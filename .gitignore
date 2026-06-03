@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+/build/
+/coverage/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+*.iml
+.vscode/
+
+# Leftover Flutter project (not part of this app)
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+lib/
+test/
+.dart_tool/
+.metadata
+analysis_options.yaml
+devtools_options.yaml
+pubspec.yaml
+pubspec.lock
