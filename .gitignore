@@ -1,10 +1,12 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Next.js build output
+.next/
+out/
 /build/
 /coverage/
+next-env.d.ts
 
 # Environment / secrets
 .env
@@ -18,18 +20,3 @@ dist/
 *.iml
 .vscode/
 
-# Leftover Flutter project (not part of this app)
-android/
-ios/
-linux/
-macos/
-windows/
-web/
-lib/
-test/
-.dart_tool/
-.metadata
-analysis_options.yaml
-devtools_options.yaml
-pubspec.yaml
-pubspec.lock
