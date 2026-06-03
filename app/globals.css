@@ -1,3 +1,12 @@
+:root {
+  --accent: #f0712c;
+  --ink: #1a1a1a;
+  --muted: #6b6b6b;
+  --line: #e6e4e0;
+  --bg: #ffffff;
+  --bg-soft: #f7f5f2;
+}
+
 *,
 *::before,
 *::after {
@@ -13,11 +22,12 @@ body {
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  color: #1a1a1a;
-  background: #ffffff;
+  color: var(--ink);
+  background: var(--bg);
   line-height: 1.5;
 }
 
+/* ---- generic landing screen ---- */
 .screen {
   min-height: 100vh;
   display: flex;
@@ -35,5 +45,202 @@ body {
 }
 
 .screen p {
-  color: #555;
+  color: var(--muted);
+}
+
+.screen a {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ---- inline editing ---- */
+.editable {
+  outline: none;
+  border-radius: 6px;
+}
+
+.editable:focus {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}
+
+/* ---- doc screen layout ---- */
+.doc-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+}
+
+.doc-sidebar {
+  border-right: 1px solid var(--line);
+  background: var(--bg-soft);
+  padding: 20px 14px;
+  overflow-y: auto;
+}
+
+.doc-sidebar-head {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 8px 12px;
+}
+
+.doc-group {
+  margin-bottom: 18px;
+}
+
+.doc-group-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 8px 6px;
+}
+
+.doc-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.doc-nav-item:hover {
+  background: #efece7;
+}
+
+.doc-nav-item.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.doc-nav-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: #cfccc7;
+}
+
+.doc-dot.status-wip {
+  background: var(--accent);
+}
+
+.doc-dot.status-done {
+  background: var(--ink);
+}
+
+.doc-nav-item.is-active .doc-dot {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* ---- doc main pane ---- */
+.doc-main {
+  overflow-y: auto;
+  padding: 48px 56px;
+  max-width: 760px;
+}
+
+.doc-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.doc-kind,
+.doc-owner {
+  display: inline-flex;
+}
+
+.doc-status {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.doc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.doc-tag {
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.doc-body {
+  margin-top: 32px;
+}
+
+.doc-section {
+  margin-bottom: 26px;
+}
+
+.doc-section-heading {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.doc-section-body {
+  color: #333;
+}
+
+.doc-add {
+  margin-top: 8px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.doc-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
