@@ -13,6 +13,8 @@ import {
   renameCanvas,
   type CanvasInfo,
 } from "@/lib/canvasRepo";
+import "../doc.css";
+import "./canvas.css";
 
 interface PresenceUser { key: string; name: string; initials: string; color: string }
 

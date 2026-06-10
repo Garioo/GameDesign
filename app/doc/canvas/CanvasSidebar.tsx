@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CanvasInfo } from "@/lib/canvasRepo";
+import "../Sidebar.css";
 
 /* ---------- icons ---------- */
 type IconProps = { className?: string };
