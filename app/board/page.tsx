@@ -103,6 +103,78 @@ const css = `
   .sidebar-new:hover { color: var(--ember); background: var(--ember-tint); }
   .sidebar-new svg { width: 13px; height: 13px; }
 
+  /* ── sidebar calendar ── */
+  .sidebar-cal { padding: 4px 8px 0; }
+  .cal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 2px 8px;
+  }
+  .cal-title { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .cal-nav-btn {
+    display: grid; place-items: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    border: none; background: none; color: var(--ink-faint); cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .cal-nav-btn:hover { background: var(--line-soft); color: var(--ink); }
+  .cal-nav-btn svg { width: 13px; height: 13px; }
+  .cal-weekdays, .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+  }
+  .cal-weekday {
+    font-size: 10px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase;
+    text-align: center; padding-bottom: 4px;
+  }
+  .cal-day {
+    position: relative;
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; color: var(--ink-soft); border-radius: 8px;
+    border: none; background: none; cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .cal-day:hover { background: var(--line-soft); color: var(--ink); }
+  .cal-day.other-month { color: var(--ink-faint); opacity: 0.45; }
+  .cal-day.today { font-weight: 700; color: var(--ember-deep); }
+  .cal-day.selected { background: var(--ember); color: #fff; font-weight: 600; }
+  .cal-day.selected:hover { background: var(--ember); color: #fff; }
+  .cal-day-dot {
+    position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%; background: var(--ember);
+  }
+  .cal-day.selected .cal-day-dot { background: #fff; }
+
+  .cal-due { margin-top: 10px; padding: 0 2px; }
+  .cal-due-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; font-weight: 700; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0 0 6px;
+  }
+  .cal-due-clear {
+    font: inherit; font-size: 11px; color: var(--ink-faint);
+    background: none; border: none; cursor: pointer; text-transform: none; letter-spacing: normal;
+  }
+  .cal-due-clear:hover { color: var(--ember); }
+  .cal-due-list { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+  .cal-due-item {
+    display: block; width: 100%; text-align: left; font: inherit; font-size: 12px;
+    color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 8px; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  .cal-due-item:hover { border-color: var(--ember-tint2); background: var(--ember-tint); }
+  .cal-due-empty { font-size: 12px; color: var(--ink-faint); padding: 4px 0; }
+
+  /* ── card deadline badge ── */
+  .card-deadline {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
+    background: var(--line-soft); color: var(--ink-faint);
+  }
+  .card-deadline svg { width: 11px; height: 11px; }
+  .card-deadline.overdue { background: #fbe2dc; color: #b9421f; }
+  .card-deadline.soon { background: #f7ecd2; color: #7a5614; }
+
   .main-col {
     flex: 1; min-width: 0;
     display: flex; flex-direction: column;
@@ -390,6 +462,7 @@ const css = `
     .sidebar-name, .sidebar-label { display: none; }
     .sidebar-item { justify-content: center; padding: 9px; }
     .sidebar-new svg { width: 14px; height: 14px; }
+    .sidebar-cal { display: none; }
   }
 `;
 
@@ -444,6 +517,21 @@ const Filter = ({ className }) => (
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
   </svg>
 );
+const ChevronLeft = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15 18-6-6 6-6" />
+  </svg>
+);
+const ChevronRight = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);
+const Flag = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 22V4a1 1 0 0 1 1-1h11.5a.5.5 0 0 1 .4.8L13 9l3.9 5.2a.5.5 0 0 1-.4.8H5" />
+  </svg>
+);
 
 /* ── seed data ───────────────────────────────────────────────────────────── */
 const PEOPLE = [
@@ -471,9 +559,9 @@ const INIT_BOARDS = [
       {
         id: "col-todo", name: "To Do", color: "#a59a8c",
         cards: [
-          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1" },
-          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2" },
-          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null },
+          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1", deadline: "2026-06-12" },
+          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2", deadline: "2026-06-19" },
+          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null, deadline: "2026-06-08" },
         ],
       },
       {
@@ -534,6 +622,20 @@ const INIT_BOARDS = [
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 function ownerById(id) { return PEOPLE.find((p) => p.id === id) ?? null; }
 
+const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function pad2(n) { return String(n).padStart(2, "0"); }
+function dateKey(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+function todayKey() {
+  const d = new Date();
+  return dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function formatDeadline(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return `${MONTH_NAMES[m - 1].slice(0, 3)} ${d}`;
+}
+
 /* ── Card component ──────────────────────────────────────────────────────── */
 function Card({ card, onDragStart, onDragEnd, dropState, onClick }) {
   const owner = ownerById(card.ownerId);
@@ -564,9 +666,16 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }) {
             <span className="card-owner-name" style={{ color: "var(--ink-faint)" }}>Unassigned</span>
           )}
         </div>
-        {card.priority && (
-          <span className={`card-priority ${card.priority}`}>{card.priority}</span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {card.deadline && (
+            <span className={`card-deadline${card.deadline < todayKey() ? " overdue" : ""}`}>
+              <Flag /> {formatDeadline(card.deadline)}
+            </span>
+          )}
+          {card.priority && (
+            <span className={`card-priority ${card.priority}`}>{card.priority}</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -650,6 +759,7 @@ function CardModal({ card, onClose, onSave }) {
   const [kind, setKind] = useState(card.kind ?? "");
   const [priority, setPriority] = useState(card.priority ?? "");
   const [ownerId, setOwnerId] = useState(card.ownerId ?? "");
+  const [deadline, setDeadline] = useState(card.deadline ?? "");
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -683,16 +793,22 @@ function CardModal({ card, onClose, onSave }) {
             </select>
           </div>
         </div>
-        <div className="modal-field">
-          <label className="modal-label">Owner</label>
-          <select className="modal-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-            <option value="">Unassigned</option>
-            {PEOPLE.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="modal-field">
+            <label className="modal-label">Owner</label>
+            <select className="modal-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+              <option value="">Unassigned</option>
+              {PEOPLE.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="modal-field">
+            <label className="modal-label">Deadline</label>
+            <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          </div>
         </div>
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null }); onClose(); }}>Save</button>
+          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null }); onClose(); }}>Save</button>
         </div>
       </div>
     </div>
@@ -705,6 +821,11 @@ export default function BoardPage() {
   const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
   const [filterKind, setFilterKind] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
+  const [selectedDate, setSelectedDate] = useState(null);
   const drag = useRef({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState(null); // { overCol, overCard, position }
 
@@ -781,7 +902,7 @@ export default function BoardPage() {
       c.id !== colId ? c : {
         ...c,
         cards: [...c.cards, {
-          id: mkId(), title, sub: "", kind: "", tags: [], priority: null, ownerId: null
+          id: mkId(), title, sub: "", kind: "", tags: [], priority: null, ownerId: null, deadline: selectedDate ?? null
         }]
       }
     ));
@@ -803,9 +924,59 @@ export default function BoardPage() {
 
   const kinds = ["mechanic", "vision", "economy", "lore"];
 
-  const displayCols = filterKind
-    ? cols.map((c) => ({ ...c, cards: c.cards.filter((k) => k.kind === filterKind) }))
-    : cols;
+  const displayCols = cols.map((c) => ({
+    ...c,
+    cards: c.cards.filter((k) =>
+      (!filterKind || k.kind === filterKind) &&
+      (!selectedDate || k.deadline === selectedDate)
+    ),
+  }));
+
+  /* ── calendar data ── */
+  const dueMap = {};
+  for (const c of cols) {
+    for (const k of c.cards) {
+      if (!k.deadline) continue;
+      (dueMap[k.deadline] ??= []).push({ ...k, colId: c.id, colName: c.name });
+    }
+  }
+
+  function shiftMonth(delta) {
+    setCalMonth((prev) => {
+      let m = prev.m + delta, y = prev.y;
+      if (m < 0) { m = 11; y -= 1; }
+      if (m > 11) { m = 0; y += 1; }
+      return { y, m };
+    });
+  }
+
+  function buildCalendarCells() {
+    const { y, m } = calMonth;
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const daysInPrevMonth = new Date(y, m, 0).getDate();
+    let firstWeekday = new Date(y, m, 1).getDay();
+    firstWeekday = (firstWeekday + 6) % 7; // Monday = 0
+
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i++) {
+      const d = daysInPrevMonth - firstWeekday + 1 + i;
+      const pm = m === 0 ? 11 : m - 1, py = m === 0 ? y - 1 : y;
+      cells.push({ key: dateKey(py, pm, d), day: d, otherMonth: true });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ key: dateKey(y, m, d), day: d, otherMonth: false });
+    }
+    while (cells.length % 7 !== 0) {
+      const d = cells.length - (firstWeekday + daysInMonth) + 1;
+      const nm = m === 11 ? 0 : m + 1, ny = m === 11 ? y + 1 : y;
+      cells.push({ key: dateKey(ny, nm, d), day: d, otherMonth: true });
+    }
+    return cells;
+  }
+
+  const calCells = buildCalendarCells();
+  const today = todayKey();
+  const selectedDue = selectedDate ? (dueMap[selectedDate] ?? []) : [];
 
   return (
     <>
@@ -854,6 +1025,58 @@ export default function BoardPage() {
               <Plus />
               <span className="sidebar-name">New board</span>
             </button>
+
+            <div className="sidebar-divider" />
+
+            {/* deadline calendar */}
+            <div className="sidebar-cal">
+              <div className="cal-head">
+                <button className="cal-nav-btn" onClick={() => shiftMonth(-1)} title="Previous month">
+                  <ChevronLeft />
+                </button>
+                <span className="cal-title">{MONTH_NAMES[calMonth.m]} {calMonth.y}</span>
+                <button className="cal-nav-btn" onClick={() => shiftMonth(1)} title="Next month">
+                  <ChevronRight />
+                </button>
+              </div>
+              <div className="cal-weekdays">
+                {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
+              </div>
+              <div className="cal-grid">
+                {calCells.map((cell) => (
+                  <button
+                    key={cell.key}
+                    className={`cal-day${cell.otherMonth ? " other-month" : ""}${cell.key === today ? " today" : ""}${cell.key === selectedDate ? " selected" : ""}`}
+                    onClick={() => setSelectedDate(selectedDate === cell.key ? null : cell.key)}
+                    title={cell.key}
+                  >
+                    {cell.day}
+                    {dueMap[cell.key] && <span className="cal-day-dot" />}
+                  </button>
+                ))}
+              </div>
+              {selectedDate && (
+                <div className="cal-due">
+                  <div className="cal-due-head">
+                    <span>Due {formatDeadline(selectedDate)}</span>
+                    <button className="cal-due-clear" onClick={() => setSelectedDate(null)}>Clear</button>
+                  </div>
+                  <div className="cal-due-list">
+                    {selectedDue.length === 0 ? (
+                      <div className="cal-due-empty">Nothing due across any board.</div>
+                    ) : selectedDue.map((k) => (
+                      <button
+                        key={k.id}
+                        className="cal-due-item"
+                        onClick={() => setEditingCard(cols.find((c) => c.id === k.colId)?.cards.find((c) => c.id === k.id) ?? k)}
+                      >
+                        {k.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </aside>
 
           <div className="main-col">
