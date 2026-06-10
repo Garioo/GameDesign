@@ -40,10 +40,14 @@ export interface LinkedRef {
 
 export interface DesignDoc {
   id: string;
+  sectionId?: string; // owning section (DB id)
+  parentId?: string; // parent page (nested tree) or undefined for top-level
+  position?: number; // order within its sibling group
   title: string;
   group: string; // sidebar grouping, e.g. "Mechanics & Systems"
   kind: string; // what this doc is, e.g. "Core mechanic"
   status: Status;
+  ownerId?: string; // profiles.id when assigned
   owner: string; // initials, shown in the avatar
   ownerName: string; // full name
   ownerColor: string; // avatar background
@@ -52,6 +56,7 @@ export interface DesignDoc {
   links: string[]; // "Links to" chips
   blocks: Block[]; // the editable body
   refs: LinkedRef[]; // "Linked references" rail
+  updatedAt?: string; // ISO timestamp from the DB (for "last edited")
 }
 
 export const seedDocs: DesignDoc[] = [

@@ -1,14 +1,50 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BlockEditor from "./BlockEditor";
+import Sidebar from "./Sidebar";
+import { supabase } from "@/lib/supabase";
+import { ensureSession, type SessionInfo } from "@/lib/session";
 import {
-  seedDocs,
+  createPage,
+  createSection,
+  deletePage,
+  deleteSection,
+  fetchPageBlocks,
+  listMembers,
+  listSections,
+  loadWorkspace,
+  renameSection,
+  reorderSections,
+  saveBlocks,
+  savePage,
+  seedIfEmpty,
+  setPageOwner,
+  updatePagePlacement,
+  type ProfileInfo,
+  type SectionInfo,
+} from "@/lib/docsRepo";
+import CommandPalette from "./CommandPalette";
+import {
   STATUS_LABEL,
+  type Block,
   type DesignDoc,
   type RefIcon,
   type Status,
 } from "./data";
+
+interface PresenceUser { key: string; name: string; initials: string; color: string }
+
+function relativeTime(iso?: string): string {
+  if (!iso) return "just now";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
 
 const STATUS_ORDER: Status[] = ["todo", "wip", "review", "done"];
 
@@ -94,24 +130,495 @@ const refIcon = (kind: RefIcon) => {
 };
 
 export default function DocPage() {
-  const [docs, setDocs] = useState<DesignDoc[]>(seedDocs);
-  const [activeId, setActiveId] = useState<string>(seedDocs[0].id);
+  const [docs, setDocs] = useState<DesignDoc[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [online, setOnline] = useState<PresenceUser[]>([]);
+  const [sections, setSections] = useState<SectionInfo[]>([]);
+  const [people, setPeople] = useState<ProfileInfo[]>([]);
+  const [focusTitleId, setFocusTitleId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+  const [tagEditing, setTagEditing] = useState(false);
+
+  const wsRef = useRef<string | null>(null);
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const suppress = useRef<Record<string, number>>({}); // pageId -> ignore-echo-until ts
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const throttle = useRef<
+    Record<string, { last: number; timer: ReturnType<typeof setTimeout> | null; pending: unknown }>
+  >({});
+
+  // Push an edit to other clients instantly (leading + trailing, capped rate).
+  // This is the "live" path; the DB write (debounced) is the durable path.
+  const broadcast = (key: string, payload: unknown, interval = 90) => {
+    const send = (p: unknown) =>
+      channelRef.current?.send({ type: "broadcast", event: "edit", payload: p });
+    const st =
+      throttle.current[key] ?? (throttle.current[key] = { last: 0, timer: null, pending: null });
+    const now = Date.now();
+    if (now - st.last >= interval) {
+      st.last = now;
+      send(payload);
+    } else {
+      st.pending = payload;
+      if (!st.timer) {
+        st.timer = setTimeout(
+          () => {
+            st.timer = null;
+            st.last = Date.now();
+            if (st.pending !== null) {
+              send(st.pending);
+              st.pending = null;
+            }
+          },
+          interval - (now - st.last),
+        );
+      }
+    }
+  };
+
+  // ---- initial load: session -> seed -> load ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await ensureSession();
+        if (cancelled) return;
+        setSession(s);
+        wsRef.current = s.workspaceId;
+        await seedIfEmpty(s.workspaceId);
+        const [loaded, secs, members] = await Promise.all([
+          loadWorkspace(s.workspaceId),
+          listSections(s.workspaceId),
+          listMembers(s.workspaceId),
+        ]);
+        if (cancelled) return;
+        setSections(secs);
+        setPeople(members);
+        setDocs(loaded);
+        setActiveId(loaded[0]?.id ?? null);
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---- realtime: remote page/block changes + presence ----
+  useEffect(() => {
+    const wsId = wsRef.current;
+    if (loading || !wsId || !session) return;
+
+    const refetchBlocks = async (pageId: string) => {
+      const blocks = await fetchPageBlocks(pageId);
+      setDocs((prev) =>
+        prev.map((d) => (d.id === pageId ? { ...d, blocks } : d)),
+      );
+    };
+
+    const channel = supabase
+      .channel(`workspace:${wsId}`, { config: { broadcast: { self: false } } })
+      // instant live edits (no DB hop)
+      .on("broadcast", { event: "edit" }, ({ payload }) => {
+        const p = payload as
+          | { t: "block"; pageId: string; blockId: string; text: string }
+          | { t: "blocks"; pageId: string; blocks: Block[] }
+          | { t: "page"; id: string; page: Partial<DesignDoc> };
+        if (p.t === "block") {
+          // live per-keystroke text for a single block (no cross-block clobber)
+          setDocs((prev) =>
+            prev.map((d) =>
+              d.id === p.pageId
+                ? { ...d, blocks: d.blocks.map((b) => (b.id === p.blockId ? { ...b, text: p.text } : b)) }
+                : d,
+            ),
+          );
+        } else if (p.t === "blocks") {
+          setDocs((prev) =>
+            prev.map((d) => (d.id === p.pageId ? { ...d, blocks: p.blocks } : d)),
+          );
+        } else if (p.t === "page") {
+          setDocs((prev) => prev.map((d) => (d.id === p.id ? { ...d, ...p.page } : d)));
+        }
+      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "blocks" },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { page_id?: string };
+          const pageId = row?.page_id;
+          if (!pageId) return;
+          if ((suppress.current[pageId] ?? 0) > Date.now()) return; // our echo
+          refetchBlocks(pageId);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pages", filter: `project_id=eq.${wsId}` },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: string })?.id;
+            if (oldId) setDocs((prev) => prev.filter((d) => d.id !== oldId));
+            return;
+          }
+          const row = payload.new as {
+            id?: string;
+            section_id?: string | null;
+            parent_id?: string | null;
+            position?: number;
+            title?: string;
+            kind?: string | null;
+            status?: Status;
+            summary?: string;
+            tags?: string[];
+            links?: string[];
+            updated_at?: string;
+          };
+          if (!row?.id || (suppress.current[row.id] ?? 0) > Date.now()) return;
+
+          if (payload.eventType === "INSERT") {
+            const blocks = await fetchPageBlocks(row.id);
+            let secName = sections.find((s) => s.id === row.section_id)?.name;
+            if (!secName && row.section_id) {
+              const secs = await listSections(wsId);
+              setSections(secs);
+              secName = secs.find((s) => s.id === row.section_id)?.name;
+            }
+            const doc: DesignDoc = {
+              id: row.id,
+              sectionId: row.section_id ?? undefined,
+              title: row.title ?? "Untitled page",
+              group: secName ?? "Mechanics & Systems",
+              kind: row.kind ?? "",
+              status: row.status ?? "todo",
+              owner: "—",
+              ownerName: "Unassigned",
+              ownerColor: "#a59a8c",
+              subtitle: row.summary ?? "",
+              tags: row.tags ?? [],
+              links: [],
+              blocks,
+              refs: [],
+              updatedAt: row.updated_at,
+            };
+            setDocs((prev) => (prev.some((d) => d.id === row.id) ? prev : [...prev, doc]));
+            return;
+          }
+
+          // UPDATE
+          const secName = sections.find((s) => s.id === row.section_id)?.name;
+          setDocs((prev) =>
+            prev.map((d) =>
+              d.id === row.id
+                ? {
+                    ...d,
+                    title: row.title ?? d.title,
+                    subtitle: row.summary ?? d.subtitle,
+                    kind: row.kind ?? d.kind,
+                    status: row.status ?? d.status,
+                    tags: row.tags ?? d.tags,
+                    links: row.links ?? d.links,
+                    sectionId: row.section_id ?? d.sectionId,
+                    parentId: row.parent_id ?? undefined,
+                    position: row.position ?? d.position,
+                    group: secName ?? d.group,
+                    updatedAt: row.updated_at ?? d.updatedAt,
+                  }
+                : d,
+            ),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sections", filter: `project_id=eq.${wsId}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: string })?.id;
+            if (oldId) setSections((prev) => prev.filter((s) => s.id !== oldId));
+            return;
+          }
+          const row = payload.new as { id?: string; name?: string; position?: number };
+          const id = row?.id;
+          if (!id) return;
+          setSections((prev) => {
+            const name = row.name ?? "Section";
+            const position = row.position ?? prev.length;
+            return prev.some((s) => s.id === id)
+              ? prev.map((s) => (s.id === id ? { ...s, name, position } : s))
+              : [...prev, { id, name, position }];
+          });
+          if (row.name) {
+            setDocs((prev) => prev.map((d) => (d.sectionId === id ? { ...d, group: row.name! } : d)));
+          }
+        },
+      )
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<PresenceUser>();
+        const seen = new Map<string, PresenceUser>();
+        for (const metas of Object.values(state)) {
+          for (const m of metas) seen.set(m.key, m);
+        }
+        setOnline(Array.from(seen.values()));
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            key: session.userId,
+            name: session.name,
+            initials: session.initials,
+            color: session.color,
+          });
+        }
+      });
+
+    channelRef.current = channel;
+
+    return () => {
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [loading, session]);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0];
 
-  // Group docs for the sidebar, preserving first-seen group order.
-  const groups = useMemo(() => {
-    const map = new Map<string, DesignDoc[]>();
-    for (const doc of docs) {
-      const list = map.get(doc.group) ?? [];
-      list.push(doc);
-      map.set(doc.group, list);
+  const activeSectionId =
+    active?.sectionId ?? sections.find((s) => s.name === active?.group)?.id ?? null;
+
+  // Focus the title of a freshly-created page so the user can type immediately.
+  useEffect(() => {
+    if (!focusTitleId || active?.id !== focusTitleId) return;
+    const el = document.querySelector<HTMLElement>(".doc-title");
+    if (el) {
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
     }
-    return Array.from(map.entries());
-  }, [docs]);
+    setFocusTitleId(null);
+  }, [focusTitleId, active]);
+
+  // ⌘K / Ctrl-K toggles the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ---- debounced persistence ----
+  const scheduleSaveBlocks = (pageId: string, blocks: Block[]) => {
+    clearTimeout(saveTimers.current[`b:${pageId}`]);
+    saveTimers.current[`b:${pageId}`] = setTimeout(() => {
+      suppress.current[pageId] = Date.now() + 1500;
+      saveBlocks(pageId, blocks).catch(console.error);
+    }, 600);
+  };
+  const scheduleSavePage = (doc: DesignDoc) => {
+    clearTimeout(saveTimers.current[`p:${doc.id}`]);
+    saveTimers.current[`p:${doc.id}`] = setTimeout(() => {
+      suppress.current[doc.id] = Date.now() + 1500;
+      savePage(doc).catch(console.error);
+    }, 600);
+  };
 
   const update = (id: string, patch: Partial<DesignDoc>) =>
-    setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+    setDocs((prev) => {
+      const next = prev.map((d) => (d.id === id ? { ...d, ...patch } : d));
+      const doc = next.find((d) => d.id === id);
+      if (doc) {
+        if ("blocks" in patch) {
+          broadcast(`b:${id}`, { t: "blocks", pageId: id, blocks: doc.blocks }); // instant
+          scheduleSaveBlocks(id, doc.blocks); // durable
+        }
+        if (["title", "subtitle", "status", "tags", "kind", "links"].some((k) => k in patch)) {
+          broadcast(`p:${id}`, {
+            t: "page",
+            id,
+            page: {
+              title: doc.title,
+              subtitle: doc.subtitle,
+              kind: doc.kind,
+              status: doc.status,
+              tags: doc.tags,
+              links: doc.links,
+            },
+          });
+          scheduleSavePage(doc);
+        }
+      }
+      return next;
+    });
+
+  // ---- create pages / sections ----
+  const handleNewPage = async (sectionId: string | null, sectionName: string) => {
+    const wsId = wsRef.current;
+    if (!wsId) return;
+    try {
+      const doc = await createPage(wsId, sectionId, sectionName);
+      suppress.current[doc.id] = Date.now() + 2500; // ignore our own INSERT echo
+      setDocs((prev) => [...prev, doc]);
+      setActiveId(doc.id);
+      setFocusTitleId(doc.id);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleNewSection = async (name: string) => {
+    const wsId = wsRef.current;
+    if (!wsId || !name) return;
+    try {
+      const sec = await createSection(wsId, name);
+      setSections((prev) => [...prev, sec]);
+      await handleNewPage(sec.id, sec.name); // open it with a first page
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSetOwner = (p: ProfileInfo | null) => {
+    setOwnerMenuOpen(false);
+    const patch: Partial<DesignDoc> = p
+      ? { ownerId: p.id, owner: p.initials, ownerName: p.name, ownerColor: p.color }
+      : { ownerId: undefined, owner: "—", ownerName: "Unassigned", ownerColor: "#a59a8c" };
+    setDocs((prev) => prev.map((d) => (d.id === active.id ? { ...d, ...patch } : d)));
+    suppress.current[active.id] = Date.now() + 1500;
+    setPageOwner(active.id, p?.id ?? null).catch(console.error);
+    broadcast(`p:${active.id}`, { t: "page", id: active.id, page: patch });
+  };
+
+  const addTag = (raw: string) => {
+    const t = raw.trim().replace(/^#+/, "").trim();
+    setTagDraft("");
+    if (!t || active.tags.includes(t)) return;
+    update(active.id, { tags: [...active.tags, t] });
+  };
+  const removeTag = (t: string) => update(active.id, { tags: active.tags.filter((x) => x !== t) });
+
+  const addLink = (pageId: string) => {
+    setLinkMenuOpen(false);
+    if (active.links.includes(pageId)) return;
+    update(active.id, { links: [...active.links, pageId] });
+  };
+  const removeLink = (pageId: string) =>
+    update(active.id, { links: active.links.filter((x) => x !== pageId) });
+
+  const handleDeletePage = (id: string) => {
+    suppress.current[id] = Date.now() + 2500;
+    setDocs((prev) => prev.filter((d) => d.id !== id));
+    setActiveId((cur) => (cur === id ? null : cur));
+    deletePage(id).catch(console.error);
+  };
+
+  const handleRenameSection = (id: string, name: string) => {
+    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+    setDocs((prev) => prev.map((d) => (d.sectionId === id ? { ...d, group: name } : d)));
+    renameSection(id, name).catch(console.error);
+  };
+
+  const handleDeleteSection = (id: string) => {
+    setSections((prev) => prev.filter((s) => s.id !== id));
+    deleteSection(id).catch(console.error);
+  };
+
+  const handleMoveSection = (orderedIds: string[]) => {
+    setSections((prev) =>
+      [...prev]
+        .map((s) => ({ ...s, position: orderedIds.indexOf(s.id) }))
+        .sort((a, b) => a.position - b.position),
+    );
+    reorderSections(orderedIds).catch(console.error);
+  };
+
+  const handleMovePage = (
+    movedId: string,
+    sectionId: string | null,
+    parentId: string | null,
+    orderedIds: string[],
+  ) => {
+    const groupName = sections.find((s) => s.id === sectionId)?.name;
+    suppress.current[movedId] = Date.now() + 2500;
+    setDocs((prev) =>
+      prev.map((d) => {
+        let nd = d;
+        if (d.id === movedId) {
+          nd = {
+            ...nd,
+            sectionId: sectionId ?? undefined,
+            parentId: parentId ?? undefined,
+            group: groupName ?? nd.group,
+          };
+        }
+        const idx = orderedIds.indexOf(d.id);
+        if (idx >= 0) nd = { ...nd, position: idx };
+        return nd;
+      }),
+    );
+    const updates = orderedIds.map((id, i) => ({
+      id,
+      position: i,
+      sectionId: id === movedId ? sectionId : undefined,
+      parentId: id === movedId ? parentId : undefined,
+    }));
+    updatePagePlacement(updates).catch(console.error);
+  };
+
+  if (loading) {
+    return (
+      <div className="app">
+        <div className="screen">
+          <p style={{ color: "var(--ink-soft)" }}>Loading workspace…</p>
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="app">
+        <div className="screen">
+          <h1>Couldn&apos;t load the workspace</h1>
+          <p style={{ color: "var(--ink-soft)", maxWidth: 460 }}>{error}</p>
+          <p style={{ color: "var(--ink-faint)", fontSize: 13 }}>
+            Check that the SQL is applied and anonymous sign-ins are enabled in Supabase.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (!active) {
+    return (
+      <div className="app">
+        <div className="screen">
+          <p style={{ color: "var(--ink-soft)" }}>No pages yet.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const onlineList: PresenceUser[] =
+    online.length > 0
+      ? online
+      : session
+        ? [{ key: session.userId, name: session.name, initials: session.initials, color: session.color }]
+        : [];
 
   return (
     <div className="app">
@@ -129,11 +636,11 @@ export default function DocPage() {
         </div>
         <div className="top-right">
           <span className="online-dot" />
-          <span className="online-text">4 online</span>
+          <span className="online-text">{onlineList.length} online</span>
           <div className="avatar-stack">
-            {docs.slice(0, 4).map((d) => (
-              <span key={d.id} className="avatar" style={{ background: d.ownerColor }}>
-                {d.owner}
+            {onlineList.slice(0, 4).map((u) => (
+              <span key={u.key} className="avatar" style={{ background: u.color }} title={u.name}>
+                {u.initials}
               </span>
             ))}
           </div>
@@ -143,51 +650,20 @@ export default function DocPage() {
 
       <div className="body">
         {/* ---------------- left sidebar ---------------- */}
-        <aside className="sidebar">
-          <div className="section-head">
-            <span className="section-icon">
-              <Sun className="section-icon-svg" />
-            </span>
-            <div>
-              <div className="section-name">{active.group}</div>
-              <div className="section-meta">
-                {groups.find(([g]) => g === active.group)?.[1].length ?? 0} pages
-              </div>
-            </div>
-          </div>
-
-          <div className="nav-label-row">
-            <span className="nav-label">In this section</span>
-            <span className="drag-hint">drag to nest</span>
-          </div>
-
-          <nav className="nav">
-            {groups.map(([group, list]) => (
-              <div key={group} className="nav-group">
-                {group !== active.group && (
-                  <div className="nav-group-label">{group}</div>
-                )}
-                {list.map((doc) => (
-                  <button
-                    key={doc.id}
-                    className={"nav-item" + (doc.id === active.id ? " is-active" : "")}
-                    onClick={() => setActiveId(doc.id)}
-                  >
-                    {doc.id === active.id && <Chevron className="nav-chevron" />}
-                    <Doc className="nav-icon" />
-                    <span className="nav-title">{doc.title}</span>
-                    <span className={"nav-status status-" + doc.status} />
-                  </button>
-                ))}
-              </div>
-            ))}
-          </nav>
-
-          <button className="new-page">
-            <Plus className="new-page-icon" />
-            New page
-          </button>
-        </aside>
+        <Sidebar
+          docs={docs}
+          sections={sections}
+          active={active}
+          onSelect={setActiveId}
+          onNewPage={handleNewPage}
+          onNewSection={handleNewSection}
+          onRenamePage={(id, title) => update(id, { title })}
+          onDeletePage={handleDeletePage}
+          onRenameSection={handleRenameSection}
+          onDeleteSection={handleDeleteSection}
+          onMovePage={handleMovePage}
+          onMoveSection={handleMoveSection}
+        />
 
         {/* ---------------- main document ---------------- */}
         <main className="main">
@@ -235,40 +711,108 @@ export default function DocPage() {
               </div>
               <div className="meta-row">
                 <span className="meta-key">Owner</span>
-                <span className="owner">
-                  <span className="owner-avatar" style={{ background: active.ownerColor }}>
-                    {active.owner}
-                  </span>
-                  {active.ownerName}
+                <span className="owner-wrap">
+                  <button className="owner owner-btn" onClick={() => setOwnerMenuOpen((o) => !o)}>
+                    <span className="owner-avatar" style={{ background: active.ownerColor }}>
+                      {active.owner}
+                    </span>
+                    {active.ownerName}
+                    <ChevronDown className="status-chevron" />
+                  </button>
+                  {ownerMenuOpen && (
+                    <div className="owner-menu" onMouseLeave={() => setOwnerMenuOpen(false)}>
+                      {session && (
+                        <button onMouseDown={(e) => { e.preventDefault(); handleSetOwner({ id: session.userId, name: session.name, initials: session.initials, color: session.color }); }}>
+                          <span className="owner-avatar" style={{ background: session.color }}>{session.initials}</span>
+                          Assign to me
+                        </button>
+                      )}
+                      {people
+                        .filter((p) => p.id !== session?.userId)
+                        .map((p) => (
+                          <button key={p.id} onMouseDown={(e) => { e.preventDefault(); handleSetOwner(p); }}>
+                            <span className="owner-avatar" style={{ background: p.color }}>{p.initials}</span>
+                            {p.name}
+                          </button>
+                        ))}
+                      <button className="owner-clear" onMouseDown={(e) => { e.preventDefault(); handleSetOwner(null); }}>
+                        Unassign
+                      </button>
+                    </div>
+                  )}
                 </span>
               </div>
               <div className="meta-row">
                 <span className="meta-key">Tags</span>
                 <span className="tags">
                   {active.tags.map((t) => (
-                    <span key={t} className="tag"># {t}</span>
+                    <span key={t} className="tag tag-editable">
+                      # {t}
+                      <button className="tag-remove" title="Remove tag" onClick={() => removeTag(t)}>×</button>
+                    </span>
                   ))}
+                  {tagEditing ? (
+                    <input
+                      className="tag-input"
+                      autoFocus
+                      placeholder="tag…"
+                      value={tagDraft}
+                      onChange={(e) => setTagDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagDraft); }
+                        if (e.key === "Escape") { setTagDraft(""); setTagEditing(false); }
+                        if (e.key === "Backspace" && !tagDraft && active.tags.length) removeTag(active.tags[active.tags.length - 1]);
+                      }}
+                      onBlur={() => { if (tagDraft.trim()) addTag(tagDraft); setTagEditing(false); }}
+                    />
+                  ) : (
+                    <button className="tag-add" onClick={() => setTagEditing(true)}>+ Add</button>
+                  )}
                 </span>
               </div>
-              {active.links.length > 0 && (
-                <div className="meta-row">
-                  <span className="meta-key">Links to</span>
-                  <span className="links">
-                    {active.links.map((l) => {
-                      const target = docs.find((d) => d.title === l);
-                      return (
-                        <button
-                          key={l}
-                          className="link-chip"
-                          onClick={() => target && setActiveId(target.id)}
-                        >
-                          <LinkIcon className="link-icon" /> {l}
+              <div className="meta-row">
+                <span className="meta-key">Links to</span>
+                <span className="links">
+                  {active.links.map((id) => {
+                    const target = docs.find((d) => d.id === id);
+                    if (!target) return null;
+                    return (
+                      <span key={id} className="link-chip link-editable">
+                        <button className="link-go" onClick={() => setActiveId(target.id)}>
+                          <LinkIcon className="link-icon" /> {target.title}
                         </button>
-                      );
-                    })}
+                        <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                  <span className="link-add-wrap">
+                    <button className="tag-add" onClick={() => setLinkMenuOpen((o) => !o)}>
+                      + Link
+                    </button>
+                    {linkMenuOpen && (
+                      <div className="link-menu" onMouseLeave={() => setLinkMenuOpen(false)}>
+                        {docs
+                          .filter((d) => d.id !== active.id && !active.links.includes(d.id))
+                          .map((d) => (
+                            <button
+                              key={d.id}
+                              onMouseDown={(e) => { e.preventDefault(); addLink(d.id); }}
+                            >
+                              <LinkIcon className="link-icon" />
+                              <span className="link-menu-title">{d.title}</span>
+                              <span className="link-menu-group">{d.group}</span>
+                            </button>
+                          ))}
+                        {docs.filter((d) => d.id !== active.id && !active.links.includes(d.id)).length === 0 && (
+                          <div className="link-menu-empty">No other pages</div>
+                        )}
+                      </div>
+                    )}
                   </span>
-                </div>
-              )}
+                </span>
+              </div>
             </div>
 
             {/* block editor body */}
@@ -276,6 +820,12 @@ export default function DocPage() {
               key={active.id}
               blocks={active.blocks}
               onChange={(b) => update(active.id, { blocks: b })}
+              onLiveInput={(blockId, text, blocks) => {
+                // instant: per-block delta to other clients (no local re-render)
+                broadcast(`bt:${blockId}`, { t: "block", pageId: active.id, blockId, text });
+                // durable: debounced full-array write
+                scheduleSaveBlocks(active.id, blocks);
+              }}
             />
           </article>
         </main>
@@ -310,14 +860,14 @@ export default function DocPage() {
           <div className="rail-footer">
             <div className="foot-row">
               <span className="foot-key">Last edited</span>
-              <span className="foot-val">2h ago</span>
+              <span className="foot-val">{relativeTime(active.updatedAt)}</span>
             </div>
             <div className="foot-row">
-              <span className="foot-key">Contributors</span>
+              <span className="foot-key">Online now</span>
               <div className="foot-avatars">
-                {docs.slice(0, 3).map((d) => (
-                  <span key={d.id} className="foot-avatar" style={{ background: d.ownerColor }}>
-                    {d.owner}
+                {onlineList.slice(0, 3).map((u) => (
+                  <span key={u.key} className="foot-avatar" style={{ background: u.color }} title={u.name}>
+                    {u.initials}
                   </span>
                 ))}
               </div>
@@ -328,7 +878,7 @@ export default function DocPage() {
 
       {/* ---------------- floating dock ---------------- */}
       <nav className="dock">
-        <button className="dock-search">
+        <button className="dock-search" onClick={() => setPaletteOpen(true)}>
           <Search className="dock-search-icon" />
           <kbd className="kbd">⌘K</kbd>
         </button>
@@ -348,10 +898,24 @@ export default function DocPage() {
         <button className="dock-item">
           <TableIcon className="dock-icon" /> Table
         </button>
-        <button className="dock-new">
+        <button className="dock-new" onClick={() => handleNewPage(activeSectionId, active.group)}>
           <Plus className="dock-new-icon" /> New
         </button>
       </nav>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        docs={docs}
+        activeSectionId={activeSectionId}
+        activeGroup={active.group}
+        onJump={setActiveId}
+        onNewPage={handleNewPage}
+        onNewSection={() => {
+          const name = window.prompt("New section name");
+          if (name && name.trim()) handleNewSection(name.trim());
+        }}
+      />
     </div>
   );
 }

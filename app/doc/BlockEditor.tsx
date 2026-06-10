@@ -80,8 +80,11 @@ const PLACEHOLDER: Record<BlockType, string> = {
   table: "",
 };
 
-let counter = 0;
-const newId = () => `b-${Date.now().toString(36)}-${(counter++).toString(36)}`;
+// UUID so new blocks upsert directly into the `blocks` table (uuid PK).
+const newId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 /* ---------- caret helpers ---------- */
 function caretOffset(el: HTMLElement): number {
@@ -121,9 +124,13 @@ type FocusReq = { id: string; pos: "start" | "end" | number };
 export default function BlockEditor({
   blocks,
   onChange,
+  onLiveInput,
 }: {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
+  // Fired on every keystroke (not on slash queries). Lets the parent push the
+  // edit out live without re-rendering this editor (no caret disruption).
+  onLiveInput?: (blockId: string, text: string, blocks: Block[]) => void;
 }) {
   const refs = useRef(new Map<string, HTMLDivElement>());
   const [slash, setSlash] = useState<Slash | null>(null);
@@ -322,9 +329,10 @@ export default function BlockEditor({
     const text = el.innerText;
     if (text.startsWith("/") && !text.slice(1).includes(" ")) {
       setSlash({ id, query: text.slice(1), index: 0 });
-    } else if (slash && slash.id === id) {
-      setSlash(null);
+      return; // don't broadcast a slash query
     }
+    if (slash && slash.id === id) setSlash(null);
+    onLiveInput?.(id, text, readBlocks());
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, id: string) => {
