@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DesignDoc } from "./data";
 import type { SectionInfo } from "@/lib/docsRepo";
+import "./Sidebar.css";
 
 /* ---------- icons ---------- */
 type IconProps = { className?: string };

@@ -20,13 +20,36 @@ export type BlockType =
   | "quote"
   | "callout"
   | "divider"
-  | "table";
+  | "table"
+  | "image";
+
+// Tone palette for callouts (and any future tinted block). "ember" is default.
+export type BlockTone =
+  | "ember"
+  | "honey"
+  | "sage"
+  | "sky"
+  | "rose"
+  | "plum"
+  | "slate";
+
+export const BLOCK_TONES: BlockTone[] = [
+  "ember",
+  "honey",
+  "sage",
+  "sky",
+  "rose",
+  "plum",
+  "slate",
+];
 
 export interface Block {
   id: string;
   type: BlockType;
   text: string;
   rows?: string[][]; // grid content for table blocks (first row is the header)
+  src?: string; // image source (data-URL or remote URL) for image blocks
+  tone?: BlockTone; // accent tone for callout blocks
 }
 
 // Icon hint for linked-reference cards in the right rail.

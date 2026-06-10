@@ -44,7 +44,7 @@ interface BlockRow {
   id: string;
   page_id: string;
   type: string;
-  content: { text?: string; rows?: string[][] };
+  content: { text?: string; rows?: string[][]; src?: string; tone?: string };
   position: number;
 }
 export interface ProfileInfo {
@@ -95,11 +95,19 @@ interface PageRow {
   updated_at: string;
 }
 
+const blockContent = (b: Block): BlockRow["content"] => {
+  const c: BlockRow["content"] = { text: b.text };
+  if (b.rows) c.rows = b.rows;
+  if (b.src) c.src = b.src;
+  if (b.tone) c.tone = b.tone;
+  return c;
+};
+
 const blockToRow = (b: Block, pageId: string, position: number): Omit<BlockRow, never> => ({
   id: b.id,
   page_id: pageId,
   type: b.type,
-  content: b.rows ? { text: b.text, rows: b.rows } : { text: b.text },
+  content: blockContent(b),
   position,
 });
 
@@ -108,6 +116,8 @@ const rowToBlock = (r: BlockRow): Block => ({
   type: r.type as BlockType,
   text: r.content?.text ?? "",
   ...(r.content?.rows ? { rows: r.content.rows } : {}),
+  ...(r.content?.src ? { src: r.content.src } : {}),
+  ...(r.content?.tone ? { tone: r.content.tone as Block["tone"] } : {}),
 });
 
 /** Load the whole workspace into the in-memory DesignDoc[] the UI expects. */
@@ -216,7 +226,7 @@ export async function seedIfEmpty(workspaceId: string): Promise<void> {
       const rows = d.blocks.map((b, idx) => ({
         page_id: page.id,
         type: b.type,
-        content: b.rows ? { text: b.text, rows: b.rows } : { text: b.text },
+        content: blockContent(b),
         position: idx,
       }));
       const { error: bErr } = await supabase.from("blocks").insert(rows);

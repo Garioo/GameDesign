@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { DesignDoc } from "./data";
+import "./CommandPalette.css";
 
 type IconProps = { className?: string };
 const DocIcon = ({ className }: IconProps) => (

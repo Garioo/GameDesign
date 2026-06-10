@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import "../../login/auth.css";
 
 /**
  * Lands here after the OAuth provider redirects back. The browser Supabase

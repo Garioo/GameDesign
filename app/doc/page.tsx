@@ -33,6 +33,7 @@ import {
   type RefIcon,
   type Status,
 } from "./data";
+import "./doc.css";
 
 interface PresenceUser { key: string; name: string; initials: string; color: string }
 
