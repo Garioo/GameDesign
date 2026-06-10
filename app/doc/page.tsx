@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import BlockEditor from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import { supabase } from "@/lib/supabase";
@@ -32,6 +33,7 @@ import {
   type RefIcon,
   type Status,
 } from "./data";
+import "./doc.css";
 
 interface PresenceUser { key: string; name: string; initials: string; color: string }
 
@@ -130,6 +132,7 @@ const refIcon = (kind: RefIcon) => {
 };
 
 export default function DocPage() {
+  const router = useRouter();
   const [docs, setDocs] = useState<DesignDoc[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,6 +192,10 @@ export default function DocPage() {
       try {
         const s = await ensureSession();
         if (cancelled) return;
+        if (!s) {
+          router.replace("/login");
+          return;
+        }
         setSession(s);
         wsRef.current = s.workspaceId;
         await seedIfEmpty(s.workspaceId);
@@ -213,7 +220,7 @@ export default function DocPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   // ---- realtime: remote page/block changes + presence ----
   useEffect(() => {
@@ -645,6 +652,15 @@ export default function DocPage() {
             ))}
           </div>
           <button className="share-btn">Share</button>
+          <button
+            className="share-btn"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.replace("/login");
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -889,7 +905,7 @@ export default function DocPage() {
         <button className="dock-item is-active">
           <Doc className="dock-icon" /> Pages
         </button>
-        <button className="dock-item">
+        <button className="dock-item" onClick={() => router.push("/doc/canvas")}>
           <Grid className="dock-icon" /> Canvas
         </button>
         <button className="dock-item">

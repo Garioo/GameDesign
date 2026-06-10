@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Block, BlockType } from "./data";
+import { BLOCK_TONES, type Block, type BlockTone, type BlockType } from "./data";
+import "./BlockEditor.css";
 
 /* ---------- slash-menu icons (no emoji) ---------- */
 const sv = {
@@ -56,6 +57,13 @@ const ITrash = () => (
     <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" />
   </svg>
 );
+const IImage = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="8.5" cy="9.5" r="1.5" />
+    <path d="m4 18 5-5 4 4 3-3 4 4" />
+  </svg>
+);
 
 type MenuItem = { type: BlockType; label: string; hint: string; Icon: () => React.ReactElement };
 const MENU: MenuItem[] = [
@@ -65,6 +73,7 @@ const MENU: MenuItem[] = [
   { type: "bullet", label: "Bulleted list", hint: "A simple bullet list", Icon: IBullet },
   { type: "quote", label: "Quote", hint: "Capture a quote", Icon: IQuote },
   { type: "callout", label: "Callout", hint: "Make text stand out", Icon: ICallout },
+  { type: "image", label: "Image", hint: "Upload or embed a picture", Icon: IImage },
   { type: "table", label: "Table", hint: "Add a simple table", Icon: ITable },
   { type: "divider", label: "Divider", hint: "Visually separate blocks", Icon: IDivider },
 ];
@@ -78,6 +87,7 @@ const PLACEHOLDER: Record<BlockType, string> = {
   callout: "Type something…",
   divider: "",
   table: "",
+  image: "",
 };
 
 // UUID so new blocks upsert directly into the `blocks` table (uuid PK).
@@ -85,6 +95,39 @@ const newId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+/* ---------- image helpers ---------- */
+// Read a picked/dropped image file into a data-URL, downscaling large rasters so
+// the encoded string we persist (and broadcast over realtime) stays reasonable.
+// GIF/SVG pass through untouched to preserve animation / vectors.
+async function readImageFile(file: File, maxDim = 1600): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as string);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(file);
+  });
+  if (file.type === "image/gif" || file.type === "image/svg+xml") return dataUrl;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = dataUrl;
+    });
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    if (scale === 1 && dataUrl.length < 1_200_000) return dataUrl;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/webp", 0.85);
+  } catch {
+    return dataUrl;
+  }
+}
 
 /* ---------- caret helpers ---------- */
 function caretOffset(el: HTMLElement): number {
@@ -167,7 +210,7 @@ export default function BlockEditor({
   // Snapshot live DOM text for text-bearing blocks; tables/dividers pass through.
   const readBlocks = (): Block[] =>
     blocks.map((b) => {
-      if (b.type === "divider" || b.type === "table") return b;
+      if (b.type === "divider" || b.type === "table" || b.type === "image") return b;
       const el = refs.current.get(b.id);
       return el ? { ...b, text: el.innerText.replace(/\n$/, "") } : b;
     });
@@ -217,7 +260,7 @@ export default function BlockEditor({
       setFocusReq({ id, pos: "start" });
       return true;
     }
-    if (prev.type === "table") return false; // don't merge into a table
+    if (prev.type === "table" || prev.type === "image") return false; // don't merge into these
 
     const caretAt = prev.text.length;
     const next = [...cur];
@@ -234,7 +277,7 @@ export default function BlockEditor({
     const block = cur[idx];
 
     // Block types with no inline text get a trailing text block to keep writing.
-    if (type === "divider" || type === "table") {
+    if (type === "divider" || type === "table" || type === "image") {
       const next = [...cur];
       next[idx] =
         type === "table"
@@ -247,7 +290,9 @@ export default function BlockEditor({
                 ["", ""],
               ],
             }
-          : { id: block.id, type: "divider", text: "" };
+          : type === "image"
+            ? { id: block.id, type: "image", text: "", src: "" }
+            : { id: block.id, type: "divider", text: "" };
       const nb: Block = { id: newId(), type: "text", text: "" };
       next.splice(idx + 1, 0, nb);
       onChange(next);
@@ -291,7 +336,12 @@ export default function BlockEditor({
     }
     onChange(next);
     const neighbour = cur[idx - 1] ?? cur[idx + 1];
-    if (neighbour && neighbour.type !== "divider" && neighbour.type !== "table") {
+    if (
+      neighbour &&
+      neighbour.type !== "divider" &&
+      neighbour.type !== "table" &&
+      neighbour.type !== "image"
+    ) {
       setFocusReq({ id: neighbour.id, pos: "end" });
     }
   };
@@ -396,6 +446,9 @@ export default function BlockEditor({
             onChange(readBlocks());
           }}
           onTableChange={(rows) => updateBlock(b.id, { rows })}
+          onSetImage={(src) => updateBlock(b.id, { src })}
+          onSetCaption={(text) => updateBlock(b.id, { text })}
+          onSetTone={(tone) => updateBlock(b.id, { tone })}
           onPlus={() => insertAfter(b.id)}
           onToggleMenu={() => setMenuFor((m) => (m === b.id ? null : b.id))}
           onDuplicate={() => duplicateBlock(b.id)}
@@ -435,6 +488,9 @@ function BlockRow({
   onFocus,
   onBlur,
   onTableChange,
+  onSetImage,
+  onSetCaption,
+  onSetTone,
   onPlus,
   onToggleMenu,
   onDuplicate,
@@ -458,6 +514,9 @@ function BlockRow({
   onFocus: () => void;
   onBlur: () => void;
   onTableChange: (rows: string[][]) => void;
+  onSetImage: (src: string) => void;
+  onSetCaption: (text: string) => void;
+  onSetTone: (tone: BlockTone) => void;
   onPlus: () => void;
   onToggleMenu: () => void;
   onDuplicate: () => void;
@@ -472,11 +531,12 @@ function BlockRow({
   // Keep DOM text in sync with state without disturbing the caret.
   useEffect(() => {
     const el = ref.current;
-    if (!el || block.type === "divider" || block.type === "table") return;
+    if (!el || block.type === "divider" || block.type === "table" || block.type === "image")
+      return;
     if (el.innerText !== block.text) el.innerText = block.text;
   }, [block.text, block.type]);
 
-  const editable = block.type !== "divider" && block.type !== "table" && (
+  const editable = block.type !== "divider" && block.type !== "table" && block.type !== "image" && (
     <div
       ref={(el) => {
         ref.current = el;
@@ -502,6 +562,17 @@ function BlockRow({
         <TableBlock rows={block.rows ?? [["", ""]]} onChange={onTableChange} />
       </div>
     );
+  } else if (block.type === "image") {
+    main = (
+      <div className="blk-main">
+        <ImageBlock
+          src={block.src ?? ""}
+          caption={block.text}
+          onSetImage={onSetImage}
+          onSetCaption={onSetCaption}
+        />
+      </div>
+    );
   } else if (block.type === "bullet") {
     main = (
       <div className="blk-main bullet-row">
@@ -510,7 +581,12 @@ function BlockRow({
       </div>
     );
   } else if (block.type === "callout") {
-    main = <div className="blk-main callout-box">{editable}</div>;
+    main = (
+      <div className={"blk-main callout-box tone-" + (block.tone ?? "ember")}>
+        <TonePicker tone={block.tone ?? "ember"} onSetTone={onSetTone} />
+        {editable}
+      </div>
+    );
   } else if (block.type === "quote") {
     main = <div className="blk-main quote-box">{editable}</div>;
   } else {
@@ -753,5 +829,195 @@ function TableCell({
       onBlur={onBlur}
       onKeyDown={onKeyDown}
     />
+  );
+}
+
+/* ============================================================
+   Image block — drag-drop / file-pick / paste-URL, with caption.
+   ============================================================ */
+function ImageBlock({
+  src,
+  caption,
+  onSetImage,
+  onSetCaption,
+}: {
+  src: string;
+  caption: string;
+  onSetImage: (src: string) => void;
+  onSetCaption: (text: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const capRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [over, setOver] = useState(false);
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    const el = capRef.current;
+    if (el && el.innerText !== caption) el.innerText = caption;
+  }, [caption]);
+
+  const pick = async (file?: File | null) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setLoading(true);
+    try {
+      onSetImage(await readImageFile(file));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!src) {
+    return (
+      <div
+        className={"img-drop" + (over ? " is-over" : "") + (loading ? " is-loading" : "")}
+        contentEditable={false}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          pick(e.dataTransfer.files?.[0]);
+        }}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+        <div className="img-drop-head">
+          <span className="img-drop-glyph">
+            <IImage />
+          </span>
+          <span className="img-drop-text">
+            {loading ? "Adding image…" : "Drag an image here, or "}
+            {!loading && (
+              <button
+                className="img-pick"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => fileRef.current?.click()}
+              >
+                choose a file
+              </button>
+            )}
+          </span>
+        </div>
+        <input
+          className="img-url-input"
+          placeholder="…or paste an image URL and press Enter"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && url.trim()) {
+              e.preventDefault();
+              onSetImage(url.trim());
+              setUrl("");
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <figure className="img-figure" contentEditable={false}>
+      <div className="img-frame">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="img-el" src={src} alt={caption || "image"} />
+        <div className="img-tools">
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => fileRef.current?.click()}
+          >
+            Replace
+          </button>
+          <button
+            className="danger"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onSetImage("")}
+          >
+            Remove
+          </button>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+      </div>
+      <figcaption
+        ref={capRef}
+        className="img-caption"
+        contentEditable
+        suppressContentEditableWarning
+        data-ph="Add a caption…"
+        onBlur={(e) => onSetCaption(e.currentTarget.innerText.trim())}
+      />
+    </figure>
+  );
+}
+
+/* ============================================================
+   Tone picker — a colour swatch for callout blocks.
+   ============================================================ */
+const TONE_LABEL: Record<BlockTone, string> = {
+  ember: "Ember",
+  honey: "Honey",
+  sage: "Sage",
+  sky: "Sky",
+  rose: "Rose",
+  plum: "Plum",
+  slate: "Slate",
+};
+
+function TonePicker({
+  tone,
+  onSetTone,
+}: {
+  tone: BlockTone;
+  onSetTone: (tone: BlockTone) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest(".tone-pick")) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <span className="tone-pick" contentEditable={false}>
+      <button
+        className={"tone-dot tone-dot-" + tone}
+        title="Change colour"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+      />
+      {open && (
+        <span className="tone-menu">
+          {BLOCK_TONES.map((t) => (
+            <button
+              key={t}
+              className={"tone-swatch tone-dot-" + t + (t === tone ? " is-active" : "")}
+              title={TONE_LABEL[t]}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSetTone(t);
+                setOpen(false);
+              }}
+            />
+          ))}
+        </span>
+      )}
+    </span>
   );
 }

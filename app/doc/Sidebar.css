@@ -1,0 +1,164 @@
+/* ============================================================
+   EMBERWICK · Sidebar  (imported by app/doc/Sidebar.tsx)
+   ------------------------------------------------------------
+   Left navigation: section header, the page tree, drag/drop
+   indicators, inline rename inputs, and row context menus.
+   ============================================================ */
+
+.sidebar {
+  position: sticky; top: 58px;
+  height: calc(100vh - 58px);
+  padding: 22px 18px;
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+.section-head { display: flex; gap: 11px; align-items: center; margin-bottom: 22px; }
+.section-icon {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--ember-tint); color: var(--ember-deep);
+}
+.section-icon-svg { width: 17px; height: 17px; }
+.section-name { font-weight: 600; font-size: 14.5px; line-height: 1.2; }
+.section-meta { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+
+.nav-label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--sp-2); padding: 0 4px; }
+.nav-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.drag-hint { font-size: 11px; color: var(--ink-faint); opacity: 0.75; }
+
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-group + .nav-group { margin-top: var(--sp-3); }
+.nav-group-label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-faint);
+  padding: 6px 4px 2px;
+}
+.nav-add {
+  display: grid; place-items: center;
+  width: 18px; height: 18px; border-radius: var(--r-xs);
+  border: none; background: none; color: var(--ink-faint);
+  cursor: pointer; opacity: 0; transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast);
+}
+.nav-group:hover .nav-add { opacity: 1; }
+.nav-add:hover { background: var(--ember-tint); color: var(--ember-deep); }
+.nav-add-icon { width: 13px; height: 13px; }
+.nav-empty {
+  font-size: 12px; color: var(--ink-faint);
+  padding: 4px 9px 6px; font-style: italic;
+}
+.new-section-input {
+  margin-top: 4px;
+  width: 100%;
+  font: inherit; font-size: 13.5px;
+  padding: 7px 9px; border-radius: var(--r-md);
+  border: 1px solid var(--ember-tint2); background: var(--surface); color: var(--ink);
+  outline: none;
+}
+.new-section-input:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
+
+/* ---- tree rows, drag/drop, menus ---- */
+.nav-item { position: relative; }
+.nav-twisty { opacity: 0.6; }
+.nav-twisty-spacer { width: 14px; flex-shrink: 0; }
+.nav-group-actions { display: flex; align-items: center; gap: 2px; }
+
+.row-dots {
+  display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0;
+  border: none; background: none; color: var(--ink-faint);
+  cursor: pointer; opacity: 0; transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast);
+}
+.nav-item:hover .row-dots,
+.nav-group-label:hover .row-dots { opacity: 1; }
+.row-dots:hover { background: var(--line-soft); color: var(--ink); }
+.row-dots-icon { width: 15px; height: 15px; }
+
+/* drop indicators */
+.nav-item.drop-before { box-shadow: inset 0 2px 0 var(--ember); }
+.nav-item.drop-after { box-shadow: inset 0 -2px 0 var(--ember); }
+.nav-item.drop-inside { background: var(--ember-tint); box-shadow: inset 0 0 0 1.5px var(--ember-tint2); }
+.nav-group.drop-section { background: var(--ember-tint); border-radius: var(--r-md); }
+
+/* inline rename input (pages + sections) */
+.nav-rename {
+  flex: 1; min-width: 0;
+  font: inherit; font-size: 13.5px; color: var(--ink);
+  border: 1px solid var(--ember-tint2); border-radius: var(--r-sm);
+  padding: 2px 6px; background: var(--surface); outline: none;
+}
+.section-rename { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+
+/* row context menu (pages + sections) */
+.row-menu {
+  position: absolute;
+  right: 6px; top: 28px; z-index: 35;
+  width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-menu);
+  padding: 5px;
+}
+.row-menu button {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; text-align: left;
+  padding: 7px 9px; border: none; background: none; border-radius: 7px;
+  font: inherit; font-size: 13px; color: var(--ink); cursor: pointer;
+}
+.row-menu button:hover { background: var(--line-soft); }
+.row-menu button:disabled { color: var(--ink-faint); cursor: not-allowed; }
+.row-menu button:disabled:hover { background: none; }
+.row-menu svg { width: 14px; height: 14px; }
+.row-menu .danger { color: var(--danger); }
+.row-menu .danger:hover { background: var(--danger-tint); }
+.nav-item {
+  position: relative;
+  width: 100%;
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 7px 9px; border-radius: var(--r-md);
+  font: inherit; font-size: 13.5px; color: var(--ink-soft);
+  text-align: left; background: none; border: none;
+  cursor: pointer; transition: background var(--t-fast), color var(--t-fast);
+}
+.nav-item:hover { background: var(--line-soft); color: var(--ink); }
+.nav-item.is-active {
+  background: var(--ember-tint); color: var(--ember-deep); font-weight: 600;
+}
+.nav-item.is-active:hover { background: var(--ember-tint); }
+.nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: -4px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: 3px;
+  background: var(--ember);
+}
+.nav-chevron { width: 14px; height: 14px; flex-shrink: 0; }
+.nav-icon { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.85; }
+.nav-item:not(.is-active) .nav-icon { color: var(--ink-faint); }
+.nav-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-status { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #cfc6b8; }
+.nav-status.status-wip { background: var(--ember); }
+.nav-status.status-review { background: #d9a441; }
+.nav-status.status-done { background: var(--online); }
+.nav-item.is-active .nav-status { box-shadow: 0 0 0 2px var(--ember-tint); }
+
+.new-page {
+  margin-top: var(--sp-3);
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 9px; border-radius: var(--r-md);
+  font: inherit; font-size: 13.5px; color: var(--ink-faint);
+  background: none; border: none; cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.new-page:hover { background: var(--line-soft); color: var(--ink); }
+.new-page-icon { width: 15px; height: 15px; }
+
+/* ---- responsive: the sidebar collapses on narrow viewports.
+   Kept here (not in doc.css) so it always follows the base
+   .sidebar rule in source order and reliably wins. ---- */
+@media (max-width: 860px) {
+  .sidebar { display: none; }
+}

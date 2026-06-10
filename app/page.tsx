@@ -5,7 +5,7 @@ export default function HomePage() {
     <main className="screen">
       <h1>Game Design System</h1>
       <p>The team's living game design documents.</p>
-      <Link href="/doc">Open design docs →</Link>
+      <Link href="/login">Sign in →</Link>
     </main>
   );
 }

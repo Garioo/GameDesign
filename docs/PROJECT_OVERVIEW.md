@@ -1,0 +1,136 @@
+# Project Overview — EMBERWICK
+
+This is the full onboarding reference. If you only read one doc before touching the code, read
+this one (and [CONTRIBUTING.md](CONTRIBUTING.md) before you push).
+
+## What it is
+
+EMBERWICK is a web-based, **collaborative game design document (GDD) editor**. A team uses it to
+build and maintain a living design doc for a game. Content is organized hierarchically:
+
+```
+Project (workspace)
+  └─ Section        e.g. "Core Loops", "World", "Systems"
+       └─ Page      a single design doc with metadata (status, owner, tags, links)
+            └─ Block text / heading / bullet / quote / callout / divider / table
+```
+
+It is collaboration-first: multiple people can be in the same page at once. Edits broadcast live,
+and a presence indicator shows who is currently online.
+
+## Tech stack
+
+| Layer       | Technology                                                       |
+| ----------- | ---------------------------------------------------------------- |
+| Framework   | Next.js 15.1.6 (App Router)                                      |
+| UI          | React 19                                                          |
+| Language    | TypeScript 5.7.3 (strict mode, `@/*` path alias → repo root)     |
+| Backend     | Supabase — Postgres, Realtime, Auth                              |
+| Client SDK  | `@supabase/supabase-js` ^2.107                                  |
+| Styling     | Plain CSS — `app/globals.css` (design tokens + BEM-like classes) |
+| Icons       | Inline SVG (lucide-style), no icon library                       |
+
+There is **no external UI or rich-text library** — the block editor is custom.
+
+## Project structure
+
+```
+app/                       Next.js App Router
+  page.tsx                 Landing page ("/")
+  layout.tsx               Root layout (fonts, metadata, globals.css)
+  globals.css              Global styles + design tokens (~35 KB) ⚠ hot file
+  login/page.tsx           OAuth sign-in (Google / GitHub)
+  auth/callback/           OAuth redirect handler
+  doc/
+    page.tsx               Core editor screen — wires everything together (~37 KB)
+    BlockEditor.tsx        Notion-style block editor (block types, metadata card)
+    Sidebar.tsx            Section/page tree, create/rename/delete/reorder
+    CommandPalette.tsx     ⌘K / Ctrl-K quick search + navigation
+    data.ts                Domain types + seed data ⚠ hot file
+
+lib/
+  supabase.ts              Supabase client init + demo WORKSPACE_ID constant
+  session.ts               Session / auth helpers
+  docsRepo.ts              DB operations — load/create/save sections, pages, blocks
+
+supabase/
+  schema.sql               Full Postgres schema + RLS policies ⚠ hot file
+```
+
+Files marked ⚠ are **hot files** — frequently touched and conflict-prone. Coordinate before
+making large edits to them (see [CONTRIBUTING.md](CONTRIBUTING.md#coordinate-on-hot-files)).
+
+## Features / screens
+
+- **Home (`/`)** — landing page with a sign-in entry point.
+- **Login (`/login`)** — OAuth via Google / GitHub; redirects to `/doc` when authenticated.
+- **Doc editor (`/doc`)** — the main app:
+  - **Sidebar** — hierarchical tree of sections and pages; create, rename, delete, and reorder.
+  - **Block editor** — inline-editable title/subtitle and an ordered list of typed blocks
+    (`text`, `h2`, `h3`, `bullet`, `quote`, `callout`, `divider`, `table`).
+  - **Metadata card** — page status (todo / in progress / in review / done), owner, tags, and
+    cross-page links.
+  - **Right rail** — linked references (pages that point at this one), last-edited timestamp,
+    and online team-member avatars.
+  - **Command palette (⌘K / Ctrl-K)** — jump to any page or create a new page/section.
+
+## Data model
+
+Defined in [`supabase/schema.sql`](../supabase/schema.sql). **Row-Level Security (RLS) is enabled
+on all tables.** Tables:
+
+| Table             | Purpose                                                  |
+| ----------------- | -------------------------------------------------------- |
+| `profiles`        | User profile (name, color, initials for avatars)         |
+| `projects`        | Workspaces (name, tagline, genre, progress, owner)       |
+| `project_members` | Access control (project_id, user_id, role)               |
+| `sections`        | Top-level groupings (name, icon, color, position)        |
+| `pages`           | Design docs (title, kind, status, owner, tags, parent)   |
+| `blocks`          | Page body content (type, content JSONB, position)        |
+| `comments`        | Threaded discussion (page_id, parent_id)                 |
+| `milestones`      | Project timeline                                         |
+| `activity`        | Audit / activity feed                                    |
+
+## Real-time patterns
+
+Live collaboration in `app/doc/` is built on two mechanisms working together:
+
+- **Debounced DB writes** (~600 ms) persist edits to Postgres without a write per keystroke.
+- **Supabase broadcast** (throttled ~90 ms) pushes in-flight edits to other clients immediately,
+  so the editor feels live before the debounced save lands.
+- **Presence channel** tracks who is currently viewing a page and renders their avatars.
+
+When changing editor sync behavior, keep the debounce/broadcast split in mind — they tune the
+trade-off between "feels instant" and "doesn't hammer the database."
+
+## Running locally
+
+1. **Install:** `npm install`
+2. **Supabase project:** create one, then apply the schema in `supabase/schema.sql` to its
+   database (SQL editor or `supabase db push`).
+3. **Auth providers:** enable Google and/or GitHub OAuth in Supabase Auth, with the callback URL
+   pointing at `/auth/callback`.
+4. **Environment:** create `.env.local` in the repo root:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+   ```
+   The anon key is safe for the browser (RLS protects the data). **Never commit service-role keys.**
+5. **Run:** `npm run dev` → http://localhost:3000
+
+### Scripts
+
+| Command         | Purpose                           |
+| --------------- | --------------------------------- |
+| `npm run dev`   | Dev server on port 3000           |
+| `npm run build` | Production build                  |
+| `npm start`     | Run the production build          |
+| `npm run lint`  | ESLint (Next.js defaults)         |
+
+## Environment & notes
+
+- **Demo workspace:** `lib/supabase.ts` defines a hardcoded `WORKSPACE_ID`
+  (`11111111-1111-1111-1111-111111111111`) used by the current demo. Replace this when wiring up
+  real multi-workspace selection.
+- **Secrets:** only `NEXT_PUBLIC_*` keys belong in client code. Keep `.env.local` out of commits
+  for anything sensitive.

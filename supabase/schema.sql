@@ -116,6 +116,17 @@ create table if not exists public.blocks (
   updated_at timestamptz not null default now()
 );
 
+-- canvases — freeform visual boards (the data jsonb holds nodes/edges/etc.)
+create table if not exists public.canvases (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null default 'Untitled canvas',
+  data       jsonb not null default '{}'::jsonb,
+  position   int  not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- comments — threaded discussion on a page (parent_id = reply target)
 create table if not exists public.comments (
   id         uuid primary key default gen_random_uuid(),
@@ -157,6 +168,7 @@ create index if not exists idx_pages_project       on public.pages(project_id);
 create index if not exists idx_pages_section       on public.pages(section_id, position);
 create index if not exists idx_pages_parent        on public.pages(parent_id);
 create index if not exists idx_blocks_page         on public.blocks(page_id, position);
+create index if not exists idx_canvases_project     on public.canvases(project_id, position);
 create index if not exists idx_comments_page       on public.comments(page_id);
 create index if not exists idx_milestones_project  on public.milestones(project_id, position);
 create index if not exists idx_activity_project    on public.activity(project_id, created_at desc);
@@ -208,6 +220,10 @@ drop trigger if exists set_blocks_updated on public.blocks;
 create trigger set_blocks_updated before update on public.blocks
   for each row execute function public.set_updated_at();
 
+drop trigger if exists set_canvases_updated on public.canvases;
+create trigger set_canvases_updated before update on public.canvases
+  for each row execute function public.set_updated_at();
+
 -- ============================================================================
 -- Access helpers (SECURITY DEFINER so they bypass RLS and avoid recursion)
 -- ============================================================================
@@ -238,6 +254,7 @@ alter table public.project_members enable row level security;
 alter table public.sections        enable row level security;
 alter table public.pages           enable row level security;
 alter table public.blocks          enable row level security;
+alter table public.canvases        enable row level security;
 alter table public.comments        enable row level security;
 alter table public.milestones      enable row level security;
 alter table public.activity        enable row level security;
@@ -305,6 +322,13 @@ create policy blocks_all on public.blocks
   for all to authenticated
   using (public.can_access_page(page_id))
   with check (public.can_access_page(page_id));
+
+-- canvases ----------------------------------------------------------------
+drop policy if exists canvases_all on public.canvases;
+create policy canvases_all on public.canvases
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
 
 -- comments ----------------------------------------------------------------
 drop policy if exists comments_select on public.comments;
