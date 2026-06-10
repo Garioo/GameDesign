@@ -34,13 +34,23 @@ type RecordsDiff = {
 export default function CanvasBoard({
   canvasId,
   session,
+  onReady,
+  onToolChange,
 }: {
   canvasId: string;
   session: SessionInfo;
+  /** Hands the live editor up to the page so the nav-bar tools can drive it. */
+  onReady?: (editor: Editor) => void;
+  /** Reports the active tool id so the nav bar can highlight it. */
+  onToolChange?: (toolId: string) => void;
 }) {
   const handleMount = useCallback(
     (editor: Editor) => {
       let disposed = false;
+      onReady?.(editor);
+
+      // Mirror the active tool up to the nav bar.
+      const stopTool = react("active-tool", () => onToolChange?.(editor.getCurrentToolId()));
       // Unique per browser tab so each open editor is its own "peer".
       const tabId = crypto.randomUUID();
       const presenceId = InstancePresenceRecordType.createId(tabId);
@@ -136,17 +146,19 @@ export default function CanvasBoard({
       return () => {
         disposed = true;
         clearInterval(prune);
+        stopTool();
         unlistenDoc();
         unlistenPresence();
         supabase.removeChannel(channel);
       };
     },
-    [canvasId, session],
+    [canvasId, session, onReady, onToolChange],
   );
 
   return (
     <div style={{ position: "absolute", inset: 0 }}>
-      <Tldraw onMount={handleMount} />
+      {/* The default bottom toolbar is hidden — its tools live in the app nav bar. */}
+      <Tldraw onMount={handleMount} components={{ Toolbar: null }} />
     </div>
   );
 }
