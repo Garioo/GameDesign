@@ -127,7 +127,7 @@ export default function CanvasPage() {
   const [online, setOnline] = useState<PresenceUser[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tool, setTool] = useState("select");
-  const [navOpen, setNavOpen] = useState(false);
+  const [navHover, setNavHover] = useState(false);
 
   const wsRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -363,68 +363,68 @@ export default function CanvasPage() {
         </main>
       </div>
 
-      {/* dock — house toggles the app-nav cluster; tldraw tools always shown */}
-      <nav className="dock">
-        <button
-          className={"dock-toggle" + (navOpen ? " is-open" : "")}
-          title={navOpen ? "Hide menu" : "Show menu"}
-          aria-label="Toggle menu"
-          aria-expanded={navOpen}
-          onClick={() => setNavOpen((o) => !o)}
+      {/* dock — tldraw tools by default; hovering the strip underneath swaps
+          in the app nav until the mouse leaves the bar again */}
+      <div className="dock-wrap" onMouseLeave={() => setNavHover(false)}>
+        <nav className="dock">
+          {navHover ? (
+            <div key="nav" className="dock-row">
+              <button className="dock-item" onClick={() => router.push("/doc")}>
+                <HomeIcon className="dock-icon" /> Home
+              </button>
+              <button className="dock-item" onClick={() => router.push("/doc")}>
+                <Doc className="dock-icon" /> Pages
+              </button>
+              <button className="dock-item is-active">
+                <Grid className="dock-icon" /> Canvas
+              </button>
+              <button className="dock-item">
+                <Columns className="dock-icon" /> Board
+              </button>
+              <button className="dock-item">
+                <TableIcon className="dock-icon" /> Table
+              </button>
+              <span className="dock-divider" />
+              <button className="dock-new" onClick={handleNew}>
+                <Plus className="dock-new-icon" /> New
+              </button>
+            </div>
+          ) : (
+            <div key="tools" className="dock-row">
+              <div className="dock-tools">
+                {TOOLS.map((t) => (
+                  <button
+                    key={t.id}
+                    className={"dock-tool" + (tool === t.id ? " is-active" : "")}
+                    title={t.label}
+                    aria-label={t.label}
+                    disabled={!editor}
+                    onClick={() => pickTool(t.id)}
+                  >
+                    <t.Icon className="dock-tool-icon" />
+                  </button>
+                ))}
+                <button
+                  className="dock-tool"
+                  title="Insert image"
+                  aria-label="Insert image"
+                  disabled={!editor}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <ImageIcon className="dock-tool-icon" />
+                </button>
+              </div>
+            </div>
+          )}
+        </nav>
+        <div
+          className="dock-hint"
+          title="Menu"
+          onMouseEnter={() => setNavHover(true)}
         >
-          <HomeIcon className="dock-icon" />
-        </button>
-
-        <div className={"dock-nav" + (navOpen ? " is-open" : "")}>
-          <button className="dock-item" onClick={() => router.push("/doc")}>
-            <HomeIcon className="dock-icon" /> Home
-          </button>
-          <button className="dock-item" onClick={() => router.push("/doc")}>
-            <Doc className="dock-icon" /> Pages
-          </button>
-          <button className="dock-item is-active">
-            <Grid className="dock-icon" /> Canvas
-          </button>
-          <button className="dock-item">
-            <Columns className="dock-icon" /> Board
-          </button>
-          <button className="dock-item">
-            <TableIcon className="dock-icon" /> Table
-          </button>
+          <span className="dock-hint-bar" />
         </div>
-
-        <span className="dock-divider" />
-
-        <div className="dock-tools">
-          {TOOLS.map((t) => (
-            <button
-              key={t.id}
-              className={"dock-tool" + (tool === t.id ? " is-active" : "")}
-              title={t.label}
-              aria-label={t.label}
-              disabled={!editor}
-              onClick={() => pickTool(t.id)}
-            >
-              <t.Icon className="dock-tool-icon" />
-            </button>
-          ))}
-          <button
-            className="dock-tool"
-            title="Insert image"
-            aria-label="Insert image"
-            disabled={!editor}
-            onClick={() => fileRef.current?.click()}
-          >
-            <ImageIcon className="dock-tool-icon" />
-          </button>
-        </div>
-
-        <span className="dock-divider" />
-
-        <button className="dock-new" onClick={handleNew}>
-          <Plus className="dock-new-icon" /> New
-        </button>
-      </nav>
+      </div>
 
       <input
         ref={fileRef}
