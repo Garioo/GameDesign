@@ -46,13 +46,26 @@
    underneath belongs to the same hover area (mouse-leave reverts to tools). */
 .canvas-app .dock-wrap {
   position: fixed;
-  bottom: 8px;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Invisible buffer: the hover region extends well past the visible bar,
+     so small mouse drifts don't snap the nav back to the tldraw tools. */
+  padding: 36px 64px 8px;
+  /* …but never steal canvas clicks: only the bar and hint strip are
+     interactive until the nav is showing. */
+  pointer-events: none;
+}
+.canvas-app .dock-wrap .dock,
+.canvas-app .dock-wrap .dock-hint {
+  pointer-events: auto;
+}
+.canvas-app .dock-wrap.is-nav {
+  pointer-events: auto;
 }
 .canvas-app .dock-wrap .dock {
   position: static;

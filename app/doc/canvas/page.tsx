@@ -131,6 +131,19 @@ export default function CanvasPage() {
 
   const wsRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const navRevert = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Grace period: brief mouse excursions outside the bar don't snap it back.
+  const cancelNavRevert = () => {
+    if (navRevert.current) {
+      clearTimeout(navRevert.current);
+      navRevert.current = null;
+    }
+  };
+  const scheduleNavRevert = () => {
+    cancelNavRevert();
+    navRevert.current = setTimeout(() => setNavHover(false), 600);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -365,7 +378,11 @@ export default function CanvasPage() {
 
       {/* dock — tldraw tools by default; hovering the strip underneath swaps
           in the app nav until the mouse leaves the bar again */}
-      <div className="dock-wrap" onMouseLeave={() => setNavHover(false)}>
+      <div
+        className={"dock-wrap" + (navHover ? " is-nav" : "")}
+        onMouseEnter={cancelNavRevert}
+        onMouseLeave={scheduleNavRevert}
+      >
         <nav className="dock">
           {navHover ? (
             <div key="nav" className="dock-row">
