@@ -905,7 +905,7 @@ export default function DocPage() {
         <button className="dock-item is-active">
           <Doc className="dock-icon" /> Pages
         </button>
-        <button className="dock-item">
+        <button className="dock-item" onClick={() => router.push("/doc/canvas")}>
           <Grid className="dock-icon" /> Canvas
         </button>
         <button className="dock-item">
