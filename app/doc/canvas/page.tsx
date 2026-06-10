@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
+import type { Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
 import CanvasBoard from "./CanvasBoard";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +36,11 @@ const Grid = ({ className, style }: IconProps & { style?: CSSProperties }) => (
     <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
   </svg>
 );
+const HomeIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
+  </svg>
+);
 const Columns = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M15 3v18" />
@@ -45,21 +51,71 @@ const TableIcon = ({ className }: IconProps) => (
     <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />
   </svg>
 );
-const HomeIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-  </svg>
-);
-const Search = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-  </svg>
-);
 const Plus = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+
+/* ---------- tldraw tool icons (rendered into the nav bar) ---------- */
+const Cursor = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3l7.5 18 2.3-7.2 7.2-2.3z" />
+  </svg>
+);
+const Hand = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" />
+    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 13" />
+  </svg>
+);
+const Pencil = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+  </svg>
+);
+const Eraser = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4L14 4a2 2 0 0 1 3 0l4 4a2 2 0 0 1 0 3L11 21z" /><path d="M22 21H7M5 13l6 6" />
+  </svg>
+);
+const ArrowTool = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 19 19 5M9 5h10v10" />
+  </svg>
+);
+const TextTool = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 6V5h16v1M12 5v14M9 19h6" />
+  </svg>
+);
+const Note = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9l-7 7H5a2 2 0 0 1-2-2z" /><path d="M14 21v-5a2 2 0 0 1 2-2h5" />
+  </svg>
+);
+const Square = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+  </svg>
+);
+const ImageIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-4.5-4.5L5 21" />
+  </svg>
+);
+
+// tldraw tool id -> nav-bar button. `geo` covers rectangles/shapes.
+const TOOLS: { id: string; label: string; Icon: ComponentType<IconProps> }[] = [
+  { id: "select", label: "Select", Icon: Cursor },
+  { id: "hand", label: "Hand", Icon: Hand },
+  { id: "draw", label: "Draw", Icon: Pencil },
+  { id: "eraser", label: "Eraser", Icon: Eraser },
+  { id: "arrow", label: "Arrow", Icon: ArrowTool },
+  { id: "text", label: "Text", Icon: TextTool },
+  { id: "note", label: "Note", Icon: Note },
+  { id: "geo", label: "Shape", Icon: Square },
+];
 
 export default function CanvasPage() {
   const router = useRouter();
@@ -69,8 +125,12 @@ export default function CanvasPage() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [online, setOnline] = useState<PresenceUser[]>([]);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [tool, setTool] = useState("select");
+  const [navOpen, setNavOpen] = useState(false);
 
   const wsRef = useRef<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +234,24 @@ export default function CanvasPage() {
     deleteCanvas(id).catch(console.error);
   };
 
+  // Drop the editor reference when there is no board mounted.
+  useEffect(() => {
+    if (!active) setEditor(null);
+  }, [active]);
+
+  const pickTool = (id: string) => editor?.setCurrentTool(id);
+
+  const onImageChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !editor) return;
+    await editor.putExternalContent({
+      type: "files",
+      files: [file],
+      point: editor.getViewportPageBounds().center,
+    });
+  };
+
   if (loading) {
     return (
       <div className="app">
@@ -255,7 +333,13 @@ export default function CanvasPage() {
         {/* canvas area */}
         <main className="main" style={{ position: "relative", padding: 0, overflow: "hidden" }}>
           {active && session ? (
-            <CanvasBoard key={active.id} canvasId={active.id} session={session} />
+            <CanvasBoard
+              key={active.id}
+              canvasId={active.id}
+              session={session}
+              onReady={setEditor}
+              onToolChange={setTool}
+            />
           ) : (
             <div
               style={{
@@ -279,32 +363,76 @@ export default function CanvasPage() {
         </main>
       </div>
 
-      {/* dock */}
+      {/* dock — house toggles the app-nav cluster; tldraw tools always shown */}
       <nav className="dock">
-        <button className="dock-search">
-          <Search className="dock-search-icon" />
-          <kbd className="kbd">⌘K</kbd>
+        <button
+          className={"dock-toggle" + (navOpen ? " is-open" : "")}
+          title={navOpen ? "Hide menu" : "Show menu"}
+          aria-label="Toggle menu"
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen((o) => !o)}
+        >
+          <HomeIcon className="dock-icon" />
         </button>
+
+        <div className={"dock-nav" + (navOpen ? " is-open" : "")}>
+          <button className="dock-item" onClick={() => router.push("/doc")}>
+            <HomeIcon className="dock-icon" /> Home
+          </button>
+          <button className="dock-item" onClick={() => router.push("/doc")}>
+            <Doc className="dock-icon" /> Pages
+          </button>
+          <button className="dock-item is-active">
+            <Grid className="dock-icon" /> Canvas
+          </button>
+          <button className="dock-item">
+            <Columns className="dock-icon" /> Board
+          </button>
+          <button className="dock-item">
+            <TableIcon className="dock-icon" /> Table
+          </button>
+        </div>
+
         <span className="dock-divider" />
-        <button className="dock-item" onClick={() => router.push("/doc")}>
-          <HomeIcon className="dock-icon" /> Home
-        </button>
-        <button className="dock-item" onClick={() => router.push("/doc")}>
-          <Doc className="dock-icon" /> Pages
-        </button>
-        <button className="dock-item is-active">
-          <Grid className="dock-icon" /> Canvas
-        </button>
-        <button className="dock-item">
-          <Columns className="dock-icon" /> Board
-        </button>
-        <button className="dock-item">
-          <TableIcon className="dock-icon" /> Table
-        </button>
+
+        <div className="dock-tools">
+          {TOOLS.map((t) => (
+            <button
+              key={t.id}
+              className={"dock-tool" + (tool === t.id ? " is-active" : "")}
+              title={t.label}
+              aria-label={t.label}
+              disabled={!editor}
+              onClick={() => pickTool(t.id)}
+            >
+              <t.Icon className="dock-tool-icon" />
+            </button>
+          ))}
+          <button
+            className="dock-tool"
+            title="Insert image"
+            aria-label="Insert image"
+            disabled={!editor}
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImageIcon className="dock-tool-icon" />
+          </button>
+        </div>
+
+        <span className="dock-divider" />
+
         <button className="dock-new" onClick={handleNew}>
           <Plus className="dock-new-icon" /> New
         </button>
       </nav>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={onImageChosen}
+      />
     </div>
   );
 }

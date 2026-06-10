@@ -38,3 +38,77 @@
   position: relative;
   overflow: hidden;
 }
+
+/* ---- tldraw tools, embedded in the app nav bar ---- */
+.canvas-app .dock { max-width: calc(100vw - 32px); }
+
+/* House button: toggles the app-nav cluster open/closed. */
+.dock-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 38px;
+  border-radius: 11px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+.dock-toggle:hover { background: var(--line-soft); color: var(--ink); transform: translateY(-1px); }
+.dock-toggle:active { transform: none; }
+.dock-toggle.is-open { background: var(--ember); color: #fff; }
+.dock-toggle .dock-icon { width: 18px; height: 18px; }
+
+/* App-nav cluster: collapses horizontally when the house is closed. */
+.dock-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width var(--t-med, 0.28s) ease, opacity 0.18s ease;
+}
+.dock-nav.is-open {
+  max-width: 560px;
+  opacity: 1;
+}
+
+.dock-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dock-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+.dock-tool:hover:not(:disabled) {
+  background: var(--line-soft);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+.dock-tool:active { transform: none; }
+.dock-tool.is-active {
+  background: var(--ember);
+  color: #fff;
+}
+.dock-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dock-tool-icon { width: 18px; height: 18px; }
+
+/* Keep the floating dock clear of tldraw's bottom-left zoom/help controls. */
+.canvas-app .tlui-layout__bottom { padding-bottom: 84px; }
