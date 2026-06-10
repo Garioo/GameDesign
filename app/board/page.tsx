@@ -72,11 +72,47 @@ const css = `
   }
   .share-btn:hover { background: #fff; border-color: #ddd0bd; transform: translateY(-1px); box-shadow: 0 3px 10px rgba(42,36,30,0.08); }
 
+  /* ── body layout (sidebar + main) ── */
+  .body-row {
+    display: flex; flex: 1; min-height: 0;
+  }
+  .sidebar {
+    width: 224px; flex-shrink: 0;
+    padding: 18px 12px;
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .sidebar-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-faint);
+    padding: 6px 10px 10px;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    font: inherit; font-size: 13.5px; color: var(--ink-soft); text-align: left;
+    padding: 9px 10px; border-radius: 9px;
+    background: none; border: none; cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .sidebar-item:hover { background: var(--line-soft); color: var(--ink); }
+  .sidebar-item.active { background: var(--ember-tint); color: var(--ember-deep); font-weight: 600; }
+  .sidebar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .sidebar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-divider { height: 1px; background: var(--line-soft); margin: 8px 4px; }
+  .sidebar-new { color: var(--ink-faint); }
+  .sidebar-new:hover { color: var(--ember); background: var(--ember-tint); }
+  .sidebar-new svg { width: 13px; height: 13px; }
+
+  .main-col {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+  }
+
   /* ── board toolbar ── */
   .board-toolbar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 18px 28px 0;
-    max-width: 1500px; width: 100%; margin: 0 auto;
+    width: 100%;
   }
   .board-toolbar-left { display: flex; align-items: center; gap: 10px; }
   .board-title-area { display: flex; flex-direction: column; gap: 2px; }
@@ -115,7 +151,7 @@ const css = `
     flex: 1;
     overflow-x: auto;
     padding: 20px 28px 120px;
-    max-width: 1500px; width: 100%; margin: 0 auto;
+    width: 100%;
     scrollbar-width: thin; scrollbar-color: var(--line) transparent;
   }
   .board-scroll::-webkit-scrollbar { height: 10px; }
@@ -350,6 +386,10 @@ const css = `
   @media (max-width: 768px) {
     .board-toolbar { padding: 14px 16px 0; }
     .board-scroll { padding: 14px 16px 120px; }
+    .sidebar { width: 64px; padding: 14px 8px; }
+    .sidebar-name, .sidebar-label { display: none; }
+    .sidebar-item { justify-content: center; padding: 9px; }
+    .sidebar-new svg { width: 14px; height: 14px; }
   }
 `;
 
@@ -415,36 +455,79 @@ const PEOPLE = [
 
 function mkId() { return Math.random().toString(36).slice(2, 9); }
 
-const INIT_COLS = [
+function defaultCols() {
+  return [
+    { id: mkId(), name: "To Do", color: "#a59a8c", cards: [] },
+    { id: mkId(), name: "In Progress", color: "#cf6a2c", cards: [] },
+    { id: mkId(), name: "Review", color: "#d9a441", cards: [] },
+    { id: mkId(), name: "Done", color: "#4caf7d", cards: [] },
+  ];
+}
+
+const INIT_BOARDS = [
   {
-    id: "col-todo", name: "To Do", color: "#a59a8c",
-    cards: [
-      { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1" },
-      { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2" },
-      { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null },
+    id: "board-core", name: "Core Gameplay", color: "#cf6a2c",
+    cols: [
+      {
+        id: "col-todo", name: "To Do", color: "#a59a8c",
+        cards: [
+          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1" },
+          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2" },
+          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null },
+        ],
+      },
+      {
+        id: "col-wip", name: "In Progress", color: "#cf6a2c",
+        cards: [
+          { id: mkId(), title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", ownerId: "3" },
+          { id: mkId(), title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", ownerId: "1" },
+        ],
+      },
+      {
+        id: "col-review", name: "Review", color: "#d9a441",
+        cards: [
+          { id: mkId(), title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, ownerId: "4" },
+          { id: mkId(), title: "Audio ambience zones", sub: "Per-biome audio blending using distance cues.", kind: "mechanic", tags: ["audio"], priority: "medium", ownerId: "2" },
+        ],
+      },
+      {
+        id: "col-done", name: "Done", color: "#4caf7d",
+        cards: [
+          { id: mkId(), title: "Player stats dashboard", sub: "In-game HUD displaying health, stamina, gold.", kind: "mechanic", tags: ["ui", "done"], priority: null, ownerId: "3" },
+          { id: mkId(), title: "Tutorial flow v1", sub: "Guided onboarding across first 10 minutes of play.", kind: "vision", tags: ["ux", "done"], priority: null, ownerId: "1" },
+          { id: mkId(), title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, ownerId: "4" },
+        ],
+      },
     ],
   },
   {
-    id: "col-wip", name: "In Progress", color: "#cf6a2c",
-    cards: [
-      { id: mkId(), title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", ownerId: "3" },
-      { id: mkId(), title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", ownerId: "1" },
+    id: "board-economy", name: "Economy & Items", color: "#4caf7d",
+    cols: [
+      {
+        id: "col-econ-todo", name: "To Do", color: "#a59a8c",
+        cards: [
+          { id: mkId(), title: "Crafting material sinks", sub: "Add high-tier recipes to drain late-game material surplus.", kind: "economy", tags: ["crafting"], priority: "medium", ownerId: "1" },
+          { id: mkId(), title: "Currency exchange rates", sub: "Define conversion between region-specific currencies.", kind: "economy", tags: ["world"], priority: null, ownerId: null },
+        ],
+      },
+      { id: "col-econ-wip", name: "In Progress", color: "#cf6a2c", cards: [
+          { id: mkId(), title: "Vendor restock logic", sub: "Tune restock intervals per vendor tier.", kind: "economy", tags: ["vendors"], priority: "high", ownerId: "3" },
+        ],
+      },
+      { id: "col-econ-review", name: "Review", color: "#d9a441", cards: [] },
+      { id: "col-econ-done", name: "Done", color: "#4caf7d", cards: [
+          { id: mkId(), title: "Starting gold balance", sub: "Set baseline gold for new characters per difficulty.", kind: "economy", tags: ["balance", "done"], priority: null, ownerId: "4" },
+        ],
+      },
     ],
   },
   {
-    id: "col-review", name: "Review", color: "#d9a441",
-    cards: [
-      { id: mkId(), title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, ownerId: "4" },
-      { id: mkId(), title: "Audio ambience zones", sub: "Per-biome audio blending using distance cues.", kind: "mechanic", tags: ["audio"], priority: "medium", ownerId: "2" },
-    ],
-  },
-  {
-    id: "col-done", name: "Done", color: "#4caf7d",
-    cards: [
-      { id: mkId(), title: "Player stats dashboard", sub: "In-game HUD displaying health, stamina, gold.", kind: "mechanic", tags: ["ui", "done"], priority: null, ownerId: "3" },
-      { id: mkId(), title: "Tutorial flow v1", sub: "Guided onboarding across first 10 minutes of play.", kind: "vision", tags: ["ux", "done"], priority: null, ownerId: "1" },
-      { id: mkId(), title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, ownerId: "4" },
-    ],
+    id: "board-narrative", name: "World & Narrative", color: "#8a54b5",
+    cols: defaultCols().map((c, i) => i === 0 ? {
+      ...c, cards: [
+        { id: mkId(), title: "Faction reputation arcs", sub: "Outline reputation thresholds and unlocks for the three major factions.", kind: "lore", tags: ["factions"], priority: "medium", ownerId: "4" },
+      ],
+    } : c),
   },
 ];
 
@@ -618,11 +701,29 @@ function CardModal({ card, onClose, onSave }) {
 
 /* ── Main BoardPage component ─────────────────────────────────────────────── */
 export default function BoardPage() {
-  const [cols, setCols] = useState(INIT_COLS);
+  const [boards, setBoards] = useState(INIT_BOARDS);
+  const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
   const [filterKind, setFilterKind] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const drag = useRef({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState(null); // { overCol, overCard, position }
+
+  const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
+  const cols = activeBoard.cols;
+
+  function setCols(updater) {
+    setBoards((prev) => prev.map((b) =>
+      b.id !== activeBoardId ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
+    ));
+  }
+
+  function handleAddBoard() {
+    const name = window.prompt("New board name");
+    if (!name?.trim()) return;
+    const id = mkId();
+    setBoards((prev) => [...prev, { id, name: name.trim(), color: "#cf6a2c", cols: defaultCols() }]);
+    setActiveBoardId(id);
+  }
 
   /* drag handlers */
   function handleDragStart(e, cardId) {
@@ -733,57 +834,82 @@ export default function BoardPage() {
           </div>
         </header>
 
-        {/* toolbar */}
-        <div className="board-toolbar">
-          <div>
-            <div className="board-label">Design Workspace · Board</div>
-            <div className="board-heading">Sprint Board</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <div className="filter-row">
+        <div className="body-row">
+          {/* sidebar: board list */}
+          <aside className="sidebar">
+            <div className="sidebar-label">Boards</div>
+            {boards.map((b) => (
               <button
-                className={`filter-chip${!filterKind ? " active" : ""}`}
-                onClick={() => setFilterKind(null)}
+                key={b.id}
+                className={`sidebar-item${b.id === activeBoardId ? " active" : ""}`}
+                onClick={() => setActiveBoardId(b.id)}
+                title={b.name}
               >
-                <Filter style={{ width: 13, height: 13 }} /> All
+                <span className="sidebar-dot" style={{ background: b.color }} />
+                <span className="sidebar-name">{b.name}</span>
               </button>
-              {kinds.map((k) => (
-                <button
-                  key={k}
-                  className={`filter-chip${filterKind === k ? " active" : ""}`}
-                  onClick={() => setFilterKind(filterKind === k ? null : k)}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-            <button className="add-col-btn" onClick={handleAddCol}>
-              <Plus style={{ width: 15, height: 15 }} /> Column
-            </button>
-          </div>
-        </div>
-
-        {/* kanban board */}
-        <div className="board-scroll">
-          <div className="board-cols">
-            {displayCols.map((col) => (
-              <Column
-                key={col.id}
-                col={col}
-                onAddCard={handleAddCard}
-                onCardClick={setEditingCard}
-                dragState={dragState}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onDragLeave={handleDragLeave}
-              />
             ))}
-            <button className="add-col-ghost" onClick={handleAddCol}>
-              <Plus style={{ width: 16, height: 16 }} />
-              Add column
+            <div className="sidebar-divider" />
+            <button className="sidebar-item sidebar-new" onClick={handleAddBoard} title="New board">
+              <Plus />
+              <span className="sidebar-name">New board</span>
             </button>
+          </aside>
+
+          <div className="main-col">
+            {/* toolbar */}
+            <div className="board-toolbar">
+              <div>
+                <div className="board-label">Design Workspace · Board</div>
+                <div className="board-heading">{activeBoard.name}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div className="filter-row">
+                  <button
+                    className={`filter-chip${!filterKind ? " active" : ""}`}
+                    onClick={() => setFilterKind(null)}
+                  >
+                    <Filter style={{ width: 13, height: 13 }} /> All
+                  </button>
+                  {kinds.map((k) => (
+                    <button
+                      key={k}
+                      className={`filter-chip${filterKind === k ? " active" : ""}`}
+                      onClick={() => setFilterKind(filterKind === k ? null : k)}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <button className="add-col-btn" onClick={handleAddCol}>
+                  <Plus style={{ width: 15, height: 15 }} /> Column
+                </button>
+              </div>
+            </div>
+
+            {/* kanban board */}
+            <div className="board-scroll">
+              <div className="board-cols">
+                {displayCols.map((col) => (
+                  <Column
+                    key={col.id}
+                    col={col}
+                    onAddCard={handleAddCard}
+                    onCardClick={setEditingCard}
+                    dragState={dragState}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onDragLeave={handleDragLeave}
+                  />
+                ))}
+                <button className="add-col-ghost" onClick={handleAddCol}>
+                  <Plus style={{ width: 16, height: 16 }} />
+                  Add column
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
