@@ -1,0 +1,382 @@
+/* Settings dialog — opened from the topbar gear / ⌘K palette.
+   Speaks the doc page's language: single-family sans headings, quiet
+   inline-editable fields (ring on hover, ember ring on focus), hairline
+   meta rows, and an ember glow rising off the header. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(42, 36, 30, 0.28);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10vh;
+}
+
+.dialog {
+  width: min(540px, 92vw);
+  max-height: 82vh;
+  overflow-y: auto;
+  background:
+    radial-gradient(440px 220px at 82% -60px, var(--ember-tint) 0%, transparent 68%),
+    var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-modal);
+  padding: 26px 30px 22px;
+  animation: riseIn 0.22s var(--ease-rise) both;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* ---------------- header ---------------- */
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding-bottom: 18px;
+}
+.flame {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--grad-ember);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(192, 83, 28, 0.55);
+}
+.flame svg {
+  width: 18px;
+  height: 18px;
+}
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+.title {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.tagline {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.close {
+  flex: none;
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.close:hover {
+  color: var(--ink);
+  background: var(--line-soft);
+}
+
+/* ---------------- sections ---------------- */
+.section {
+  padding: 14px 0 10px;
+  animation: riseIn 0.4s var(--ease-rise) both;
+}
+.s1 { animation-delay: 0.05s; }
+.s2 { animation-delay: 0.12s; }
+.s3 { animation-delay: 0.19s; }
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 26px;
+}
+/* small-caps kicker, same vocabulary as the doc page's crumb */
+.sectionTitle {
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.saveChip {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--grad-ember);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 14px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(191, 99, 43, 0.3);
+  animation: fadeIn 0.15s ease both;
+  transition: filter var(--t-fast), transform var(--t-fast);
+}
+.saveChip:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.saveChip:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* ---------------- identity ---------------- */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 14px 0 2px;
+}
+.bigAvatar {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 4px var(--line),
+    0 12px 24px -12px rgba(42, 36, 30, 0.45);
+  transition: background var(--t-slow) ease;
+}
+.identityFields {
+  flex: 1;
+  min-width: 0;
+}
+.nameInput {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  background: none;
+  border: none;
+  outline: none;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: var(--r-sm);
+  transition: box-shadow var(--t-fast);
+}
+.nameInput:hover { box-shadow: 0 0 0 2px var(--line-soft); }
+.nameInput:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
+.nameInput::placeholder { color: var(--ink-faint); }
+
+.identityMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 6px;
+}
+.miniKey {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.initialsInput {
+  width: 36px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink);
+  background: none;
+  border: none;
+  outline: none;
+  padding: 3px 0;
+  border-radius: var(--r-sm);
+  transition: box-shadow var(--t-fast);
+}
+.initialsInput:hover { box-shadow: 0 0 0 2px var(--line-soft); }
+.initialsInput:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
+
+.metaDot {
+  color: var(--ink-faint);
+  user-select: none;
+}
+
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.swatch {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--t-fast);
+}
+.swatch:hover { transform: scale(1.18); }
+.swatchActive {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--ink);
+}
+
+/* ---------------- workspace rows (meta-card pattern) ---------------- */
+.rows {
+  margin-top: 2px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.row:last-child { border-bottom: none; }
+.key {
+  width: 96px;
+  flex-shrink: 0;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.inline {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--ink);
+  background: none;
+  border: none;
+  outline: none;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border-radius: var(--r-sm);
+  transition: box-shadow var(--t-fast);
+}
+.inline:hover { box-shadow: 0 0 0 2px var(--line-soft); }
+.inline:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
+.inline::placeholder { color: var(--ink-faint); }
+
+.fine {
+  padding: 10px 0;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+/* ---------------- account ---------------- */
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 42px;
+}
+.accountWho {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.accountEmail {
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.providerChip {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--line-soft);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.signOut {
+  flex: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.signOut:hover {
+  background: #fffaf3;
+  border-color: #d8cbb8;
+}
+
+/* the quiet ashes at the bottom — leaving lives here, understated */
+.ash {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  font-size: 12.5px;
+}
+.ashLink {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color var(--t-fast);
+}
+.ashLink:hover { color: var(--danger); }
+.ashConfirm {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  color: var(--ink-soft);
+  animation: fadeIn 0.15s ease both;
+}
+.ashYes {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--danger);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+.ashYes:hover { filter: brightness(1.08); }
+.ashNo {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.ashNo:hover { background: var(--line-soft); }

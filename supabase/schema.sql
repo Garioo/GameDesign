@@ -58,6 +58,9 @@ create table if not exists public.projects (
   updated_at timestamptz not null default now()
 );
 
+-- added later: linked GitHub repository ("owner/name") for script blocks
+alter table public.projects add column if not exists repo text;
+
 -- project_members — who can see / edit a project
 create table if not exists public.project_members (
   project_id uuid not null references public.projects(id) on delete cascade,
@@ -136,6 +139,11 @@ create table if not exists public.comments (
   body       text not null,
   created_at timestamptz not null default now()
 );
+
+-- added later: edit + resolve metadata (idempotent for existing databases)
+alter table public.comments add column if not exists updated_at  timestamptz;
+alter table public.comments add column if not exists resolved_at timestamptz;
+alter table public.comments add column if not exists resolved_by uuid references public.profiles(id);
 
 -- milestones — project timeline
 create table if not exists public.milestones (
@@ -339,9 +347,13 @@ drop policy if exists comments_insert on public.comments;
 create policy comments_insert on public.comments
   for insert to authenticated with check (public.can_access_page(page_id) and author = auth.uid());
 
+-- any member may update (needed so anyone can resolve a thread); the UI
+-- restricts body edits to the author. Mirrors the delete policy below.
 drop policy if exists comments_update on public.comments;
 create policy comments_update on public.comments
-  for update to authenticated using (author = auth.uid()) with check (author = auth.uid());
+  for update to authenticated
+  using (public.can_access_page(page_id))
+  with check (public.can_access_page(page_id));
 
 drop policy if exists comments_delete on public.comments;
 create policy comments_delete on public.comments

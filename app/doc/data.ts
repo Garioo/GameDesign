@@ -17,11 +17,14 @@ export type BlockType =
   | "h2"
   | "h3"
   | "bullet"
+  | "numbered"
+  | "todo"
   | "quote"
   | "callout"
   | "divider"
   | "table"
-  | "image";
+  | "image"
+  | "script";
 
 // Tone palette for callouts (and any future tinted block). "ember" is default.
 export type BlockTone =
@@ -50,6 +53,9 @@ export interface Block {
   rows?: string[][]; // grid content for table blocks (first row is the header)
   src?: string; // image source (data-URL or remote URL) for image blocks
   tone?: BlockTone; // accent tone for callout blocks
+  checked?: boolean; // done state for todo blocks
+  path?: string; // repo-relative file path for script blocks
+  code?: string; // cached file content for script blocks
 }
 
 // Icon hint for linked-reference cards in the right rail.

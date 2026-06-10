@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { captureGithubToken } from "./github";
 
 export interface SessionInfo {
   userId: string;
@@ -8,7 +9,7 @@ export interface SessionInfo {
   color: string;
 }
 
-const PALETTE = ["#5a83d6", "#3f9d6e", "#d4763a", "#b7553d", "#7b61c9", "#c2417a"];
+export const PALETTE = ["#5a83d6", "#3f9d6e", "#d4763a", "#b7553d", "#7b61c9", "#c2417a"];
 const NAMES = ["Ash", "Wren", "Juniper", "Soot", "Cinder", "Pike", "Bram", "Hazel", "Fen", "Marlow"];
 
 function pick<T>(arr: T[], seed: string): T {
@@ -28,6 +29,7 @@ export async function ensureSession(): Promise<SessionInfo | null> {
   } = await supabase.auth.getSession();
 
   if (!session) return null;
+  captureGithubToken(session); // present right after an OAuth sign-in
   const userId = session.user.id;
 
   // Create the shared project (if needed) and join it.

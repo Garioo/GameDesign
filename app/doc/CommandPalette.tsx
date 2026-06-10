@@ -15,13 +15,29 @@ const PlusIcon = ({ className }: IconProps) => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+const GearIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08A1.7 1.7 0 0 0 10 4.09V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08A1.7 1.7 0 0 0 21 11.9h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
+  </svg>
+);
 
 interface Item {
   key: string;
   label: string;
   hint?: string;
-  kind: "page" | "action";
+  kind: "page" | "action" | "settings";
   run: () => void;
+}
+
+// A short excerpt around the first match, so the user sees *why* a page matched.
+function snippetAround(text: string, idx: number, len: number): string {
+  const start = Math.max(0, idx - 30);
+  const end = Math.min(text.length, idx + len + 30);
+  let s = text.slice(start, end).replace(/\s+/g, " ").trim();
+  if (start > 0) s = "… " + s;
+  if (end < text.length) s = s + " …";
+  return s;
 }
 
 export default function CommandPalette({
@@ -33,6 +49,7 @@ export default function CommandPalette({
   onJump,
   onNewPage,
   onNewSection,
+  onOpenSettings,
 }: {
   open: boolean;
   onClose: () => void;
@@ -42,6 +59,7 @@ export default function CommandPalette({
   onJump: (id: string) => void;
   onNewPage: (sectionId: string | null, sectionName: string) => void;
   onNewSection: () => void;
+  onOpenSettings?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -56,18 +74,39 @@ export default function CommandPalette({
   const items = useMemo<Item[]>(() => {
     const q = query.trim().toLowerCase();
     const pageItems: Item[] = docs
-      .filter((d) => !q || d.title.toLowerCase().includes(q) || d.group.toLowerCase().includes(q))
-      .slice(0, 50)
-      .map((d) => ({
-        key: `page:${d.id}`,
-        label: d.title,
-        hint: d.group,
-        kind: "page" as const,
-        run: () => {
-          onJump(d.id);
-          onClose();
-        },
-      }));
+      .map((d): Item | null => {
+        const titleMatch =
+          !q || d.title.toLowerCase().includes(q) || d.group.toLowerCase().includes(q);
+
+        // Fall back to scanning block bodies (and table cells) for the query.
+        // Block text may carry inline HTML (bold/code) — strip tags first.
+        let snippet: string | undefined;
+        if (!titleMatch && q) {
+          for (const b of d.blocks) {
+            const hay =
+              b.text.replace(/<[^>]+>/g, "") + (b.rows ? " " + b.rows.flat().join(" ") : "");
+            const idx = hay.toLowerCase().indexOf(q);
+            if (idx >= 0) {
+              snippet = snippetAround(hay, idx, q.length);
+              break;
+            }
+          }
+          if (!snippet) return null; // matches neither title nor content
+        }
+
+        return {
+          key: `page:${d.id}`,
+          label: d.title,
+          hint: snippet ?? d.group, // content snippet, else the group name
+          kind: "page" as const,
+          run: () => {
+            onJump(d.id);
+            onClose();
+          },
+        };
+      })
+      .filter((x): x is Item => x !== null)
+      .slice(0, 50);
     const actions: Item[] = [
       {
         key: "act:new-page",
@@ -88,6 +127,20 @@ export default function CommandPalette({
           onClose();
         },
       },
+      ...(onOpenSettings
+        ? [
+            {
+              key: "act:settings",
+              label: "Settings",
+              hint: "profile · workspace · account",
+              kind: "settings" as const,
+              run: () => {
+                onOpenSettings();
+                onClose();
+              },
+            },
+          ]
+        : []),
     ].filter((a) => !q || a.label.toLowerCase().includes(q));
     return [...pageItems, ...actions];
   }, [query, docs, activeSectionId, activeGroup, onJump, onNewPage, onNewSection, onClose]);
@@ -139,7 +192,7 @@ export default function CommandPalette({
               }}
             >
               <span className="palette-glyph">
-                {it.kind === "page" ? <DocIcon /> : <PlusIcon />}
+                {it.kind === "page" ? <DocIcon /> : it.kind === "settings" ? <GearIcon /> : <PlusIcon />}
               </span>
               <span className="palette-label">{it.label}</span>
               {it.hint && <span className="palette-hint">{it.hint}</span>}

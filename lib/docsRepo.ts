@@ -44,7 +44,15 @@ interface BlockRow {
   id: string;
   page_id: string;
   type: string;
-  content: { text?: string; rows?: string[][]; src?: string; tone?: string };
+  content: {
+    text?: string;
+    rows?: string[][];
+    src?: string;
+    tone?: string;
+    checked?: boolean;
+    path?: string;
+    code?: string;
+  };
   position: number;
 }
 export interface ProfileInfo {
@@ -100,6 +108,9 @@ const blockContent = (b: Block): BlockRow["content"] => {
   if (b.rows) c.rows = b.rows;
   if (b.src) c.src = b.src;
   if (b.tone) c.tone = b.tone;
+  if (b.checked !== undefined) c.checked = b.checked;
+  if (b.path) c.path = b.path;
+  if (b.code !== undefined) c.code = b.code;
   return c;
 };
 
@@ -118,6 +129,9 @@ const rowToBlock = (r: BlockRow): Block => ({
   ...(r.content?.rows ? { rows: r.content.rows } : {}),
   ...(r.content?.src ? { src: r.content.src } : {}),
   ...(r.content?.tone ? { tone: r.content.tone as Block["tone"] } : {}),
+  ...(r.content?.checked !== undefined ? { checked: r.content.checked } : {}),
+  ...(r.content?.path ? { path: r.content.path } : {}),
+  ...(r.content?.code !== undefined ? { code: r.content.code } : {}),
 });
 
 /** Load the whole workspace into the in-memory DesignDoc[] the UI expects. */

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BLOCK_TONES, type Block, type BlockTone, type BlockType } from "./data";
+import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
+import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
 import "./BlockEditor.css";
 
 /* ---------- slash-menu icons (no emoji) ---------- */
@@ -27,6 +29,18 @@ const IBullet = () => (
     <circle cx="4.5" cy="6" r="1.3" fill="currentColor" stroke="none" />
     <circle cx="4.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
     <circle cx="4.5" cy="18" r="1.3" fill="currentColor" stroke="none" />
+  </svg>
+);
+const INumbered = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <path d="M10 6h11M10 12h11M10 18h11" />
+    <path d="M4 5.5 5.5 4.5v4M4 11h2.5l-2.5 3h2.5M4 17h2a1 1 0 0 1 0 2H5a1 1 0 0 0 0 2h1.5" strokeWidth="1.4" />
+  </svg>
+);
+const ITodo = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <path d="m8.5 12 2.5 2.5 5-5.5" />
   </svg>
 );
 const IQuote = () => (
@@ -64,6 +78,11 @@ const IImage = () => (
     <path d="m4 18 5-5 4 4 3-3 4 4" />
   </svg>
 );
+const ICode = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <path d="m8 7-5 5 5 5M16 7l5 5-5 5M13 4l-2 16" />
+  </svg>
+);
 
 type MenuItem = { type: BlockType; label: string; hint: string; Icon: () => React.ReactElement };
 const MENU: MenuItem[] = [
@@ -71,9 +90,12 @@ const MENU: MenuItem[] = [
   { type: "h2", label: "Heading", hint: "Large section heading", Icon: IH2 },
   { type: "h3", label: "Subheading", hint: "Smaller heading", Icon: IH3 },
   { type: "bullet", label: "Bulleted list", hint: "A simple bullet list", Icon: IBullet },
+  { type: "numbered", label: "Numbered list", hint: "A list with numbering", Icon: INumbered },
+  { type: "todo", label: "To-do list", hint: "Track tasks with checkboxes", Icon: ITodo },
   { type: "quote", label: "Quote", hint: "Capture a quote", Icon: IQuote },
   { type: "callout", label: "Callout", hint: "Make text stand out", Icon: ICallout },
   { type: "image", label: "Image", hint: "Upload or embed a picture", Icon: IImage },
+  { type: "script", label: "Script", hint: "Attach a file from the GitHub repo", Icon: ICode },
   { type: "table", label: "Table", hint: "Add a simple table", Icon: ITable },
   { type: "divider", label: "Divider", hint: "Visually separate blocks", Icon: IDivider },
 ];
@@ -83,12 +105,19 @@ const PLACEHOLDER: Record<BlockType, string> = {
   h2: "Heading",
   h3: "Subheading",
   bullet: "List",
+  numbered: "List",
+  todo: "To-do",
   quote: "Empty quote",
   callout: "Type something…",
   divider: "",
   table: "",
   image: "",
+  script: "",
 };
+
+// Blocks with no inline-editable text (rendered as standalone "chrome").
+const isChromeBlock = (t: BlockType) =>
+  t === "divider" || t === "table" || t === "image" || t === "script";
 
 // UUID so new blocks upsert directly into the `blocks` table (uuid PK).
 const newId = () =>
@@ -129,6 +158,38 @@ async function readImageFile(file: File, maxDim = 1600): Promise<string> {
   }
 }
 
+/* ---------- inline-HTML sanitizer ---------- */
+// Block text is stored as a tiny HTML subset so ⌘B/⌘I/⌘E formatting survives
+// persistence and realtime. Everything else (attributes, unknown tags) is
+// stripped down to its text content at every read and write.
+const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "CODE", "BR"]);
+
+function sanitizeHtml(html: string): string {
+  if (!/[<&]/.test(html)) return html;
+  const root = document.createElement("div");
+  root.innerHTML = html;
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as Element;
+        walk(el);
+        if (ALLOWED_TAGS.has(el.tagName)) {
+          while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+        } else {
+          while (el.firstChild) node.insertBefore(el.firstChild, el);
+          node.removeChild(el);
+        }
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        node.removeChild(child); // comments & friends
+      }
+    }
+  };
+  walk(root);
+  // A trailing <br> is just contentEditable's empty-line filler — drop it so
+  // empty blocks stay truly empty (placeholders rely on :empty).
+  return root.innerHTML.replace(/<br\s*\/?>$/i, "");
+}
+
 /* ---------- caret helpers ---------- */
 function caretOffset(el: HTMLElement): number {
   const sel = window.getSelection();
@@ -149,10 +210,25 @@ function placeCaret(el: HTMLElement, pos: "start" | "end" | number) {
   if (!sel) return;
   const range = document.createRange();
   if (typeof pos === "number") {
-    const node = el.firstChild ?? el;
-    const len = (node.textContent ?? "").length;
-    range.setStart(node, Math.min(pos, len));
-    range.collapse(true);
+    // Walk text nodes so the offset lands correctly inside formatted content.
+    let remaining = pos;
+    let placed = false;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      if (remaining <= node.length) {
+        range.setStart(node, remaining);
+        placed = true;
+        break;
+      }
+      remaining -= node.length;
+    }
+    if (!placed) {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    } else {
+      range.collapse(true);
+    }
   } else {
     range.selectNodeContents(el);
     range.collapse(pos === "start");
@@ -168,12 +244,15 @@ export default function BlockEditor({
   blocks,
   onChange,
   onLiveInput,
+  repo,
 }: {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
   // Fired on every keystroke (not on slash queries). Lets the parent push the
   // edit out live without re-rendering this editor (no caret disruption).
   onLiveInput?: (blockId: string, text: string, blocks: Block[]) => void;
+  // Workspace GitHub repository ("owner/name") for script blocks, if linked.
+  repo?: string | null;
 }) {
   const refs = useRef(new Map<string, HTMLDivElement>());
   const [slash, setSlash] = useState<Slash | null>(null);
@@ -207,16 +286,19 @@ export default function BlockEditor({
     else refs.current.delete(id);
   };
 
-  // Snapshot live DOM text for text-bearing blocks; tables/dividers pass through.
+  // Snapshot live DOM content for text-bearing blocks; tables/dividers pass
+  // through. Text is stored as sanitized inline HTML (bold/italic/code).
   const readBlocks = (): Block[] =>
     blocks.map((b) => {
-      if (b.type === "divider" || b.type === "table" || b.type === "image") return b;
+      if (isChromeBlock(b.type)) return b;
       const el = refs.current.get(b.id);
-      return el ? { ...b, text: el.innerText.replace(/\n$/, "") } : b;
+      return el ? { ...b, text: sanitizeHtml(el.innerHTML) } : b;
     });
 
   const filtered = (q: string) =>
     MENU.filter((m) => m.label.toLowerCase().includes(q.toLowerCase()));
+
+  const isListType = (t: BlockType) => t === "bullet" || t === "numbered" || t === "todo";
 
   /* ---------- structural operations ---------- */
   const handleEnter = (id: string) => {
@@ -225,21 +307,24 @@ export default function BlockEditor({
     const block = cur[idx];
     const el = refs.current.get(id)!;
     const offset = caretOffset(el);
-    const before = block.text.slice(0, offset);
-    const after = block.text.slice(offset);
+    // Split on plain text — a mid-block split drops inline formatting, which
+    // beats slicing an HTML string at a character offset.
+    const plain = el.innerText.replace(/\n$/, "");
+    const before = plain.slice(0, offset);
+    const after = plain.slice(offset);
 
-    if (block.type === "bullet" && block.text === "") {
+    if (isListType(block.type) && plain === "") {
       const next = [...cur];
-      next[idx] = { ...block, type: "text" };
+      next[idx] = { ...block, type: "text", checked: undefined };
       onChange(next);
       setFocusReq({ id, pos: "start" });
       return;
     }
 
-    const nextType: BlockType = block.type === "bullet" ? "bullet" : "text";
+    const nextType: BlockType = isListType(block.type) ? block.type : "text";
     const nb: Block = { id: newId(), type: nextType, text: after };
     const next = [...cur];
-    next[idx] = { ...block, text: before };
+    next[idx] = { ...block, text: offset >= plain.length ? block.text : before };
     next.splice(idx + 1, 0, nb);
     onChange(next);
     setFocusReq({ id: nb.id, pos: "start" });
@@ -260,9 +345,10 @@ export default function BlockEditor({
       setFocusReq({ id, pos: "start" });
       return true;
     }
-    if (prev.type === "table" || prev.type === "image") return false; // don't merge into these
+    if (prev.type === "table" || prev.type === "image" || prev.type === "script") return false; // don't merge into these
 
-    const caretAt = prev.text.length;
+    const prevEl = refs.current.get(prev.id);
+    const caretAt = prevEl ? prevEl.innerText.replace(/\n$/, "").length : prev.text.length;
     const next = [...cur];
     next[idx - 1] = { ...prev, text: prev.text + block.text };
     next.splice(idx, 1);
@@ -277,7 +363,7 @@ export default function BlockEditor({
     const block = cur[idx];
 
     // Block types with no inline text get a trailing text block to keep writing.
-    if (type === "divider" || type === "table" || type === "image") {
+    if (isChromeBlock(type)) {
       const next = [...cur];
       next[idx] =
         type === "table"
@@ -292,7 +378,9 @@ export default function BlockEditor({
             }
           : type === "image"
             ? { id: block.id, type: "image", text: "", src: "" }
-            : { id: block.id, type: "divider", text: "" };
+            : type === "script"
+              ? { id: block.id, type: "script", text: "" }
+              : { id: block.id, type: "divider", text: "" };
       const nb: Block = { id: newId(), type: "text", text: "" };
       next.splice(idx + 1, 0, nb);
       onChange(next);
@@ -336,12 +424,7 @@ export default function BlockEditor({
     }
     onChange(next);
     const neighbour = cur[idx - 1] ?? cur[idx + 1];
-    if (
-      neighbour &&
-      neighbour.type !== "divider" &&
-      neighbour.type !== "table" &&
-      neighbour.type !== "image"
-    ) {
+    if (neighbour && !isChromeBlock(neighbour.type)) {
       setFocusReq({ id: neighbour.id, pos: "end" });
     }
   };
@@ -382,10 +465,80 @@ export default function BlockEditor({
       return; // don't broadcast a slash query
     }
     if (slash && slash.id === id) setSlash(null);
-    onLiveInput?.(id, text, readBlocks());
+    onLiveInput?.(id, sanitizeHtml(el.innerHTML), readBlocks());
+  };
+
+  // "## " at the start of a plain text block converts it, Notion-style.
+  const MD_TRIGGERS: Record<string, BlockType> = {
+    "#": "h2",
+    "##": "h3",
+    "-": "bullet",
+    "*": "bullet",
+    "1.": "numbered",
+    "[]": "todo",
+    "[ ]": "todo",
+    ">": "quote",
+    "---": "divider",
+  };
+
+  // Toggle <code> around the selection (execCommand has no code variant).
+  const toggleInlineCode = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const ancestor =
+      range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.commonAncestorContainer as Element)
+        : range.commonAncestorContainer.parentElement;
+    const codeEl = ancestor?.closest("code");
+    if (codeEl) {
+      const parent = codeEl.parentNode;
+      while (codeEl.firstChild) parent?.insertBefore(codeEl.firstChild, codeEl);
+      parent?.removeChild(codeEl);
+      return;
+    }
+    try {
+      range.surroundContents(document.createElement("code"));
+    } catch {
+      // selection crosses element boundaries — wrap its extracted contents instead
+      const code = document.createElement("code");
+      code.appendChild(range.extractContents());
+      range.insertNode(code);
+    }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, id: string) => {
+    // ⌘B / ⌘I / ⌘E inline formatting
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === "b" || k === "i" || k === "e") {
+        e.preventDefault();
+        if (k === "e") toggleInlineCode();
+        else document.execCommand(k === "b" ? "bold" : "italic");
+        const el = refs.current.get(id);
+        if (el) onInput(id, el);
+        return;
+      }
+    }
+
+    // Markdown shortcuts: trigger token + space at the start of a text block.
+    if (e.key === " " && !e.metaKey && !e.ctrlKey && !(slash && slash.id === id)) {
+      const el = refs.current.get(id);
+      const block = blocks.find((b) => b.id === id);
+      if (el && block?.type === "text" && isCollapsed()) {
+        const plain = el.innerText.replace(/\n$/, "");
+        const target = MD_TRIGGERS[plain];
+        if (target && caretOffset(el) === plain.length) {
+          e.preventDefault();
+          chooseType(id, target);
+          return;
+        }
+      }
+    }
+    onKeyDownRest(e, id);
+  };
+
+  const onKeyDownRest = (e: React.KeyboardEvent<HTMLDivElement>, id: string) => {
     if (slash && slash.id === id) {
       const items = filtered(slash.query);
       if (e.key === "ArrowDown") {
@@ -424,12 +577,23 @@ export default function BlockEditor({
     }
   };
 
+  // Display numbers for numbered-list runs (resets when the run breaks).
+  let numberedRun = 0;
+  const numberFor = (b: Block): number => {
+    numberedRun = b.type === "numbered" ? numberedRun + 1 : 0;
+    return numberedRun;
+  };
+
   return (
     <div className="blocks">
       {blocks.map((b) => (
         <BlockRow
           key={b.id}
           block={b}
+          index={numberFor(b)}
+          repo={repo}
+          onToggleChecked={() => updateBlock(b.id, { checked: !b.checked })}
+          onSetScript={(patch) => updateBlock(b.id, patch)}
           register={register}
           focused={focusedId === b.id}
           menuOpen={menuFor === b.id}
@@ -475,6 +639,10 @@ export default function BlockEditor({
    ============================================================ */
 function BlockRow({
   block,
+  index,
+  repo,
+  onToggleChecked,
+  onSetScript,
   register,
   focused,
   menuOpen,
@@ -501,6 +669,10 @@ function BlockRow({
   onDrop,
 }: {
   block: Block;
+  index: number;
+  repo?: string | null;
+  onToggleChecked: () => void;
+  onSetScript: (patch: Partial<Block>) => void;
   register: (id: string, el: HTMLDivElement | null) => void;
   focused: boolean;
   menuOpen: boolean;
@@ -528,15 +700,15 @@ function BlockRow({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // Keep DOM text in sync with state without disturbing the caret.
+  // Keep DOM content in sync with state without disturbing the caret.
+  // Compared on the sanitized form so browser HTML normalization can't loop.
   useEffect(() => {
     const el = ref.current;
-    if (!el || block.type === "divider" || block.type === "table" || block.type === "image")
-      return;
-    if (el.innerText !== block.text) el.innerText = block.text;
+    if (!el || isChromeBlock(block.type)) return;
+    if (sanitizeHtml(el.innerHTML) !== block.text) el.innerHTML = block.text;
   }, [block.text, block.type]);
 
-  const editable = block.type !== "divider" && block.type !== "table" && block.type !== "image" && (
+  const editable = !isChromeBlock(block.type) && (
     <div
       ref={(el) => {
         ref.current = el;
@@ -548,6 +720,12 @@ function BlockRow({
       data-ph={PLACEHOLDER[block.type]}
       onInput={(e) => onInput(block.id, e.currentTarget)}
       onKeyDown={(e) => onKeyDown(e, block.id)}
+      onPaste={(e) => {
+        // Paste as plain text — the DOM is the source of truth for block HTML.
+        e.preventDefault();
+        document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+        onInput(block.id, e.currentTarget);
+      }}
       onFocus={onFocus}
       onBlur={onBlur}
     />
@@ -573,10 +751,44 @@ function BlockRow({
         />
       </div>
     );
+  } else if (block.type === "script") {
+    main = (
+      <div className="blk-main">
+        <ScriptBlock repo={repo} path={block.path} code={block.code} onSet={onSetScript} />
+      </div>
+    );
   } else if (block.type === "bullet") {
     main = (
       <div className="blk-main bullet-row">
         <span className="blk-dot">•</span>
+        {editable}
+      </div>
+    );
+  } else if (block.type === "numbered") {
+    main = (
+      <div className="blk-main bullet-row">
+        <span className="blk-num">{index}.</span>
+        {editable}
+      </div>
+    );
+  } else if (block.type === "todo") {
+    main = (
+      <div className={"blk-main todo-row" + (block.checked ? " is-checked" : "")}>
+        <button
+          className="blk-check"
+          contentEditable={false}
+          role="checkbox"
+          aria-checked={!!block.checked}
+          title={block.checked ? "Mark as not done" : "Mark as done"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggleChecked}
+        >
+          {block.checked && (
+            <svg viewBox="0 0 24 24" {...sv} strokeWidth={3}>
+              <path d="m5 13 5 5L20 7" />
+            </svg>
+          )}
+        </button>
         {editable}
       </div>
     );
@@ -961,6 +1173,243 @@ function ImageBlock({
         onBlur={(e) => onSetCaption(e.currentTarget.innerText.trim())}
       />
     </figure>
+  );
+}
+
+/* ============================================================
+   Script block — attach a file from the workspace's GitHub repo
+   by name. Caches the file content in the block (so teammates see
+   it without hitting the API) and shows whether the file still
+   exists on the default branch.
+   ============================================================ */
+function ScriptBlock({
+  repo,
+  path,
+  code,
+  onSet,
+}: {
+  repo?: string | null;
+  path?: string;
+  code?: string;
+  onSet: (patch: Partial<Block>) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [files, setFiles] = useState<string[] | null>(null);
+  const [branch, setBranch] = useState("main");
+  const [status, setStatus] = useState<"ok" | "missing" | "unknown">("unknown");
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // One tree fetch per repo per session (cached in lib/github); used for the
+  // picker list and for the staleness dot on attached files.
+  useEffect(() => {
+    if (!repo) return;
+    let cancelled = false;
+    setError(null);
+    getRepoTree(repo)
+      .then((t) => {
+        if (cancelled) return;
+        setBranch(t.branch);
+        setFiles(t.list);
+        if (path) setStatus(t.paths.has(path) ? "ok" : "missing");
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        if (e instanceof GithubError && (e.status === 401 || e.status === 403)) {
+          setError(
+            getGithubToken()
+              ? "GitHub access expired — sign in with GitHub again."
+              : "Private repo? Sign in with GitHub to browse it.",
+          );
+        } else if (e instanceof GithubError && e.status === 404) {
+          setError(`Repository "${repo}" not found.`);
+        } else {
+          setError("Couldn't reach GitHub.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repo, path]);
+
+  if (!repo) {
+    return (
+      <div className="script-unlinked" contentEditable={false}>
+        <ICode />
+        <span>Link a GitHub repository in Settings to attach scripts.</span>
+      </div>
+    );
+  }
+
+  const attach = async (p: string) => {
+    setBusy(true);
+    try {
+      const c = await getFileContent(repo, p);
+      onSet({ path: p, code: c });
+    } catch {
+      onSet({ path: p }); // attach anyway; preview can be fetched later
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* ---- picker (no file attached yet) ---- */
+  if (!path) {
+    const q = query.trim().toLowerCase();
+    const base = (f: string) => f.slice(f.lastIndexOf("/") + 1).toLowerCase();
+    const matches = !files
+      ? []
+      : files
+          .filter((f) => f.toLowerCase().includes(q))
+          .sort((a, b) => {
+            // basename hits first, then shorter paths
+            const rank = (f: string) =>
+              base(f).startsWith(q) ? 0 : base(f).includes(q) ? 1 : 2;
+            return rank(a) - rank(b) || a.length - b.length;
+          })
+          .slice(0, 8);
+    return (
+      <div className="script-pick" contentEditable={false}>
+        <input
+          className="script-search"
+          autoFocus
+          placeholder={`Search files in ${repo}…`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {error && <div className="script-error">{error}</div>}
+        {!error && files === null && <div className="script-hint">Loading file list…</div>}
+        {!error && files !== null && q && matches.length === 0 && (
+          <div className="script-hint">No matching files.</div>
+        )}
+        <div className="script-results">
+          {matches.map((f) => {
+            const i = f.lastIndexOf("/");
+            return (
+              <button
+                key={f}
+                disabled={busy}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => attach(f)}
+              >
+                <span className="script-result-name">{i >= 0 ? f.slice(i + 1) : f}</span>
+                {i >= 0 && <span className="script-result-dir">{f.slice(0, i)}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  /* ---- attached card ---- */
+  const slash = path.lastIndexOf("/");
+  const name = slash >= 0 ? path.slice(slash + 1) : path;
+  const dir = slash >= 0 ? path.slice(0, slash) : "";
+
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const [c, t] = await Promise.all([getFileContent(repo, path), getRepoTree(repo, true)]);
+      onSet({ code: c });
+      setBranch(t.branch);
+      setStatus(t.paths.has(path) ? "ok" : "missing");
+    } catch (e: unknown) {
+      if (e instanceof GithubError && e.status === 404) setStatus("missing");
+      else setError("Refresh failed — couldn't reach GitHub.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="script-card" contentEditable={false}>
+      <div className="script-head">
+        <span className="script-glyph">
+          <ICode />
+        </span>
+        <button className="script-name" title={open ? "Hide code" : "Show code"} onClick={() => setOpen((o) => !o)}>
+          {name}
+        </button>
+        {dir && <span className="script-dir">{dir}</span>}
+        {code !== undefined && (
+          <span className="script-meta">
+            {langLabel(detectLang(path))} · {code.split("\n").length} lines
+          </span>
+        )}
+        <span
+          className={"script-status is-" + status}
+          title={
+            status === "ok"
+              ? `Exists on ${branch}`
+              : status === "missing"
+                ? `Not found on ${branch} — moved or deleted?`
+                : "Checking…"
+          }
+        />
+        <span className="script-tools">
+          <button onClick={refresh} disabled={busy}>
+            {busy ? "…" : "Refresh"}
+          </button>
+          <a
+            href={`https://github.com/${repo}/blob/${encodeURIComponent(branch)}/${path
+              .split("/")
+              .map(encodeURIComponent)
+              .join("/")}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open
+          </a>
+          <button className="danger" onClick={() => onSet({ path: undefined, code: undefined })}>
+            Detach
+          </button>
+        </span>
+      </div>
+      {error && <div className="script-error">{error}</div>}
+      {open &&
+        (code !== undefined ? (
+          <ScriptCode code={code} path={path} />
+        ) : (
+          <div className="script-hint" style={{ padding: "10px 14px" }}>
+            No cached copy yet — hit Refresh.
+          </div>
+        ))}
+    </div>
+  );
+}
+
+// Cap rendering so a 10k-line file can't lock up the page; the full file is
+// one click away on GitHub.
+const MAX_CODE_LINES = 500;
+
+function ScriptCode({ code, path }: { code: string; path: string }) {
+  const lang = detectLang(path);
+  const { lines, total } = useMemo(() => {
+    const all = highlightLines(code.replace(/\n$/, ""), lang);
+    return { lines: all.slice(0, MAX_CODE_LINES), total: all.length };
+  }, [code, lang]);
+  const gutter = String(total).length;
+
+  return (
+    <div className="script-codewrap">
+      <pre className="script-code">
+        {lines.map((toks, i) => (
+          <div key={i} className="script-codeline">
+            <span className="script-ln" style={{ width: `${gutter}ch` }}>
+              {i + 1}
+            </span>
+            <span className="script-src">{renderLine(toks)}</span>
+          </div>
+        ))}
+        {total > MAX_CODE_LINES && (
+          <div className="script-codemore">
+            … {total - MAX_CODE_LINES} more lines — open on GitHub for the rest
+          </div>
+        )}
+      </pre>
+    </div>
   );
 }
 

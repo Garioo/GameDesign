@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import { supabase } from "@/lib/supabase";
@@ -26,11 +26,27 @@ import {
   type SectionInfo,
 } from "@/lib/docsRepo";
 import CommandPalette from "./CommandPalette";
+import Comments from "./Comments";
+import Settings from "./Settings";
+import {
+  getWorkspaceInfo,
+  leaveWorkspace,
+  updateProfile,
+  updateWorkspaceInfo,
+  type WorkspaceInfo,
+} from "@/lib/settingsRepo";
+import {
+  addComment,
+  deleteComment,
+  editComment,
+  listComments,
+  setCommentResolved,
+  type CommentRow,
+} from "@/lib/commentsRepo";
 import {
   STATUS_LABEL,
   type Block,
   type DesignDoc,
-  type RefIcon,
   type Status,
 } from "./data";
 import "./doc.css";
@@ -58,11 +74,6 @@ const Flame = ({ className }: IconProps) => (
     <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
   </svg>
 );
-const Sun = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-  </svg>
-);
 const Doc = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h6" />
@@ -76,16 +87,6 @@ const Chevron = ({ className }: IconProps) => (
 const LinkIcon = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-const Compass = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" /><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36z" />
-  </svg>
-);
-const Database = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0" />
   </svg>
 );
 const ChevronDown = ({ className }: IconProps) => (
@@ -123,16 +124,35 @@ const TableIcon = ({ className }: IconProps) => (
     <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />
   </svg>
 );
+const Gear = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08A1.7 1.7 0 0 0 10 4.09V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08A1.7 1.7 0 0 0 21 11.9h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
+  </svg>
+);
 
-const refIcon = (kind: RefIcon) => {
-  if (kind === "mechanic") return <Sun className="ref-icon" />;
-  if (kind === "vision") return <Compass className="ref-icon" />;
-  if (kind === "economy") return <Database className="ref-icon" />;
-  return <Doc className="ref-icon" />;
-};
+type SaveState = "saved" | "saving" | "error";
 
+// useSearchParams needs a Suspense boundary in the app router.
 export default function DocPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="app">
+          <div className="screen">
+            <p style={{ color: "var(--ink-soft)" }}>Loading workspace…</p>
+          </div>
+        </div>
+      }
+    >
+      <DocPageInner />
+    </Suspense>
+  );
+}
+
+function DocPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [docs, setDocs] = useState<DesignDoc[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,14 +167,54 @@ export default function DocPage() {
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [tagEditing, setTagEditing] = useState(false);
+  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [shareCopied, setShareCopied] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
 
   const wsRef = useRef<string | null>(null);
+  const activeIdRef = useRef<string | null>(null); // current page, for realtime handlers
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const suppress = useRef<Record<string, number>>({}); // pageId -> ignore-echo-until ts
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const throttle = useRef<
     Record<string, { last: number; timer: ReturnType<typeof setTimeout> | null; pending: unknown }>
   >({});
+  const pendingSaves = useRef(0);
+  const lastFailedSave = useRef<(() => Promise<void>) | null>(null);
+
+  // Run a persistence call and surface its outcome in the topbar indicator.
+  const trackSave = (run: () => Promise<void>) => {
+    pendingSaves.current += 1;
+    setSaveState("saving");
+    run()
+      .then(() => {
+        pendingSaves.current -= 1;
+        if (pendingSaves.current === 0) {
+          lastFailedSave.current = null; // a newer write superseded the failure
+          setSaveState("saved");
+        }
+      })
+      .catch((e) => {
+        pendingSaves.current -= 1;
+        console.error(e);
+        lastFailedSave.current = run;
+        setSaveState("error");
+      });
+  };
+
+  const retryFailedSave = () => {
+    const run = lastFailedSave.current;
+    lastFailedSave.current = null;
+    if (run) trackSave(run);
+  };
+
+  // Navigate to a page, recording it in the URL so reload/back/share work.
+  const openPage = (id: string) => {
+    setActiveId(id);
+    router.push(`/doc?page=${id}`, { scroll: false });
+  };
 
   // Push an edit to other clients instantly (leading + trailing, capped rate).
   // This is the "live" path; the DB write (debounced) is the durable path.
@@ -199,16 +259,26 @@ export default function DocPage() {
         setSession(s);
         wsRef.current = s.workspaceId;
         await seedIfEmpty(s.workspaceId);
-        const [loaded, secs, members] = await Promise.all([
+        const [loaded, secs, members, wsInfo] = await Promise.all([
           loadWorkspace(s.workspaceId),
           listSections(s.workspaceId),
           listMembers(s.workspaceId),
+          getWorkspaceInfo(s.workspaceId),
         ]);
         if (cancelled) return;
         setSections(secs);
         setPeople(members);
+        setWorkspace(wsInfo);
         setDocs(loaded);
-        setActiveId(loaded[0]?.id ?? null);
+        // Land on the page in the URL when valid, else the first page.
+        // (Read from location, not useSearchParams, so this effect doesn't
+        // re-run the whole session init on every navigation.)
+        const param = new URLSearchParams(window.location.search).get("page");
+        const initial = loaded.find((d) => d.id === param)?.id ?? loaded[0]?.id ?? null;
+        setActiveId(initial);
+        if (initial && initial !== param) {
+          router.replace(`/doc?page=${initial}`, { scroll: false });
+        }
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -234,6 +304,20 @@ export default function DocPage() {
       );
     };
 
+    // Re-pull the member list (after a profile change) and re-derive the
+    // owner display fields that were copied onto each doc at load time.
+    const refreshMembers = async () => {
+      const members = await listMembers(wsId);
+      setPeople(members);
+      setDocs((prev) =>
+        prev.map((d) => {
+          if (!d.ownerId) return d;
+          const m = members.find((x) => x.id === d.ownerId);
+          return m ? { ...d, owner: m.initials, ownerName: m.name, ownerColor: m.color } : d;
+        }),
+      );
+    };
+
     const channel = supabase
       .channel(`workspace:${wsId}`, { config: { broadcast: { self: false } } })
       // instant live edits (no DB hop)
@@ -241,7 +325,9 @@ export default function DocPage() {
         const p = payload as
           | { t: "block"; pageId: string; blockId: string; text: string }
           | { t: "blocks"; pageId: string; blocks: Block[] }
-          | { t: "page"; id: string; page: Partial<DesignDoc> };
+          | { t: "page"; id: string; page: Partial<DesignDoc> }
+          | { t: "members" }
+          | { t: "ws"; info: WorkspaceInfo };
         if (p.t === "block") {
           // live per-keystroke text for a single block (no cross-block clobber)
           setDocs((prev) =>
@@ -257,6 +343,10 @@ export default function DocPage() {
           );
         } else if (p.t === "page") {
           setDocs((prev) => prev.map((d) => (d.id === p.id ? { ...d, ...p.page } : d)));
+        } else if (p.t === "members") {
+          refreshMembers().catch(console.error);
+        } else if (p.t === "ws") {
+          setWorkspace(p.info);
         }
       })
       .on(
@@ -371,6 +461,20 @@ export default function DocPage() {
           }
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments" },
+        (payload) => {
+          // No server-side filter (page_id isn't project-scoped), so react only
+          // when the change touches the page we're looking at, then refetch as
+          // the source of truth (covers our own echo + others' edits alike).
+          const row = (payload.new ?? payload.old) as { page_id?: string };
+          const pid = row?.page_id;
+          if (pid && pid === activeIdRef.current) {
+            listComments(pid).then(setComments).catch(console.error);
+          }
+        },
+      )
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<PresenceUser>();
         const seen = new Map<string, PresenceUser>();
@@ -403,6 +507,41 @@ export default function DocPage() {
   const activeSectionId =
     active?.sectionId ?? sections.find((s) => s.name === active?.group)?.id ?? null;
 
+  // Keep the realtime handlers pointed at the page currently in view.
+  activeIdRef.current = active?.id ?? null;
+
+  // Incoming backlinks: pages whose "Links to" includes the current page.
+  const backlinks = active
+    ? docs.filter((d) => d.id !== active.id && d.links.includes(active.id))
+    : [];
+
+  // Browser back/forward: follow the URL's page param.
+  const urlPageId = searchParams.get("page");
+  useEffect(() => {
+    if (!urlPageId) return;
+    setActiveId((cur) =>
+      urlPageId !== cur && docs.some((d) => d.id === urlPageId) ? urlPageId : cur,
+    );
+  }, [urlPageId, docs]);
+
+  // Load this page's comments whenever the active page changes.
+  useEffect(() => {
+    const id = active?.id;
+    if (!id) {
+      setComments([]);
+      return;
+    }
+    let cancelled = false;
+    listComments(id)
+      .then((c) => {
+        if (!cancelled) setComments(c);
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [active?.id]);
+
   // Focus the title of a freshly-created page so the user can type immediately.
   useEffect(() => {
     if (!focusTitleId || active?.id !== focusTitleId) return;
@@ -433,16 +572,18 @@ export default function DocPage() {
   // ---- debounced persistence ----
   const scheduleSaveBlocks = (pageId: string, blocks: Block[]) => {
     clearTimeout(saveTimers.current[`b:${pageId}`]);
+    setSaveState("saving");
     saveTimers.current[`b:${pageId}`] = setTimeout(() => {
       suppress.current[pageId] = Date.now() + 1500;
-      saveBlocks(pageId, blocks).catch(console.error);
+      trackSave(() => saveBlocks(pageId, blocks));
     }, 600);
   };
   const scheduleSavePage = (doc: DesignDoc) => {
     clearTimeout(saveTimers.current[`p:${doc.id}`]);
+    setSaveState("saving");
     saveTimers.current[`p:${doc.id}`] = setTimeout(() => {
       suppress.current[doc.id] = Date.now() + 1500;
-      savePage(doc).catch(console.error);
+      trackSave(() => savePage(doc));
     }, 600);
   };
 
@@ -483,6 +624,7 @@ export default function DocPage() {
       suppress.current[doc.id] = Date.now() + 2500; // ignore our own INSERT echo
       setDocs((prev) => [...prev, doc]);
       setActiveId(doc.id);
+      router.replace(`/doc?page=${doc.id}`, { scroll: false });
       setFocusTitleId(doc.id);
     } catch (e) {
       console.error(e);
@@ -508,7 +650,7 @@ export default function DocPage() {
       : { ownerId: undefined, owner: "—", ownerName: "Unassigned", ownerColor: "#a59a8c" };
     setDocs((prev) => prev.map((d) => (d.id === active.id ? { ...d, ...patch } : d)));
     suppress.current[active.id] = Date.now() + 1500;
-    setPageOwner(active.id, p?.id ?? null).catch(console.error);
+    trackSave(() => setPageOwner(active.id, p?.id ?? null));
     broadcast(`p:${active.id}`, { t: "page", id: active.id, page: patch });
   };
 
@@ -528,10 +670,64 @@ export default function DocPage() {
   const removeLink = (pageId: string) =>
     update(active.id, { links: active.links.filter((x) => x !== pageId) });
 
+  // ---- settings ----
+  const handleSaveProfile = (patch: { name: string; initials: string; color: string }) => {
+    if (!session) return;
+    trackSave(() => updateProfile(session.userId, patch));
+    const next = { ...session, ...patch };
+    setSession(next);
+    // presence sync pushes the new identity to everyone's avatar stacks
+    channelRef.current?.track({
+      key: next.userId,
+      name: next.name,
+      initials: next.initials,
+      color: next.color,
+    });
+    setPeople((prev) => prev.map((p) => (p.id === session.userId ? { ...p, ...patch } : p)));
+    setDocs((prev) =>
+      prev.map((d) =>
+        d.ownerId === session.userId
+          ? { ...d, owner: patch.initials, ownerName: patch.name, ownerColor: patch.color }
+          : d,
+      ),
+    );
+    broadcast("members", { t: "members" });
+  };
+
+  const handleSaveWorkspace = (info: WorkspaceInfo) => {
+    const wsId = wsRef.current;
+    if (!wsId) return;
+    trackSave(() => updateWorkspaceInfo(wsId, info));
+    setWorkspace(info);
+    broadcast("ws", { t: "ws", info });
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  };
+
+  const handleLeaveWorkspace = async () => {
+    const wsId = wsRef.current;
+    if (!wsId || !session) return;
+    try {
+      await leaveWorkspace(wsId, session.userId);
+    } catch (e) {
+      console.error(e);
+    }
+    await supabase.auth.signOut();
+    router.replace("/login");
+  };
+
   const handleDeletePage = (id: string) => {
     suppress.current[id] = Date.now() + 2500;
-    setDocs((prev) => prev.filter((d) => d.id !== id));
-    setActiveId((cur) => (cur === id ? null : cur));
+    const remaining = docs.filter((d) => d.id !== id);
+    setDocs(remaining);
+    if (activeId === id) {
+      const fallback = remaining[0]?.id ?? null;
+      setActiveId(fallback);
+      router.replace(fallback ? `/doc?page=${fallback}` : "/doc", { scroll: false });
+    }
     deletePage(id).catch(console.error);
   };
 
@@ -635,7 +831,7 @@ export default function DocPage() {
           <span className="logo">
             <Flame className="logo-icon" />
           </span>
-          <span className="brand-name">EMBERWICK</span>
+          <span className="brand-name">{workspace?.name || "EMBERWICK"}</span>
           <span className="crumb-sep">/</span>
           <span className="crumb-muted">{active.group}</span>
           <span className="crumb-sep">/</span>
@@ -651,15 +847,38 @@ export default function DocPage() {
               </span>
             ))}
           </div>
-          <button className="share-btn">Share</button>
+          <span className={"save-state save-" + saveState}>
+            {saveState === "saving" && "Saving…"}
+            {saveState === "saved" && "Saved"}
+            {saveState === "error" && (
+              <>
+                Save failed
+                <button className="save-retry" onClick={retryFailedSave}>
+                  Retry
+                </button>
+              </>
+            )}
+          </span>
           <button
             className="share-btn"
             onClick={async () => {
-              await supabase.auth.signOut();
-              router.replace("/login");
+              try {
+                await navigator.clipboard.writeText(window.location.href);
+                setShareCopied(true);
+                setTimeout(() => setShareCopied(false), 1500);
+              } catch (e) {
+                console.error(e);
+              }
             }}
           >
-            Sign out
+            {shareCopied ? "Copied!" : "Share"}
+          </button>
+          <button
+            className="share-btn settings-btn"
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Gear className="settings-gear" />
           </button>
         </div>
       </header>
@@ -670,7 +889,7 @@ export default function DocPage() {
           docs={docs}
           sections={sections}
           active={active}
-          onSelect={setActiveId}
+          onSelect={openPage}
           onNewPage={handleNewPage}
           onNewSection={handleNewSection}
           onRenamePage={(id, title) => update(id, { title })}
@@ -794,7 +1013,7 @@ export default function DocPage() {
                     if (!target) return null;
                     return (
                       <span key={id} className="link-chip link-editable">
-                        <button className="link-go" onClick={() => setActiveId(target.id)}>
+                        <button className="link-go" onClick={() => openPage(target.id)}>
                           <LinkIcon className="link-icon" /> {target.title}
                         </button>
                         <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
@@ -834,6 +1053,7 @@ export default function DocPage() {
             {/* block editor body */}
             <BlockEditor
               key={active.id}
+              repo={workspace?.repo || null}
               blocks={active.blocks}
               onChange={(b) => update(active.id, { blocks: b })}
               onLiveInput={(blockId, text, blocks) => {
@@ -851,27 +1071,39 @@ export default function DocPage() {
           <div className="rail-head">
             <LinkIcon className="rail-head-icon" />
             <span>Linked references</span>
-            <span className="rail-badge">{active.refs.length}</span>
+            <span className="rail-badge">{backlinks.length}</span>
           </div>
 
           <div className="ref-list">
-            {active.refs.map((r) => {
-              const target = docs.find((d) => d.title === r.title);
-              return (
-                <button
-                  key={r.title}
-                  className="ref-card"
-                  onClick={() => target && setActiveId(target.id)}
-                >
-                  <div className="ref-title">
-                    {refIcon(r.icon)}
-                    {r.title}
-                  </div>
-                  <p className="ref-text">{r.text}</p>
-                </button>
-              );
-            })}
+            {backlinks.length === 0 && (
+              <p className="ref-text" style={{ padding: "2px 2px 8px" }}>
+                No pages link here yet.
+              </p>
+            )}
+            {backlinks.map((d) => (
+              <button key={d.id} className="ref-card" onClick={() => openPage(d.id)}>
+                <div className="ref-title">
+                  <Doc className="ref-icon" />
+                  {d.title}
+                </div>
+                <p className="ref-text">{d.subtitle || d.group}</p>
+              </button>
+            ))}
           </div>
+
+          <Comments
+            comments={comments}
+            people={people}
+            currentUserId={session?.userId ?? ""}
+            onAdd={(body, parentId) => {
+              if (session) addComment(active.id, session.userId, body, parentId ?? null).catch(console.error);
+            }}
+            onDelete={(id) => deleteComment(id).catch(console.error)}
+            onEdit={(id, body) => editComment(id, body).catch(console.error)}
+            onResolve={(id, resolved) => {
+              if (session) setCommentResolved(id, resolved, session.userId).catch(console.error);
+            }}
+          />
 
           <div className="rail-footer">
             <div className="foot-row">
@@ -925,13 +1157,27 @@ export default function DocPage() {
         docs={docs}
         activeSectionId={activeSectionId}
         activeGroup={active.group}
-        onJump={setActiveId}
+        onJump={openPage}
         onNewPage={handleNewPage}
         onNewSection={() => {
           const name = window.prompt("New section name");
           if (name && name.trim()) handleNewSection(name.trim());
         }}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
+
+      {session && (
+        <Settings
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          session={session}
+          workspace={workspace}
+          onSaveProfile={handleSaveProfile}
+          onSaveWorkspace={handleSaveWorkspace}
+          onSignOut={handleSignOut}
+          onLeave={handleLeaveWorkspace}
+        />
+      )}
     </div>
   );
 }

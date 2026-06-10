@@ -26,6 +26,8 @@ export default function LoginPage() {
       provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        // repo scope lets script blocks read the user's private repositories
+        ...(provider === "github" ? { scopes: "repo" } : {}),
       },
     });
     // On success the browser is redirected to the provider, so we only reach

@@ -78,14 +78,17 @@
   --shadow-modal: 0 24px 70px rgba(42, 36, 30, 0.30), 0 4px 12px rgba(42, 36, 30, 0.10);
 
   /* ---- Typography scale ----
-     --font-ui / --font-display are injected by next/font in layout.tsx */
+     --font-ui is injected by next/font in layout.tsx. The app is
+     single-family: --font-display aliases it, and headings differ from
+     body text by size/weight only. */
+  --font-display: var(--font-ui);
   --text-xs:   11px;
   --text-sm:   13px;
   --text-base: 15px;
   --text-lg:   17px;
-  --text-xl:   22px;
-  --text-2xl:  30px;
-  --text-display: 62px;
+  --text-xl:   19px;
+  --text-2xl:  24px;
+  --text-display: 44px;
 
   /* ---- Animation timings ---- */
   --t-fast: .12s;

@@ -72,6 +72,31 @@
 }
 .share-btn:active { transform: none; }
 
+/* settings gear (topbar) */
+.settings-btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 7px 10px;
+}
+.settings-gear { width: 16px; height: 16px; display: block; color: var(--ink-soft); }
+.settings-btn:hover .settings-gear { color: var(--ink); }
+
+/* save status indicator (topbar) */
+.save-state {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 6px;
+  font-size: 12.5px; color: var(--ink-faint);
+  transition: color .15s;
+}
+.save-state.save-saving { color: var(--ink-soft); }
+.save-state.save-error { color: var(--danger); }
+.save-retry {
+  font: inherit; font-weight: 600;
+  background: none; border: none; padding: 0;
+  color: inherit; text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ---------------- 3-column body ---------------- */
 .body {
   display: grid;
@@ -93,10 +118,10 @@
 .dot { color: var(--ink-faint); margin: 0 4px; }
 
 .doc-title {
-  font-family: var(--font-display), Georgia, serif;
-  font-weight: 500;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
   font-size: var(--text-display);
-  line-height: 1.02;
+  line-height: 1.15;
   letter-spacing: -0.02em;
   margin-bottom: 18px;
 }
