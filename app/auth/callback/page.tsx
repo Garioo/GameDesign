@@ -34,13 +34,13 @@ export default function AuthCallbackPage() {
     // If the session is already available, go straight in.
     supabase.auth.getSession().then(({ data }) => {
       captureGithubToken(data.session); // GitHub token only exists right now
-      if (data.session) finish("/doc");
+      if (data.session) finish("/home");
     });
 
     // Otherwise wait for the client to finish exchanging the code/token.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       captureGithubToken(session);
-      if (session) finish("/doc");
+      if (session) finish("/home");
     });
 
     // Fallback so we never hang forever on a failed exchange.

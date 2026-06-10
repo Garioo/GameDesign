@@ -15,7 +15,7 @@ export default function LoginPage() {
   // If a session already exists, skip the login screen.
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/doc");
+      if (data.session) router.replace("/home");
     });
   }, [router]);
 
