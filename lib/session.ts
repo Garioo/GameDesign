@@ -18,20 +18,17 @@ function pick<T>(arr: T[], seed: string): T {
 }
 
 /**
- * Ensure there is an authenticated session (anonymous), the user belongs to the
- * shared workspace, and a presentable profile exists. Returns session info.
+ * If the user is signed in (Google or GitHub), ensure they belong to the shared
+ * workspace and have a presentable profile, then return their session info.
+ * Returns `null` when there is no session — the caller should redirect to /login.
  */
-export async function ensureSession(): Promise<SessionInfo> {
-  let {
+export async function ensureSession(): Promise<SessionInfo | null> {
+  const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session) {
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) throw new Error(`Anonymous sign-in failed: ${error.message}`);
-    session = data.session;
-  }
-  const userId = session!.user.id;
+  if (!session) return null;
+  const userId = session.user.id;
 
   // Create the shared project (if needed) and join it.
   const { data: workspaceId, error: rpcError } = await supabase.rpc("ensure_workspace");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import BlockEditor from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import { supabase } from "@/lib/supabase";
@@ -130,6 +131,7 @@ const refIcon = (kind: RefIcon) => {
 };
 
 export default function DocPage() {
+  const router = useRouter();
   const [docs, setDocs] = useState<DesignDoc[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,6 +191,10 @@ export default function DocPage() {
       try {
         const s = await ensureSession();
         if (cancelled) return;
+        if (!s) {
+          router.replace("/login");
+          return;
+        }
         setSession(s);
         wsRef.current = s.workspaceId;
         await seedIfEmpty(s.workspaceId);
@@ -213,7 +219,7 @@ export default function DocPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   // ---- realtime: remote page/block changes + presence ----
   useEffect(() => {
@@ -645,6 +651,15 @@ export default function DocPage() {
             ))}
           </div>
           <button className="share-btn">Share</button>
+          <button
+            className="share-btn"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.replace("/login");
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
