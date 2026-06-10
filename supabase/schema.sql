@@ -364,5 +364,25 @@ create policy activity_insert on public.activity
   for insert to authenticated with check (public.can_access_project(project_id) and actor = auth.uid());
 
 -- ============================================================================
+-- Storage: canvas-assets bucket (images dropped/inserted on canvases).
+-- Public-read so asset URLs render without signing; writes need auth.
+-- ============================================================================
+insert into storage.buckets (id, name, public)
+values ('canvas-assets', 'canvas-assets', true)
+on conflict (id) do nothing;
+
+drop policy if exists canvas_assets_read on storage.objects;
+create policy canvas_assets_read on storage.objects
+  for select to public using (bucket_id = 'canvas-assets');
+
+drop policy if exists canvas_assets_insert on storage.objects;
+create policy canvas_assets_insert on storage.objects
+  for insert to authenticated with check (bucket_id = 'canvas-assets');
+
+drop policy if exists canvas_assets_delete on storage.objects;
+create policy canvas_assets_delete on storage.objects
+  for delete to authenticated using (bucket_id = 'canvas-assets');
+
+-- ============================================================================
 -- Done. Tables are created with RLS; access flows through project_members.
 -- ============================================================================

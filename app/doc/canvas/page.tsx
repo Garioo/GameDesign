@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
-import type { Editor } from "tldraw";
+import { GeoShapeGeoStyle, type Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
-import CanvasBoard from "./CanvasBoard";
+import CanvasBoard, { type SaveState } from "./CanvasBoard";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import {
@@ -105,7 +105,7 @@ const ImageIcon = ({ className }: IconProps) => (
   </svg>
 );
 
-// tldraw tool id -> nav-bar button. `geo` covers rectangles/shapes.
+// tldraw tool id -> nav-bar button. The geo (shape) tool has its own picker.
 const TOOLS: { id: string; label: string; Icon: ComponentType<IconProps> }[] = [
   { id: "select", label: "Select", Icon: Cursor },
   { id: "hand", label: "Hand", Icon: Hand },
@@ -114,7 +114,69 @@ const TOOLS: { id: string; label: string; Icon: ComponentType<IconProps> }[] = [
   { id: "arrow", label: "Arrow", Icon: ArrowTool },
   { id: "text", label: "Text", Icon: TextTool },
   { id: "note", label: "Note", Icon: Note },
-  { id: "geo", label: "Shape", Icon: Square },
+];
+
+/* ---------- geo shape picker ---------- */
+const Ellipse = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="8.5" />
+  </svg>
+);
+const Triangle = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+    <path d="M12 4 21 20H3z" />
+  </svg>
+);
+const Diamond = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+    <path d="M12 3l9 9-9 9-9-9z" />
+  </svg>
+);
+const Hexagon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+    <path d="M7 4h10l5 8-5 8H7l-5-8z" />
+  </svg>
+);
+const Star = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+    <path d="M12 2.5l2.9 6.2 6.6.9-4.8 4.6 1.2 6.7L12 17.7l-5.9 3.2 1.2-6.7-4.8-4.6 6.6-.9z" />
+  </svg>
+);
+const Cloud = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+  </svg>
+);
+const Oval = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <ellipse cx="12" cy="12" rx="9.5" ry="6.5" />
+  </svg>
+);
+const XBox = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="2" /><path d="m8.5 8.5 7 7M15.5 8.5l-7 7" />
+  </svg>
+);
+const CheckBox = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="2" /><path d="m8 12.5 3 3 5-6" />
+  </svg>
+);
+
+type GeoShape = (typeof GeoShapeGeoStyle)["values"] extends Iterable<infer V> ? V : never;
+
+const SHAPES: { id: GeoShape; label: string; Icon: ComponentType<IconProps> }[] = [
+  { id: "rectangle", label: "Rectangle", Icon: Square },
+  { id: "ellipse", label: "Ellipse", Icon: Ellipse },
+  { id: "triangle", label: "Triangle", Icon: Triangle },
+  { id: "diamond", label: "Diamond", Icon: Diamond },
+  { id: "hexagon", label: "Hexagon", Icon: Hexagon },
+  { id: "star", label: "Star", Icon: Star },
+  { id: "cloud", label: "Cloud", Icon: Cloud },
+  { id: "oval", label: "Oval", Icon: Oval },
+  { id: "arrow-right", label: "Arrow box", Icon: ArrowTool },
+  { id: "x-box", label: "X box", Icon: XBox },
+  { id: "check-box", label: "Check box", Icon: CheckBox },
 ];
 
 export default function CanvasPage() {
@@ -128,6 +190,8 @@ export default function CanvasPage() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tool, setTool] = useState("select");
   const [navHover, setNavHover] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
 
   const wsRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -157,7 +221,11 @@ export default function CanvasPage() {
         const list = await listCanvases(s.workspaceId);
         if (cancelled) return;
         setCanvases(list);
-        setActiveId(list[0]?.id ?? null);
+        // Deep link: honour ?c=<id> when it points at a real canvas.
+        const wanted = new URLSearchParams(window.location.search).get("c");
+        setActiveId(
+          wanted && list.some((c) => c.id === wanted) ? wanted : (list[0]?.id ?? null),
+        );
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -252,7 +320,39 @@ export default function CanvasPage() {
     if (!active) setEditor(null);
   }, [active]);
 
+  // Fresh board, fresh status.
+  useEffect(() => {
+    setSaveState("saved");
+  }, [activeId]);
+
+  // Keep ?c=<id> in the URL so refresh / sharing reopens the same canvas.
+  // history.replaceState avoids a Next.js re-render round-trip.
+  useEffect(() => {
+    if (loading) return;
+    const url = new URL(window.location.href);
+    if (active?.id) url.searchParams.set("c", active.id);
+    else url.searchParams.delete("c");
+    window.history.replaceState(null, "", url.toString());
+  }, [loading, active?.id]);
+
+  // Close the shape menu on outside click.
+  useEffect(() => {
+    if (!shapeMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest(".shape-wrap")) setShapeMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [shapeMenuOpen]);
+
   const pickTool = (id: string) => editor?.setCurrentTool(id);
+
+  const pickShape = (shape: GeoShape) => {
+    setShapeMenuOpen(false);
+    if (!editor) return;
+    editor.setStyleForNextShapes(GeoShapeGeoStyle, shape);
+    editor.setCurrentTool("geo");
+  };
 
   const onImageChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -310,6 +410,11 @@ export default function CanvasPage() {
           {active && <span className="crumb-current">{active.name}</span>}
         </div>
         <div className="top-right">
+          {active && (
+            <span className={"save-state save-" + saveState}>
+              {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ Save failed" : "Saved"}
+            </span>
+          )}
           <span className="online-dot" />
           <span className="online-text">{onlineList.length} online</span>
           <div className="avatar-stack">
@@ -352,6 +457,7 @@ export default function CanvasPage() {
               session={session}
               onReady={setEditor}
               onToolChange={setTool}
+              onSaveState={setSaveState}
             />
           ) : (
             <div
@@ -421,6 +527,33 @@ export default function CanvasPage() {
                     <t.Icon className="dock-tool-icon" />
                   </button>
                 ))}
+                <span className="shape-wrap">
+                  <button
+                    className={"dock-tool" + (tool === "geo" ? " is-active" : "")}
+                    title="Shapes"
+                    aria-label="Shapes"
+                    aria-expanded={shapeMenuOpen}
+                    disabled={!editor}
+                    onClick={() => setShapeMenuOpen((o) => !o)}
+                  >
+                    <Square className="dock-tool-icon" />
+                  </button>
+                  {shapeMenuOpen && (
+                    <div className="shape-menu">
+                      {SHAPES.map((s) => (
+                        <button
+                          key={s.id}
+                          className="shape-option"
+                          title={s.label}
+                          aria-label={s.label}
+                          onClick={() => pickShape(s.id)}
+                        >
+                          <s.Icon className="dock-tool-icon" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </span>
                 <button
                   className="dock-tool"
                   title="Insert image"

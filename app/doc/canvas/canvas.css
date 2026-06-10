@@ -47,8 +47,12 @@
 .canvas-app .dock-wrap {
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centre without translateX(-50%): fractional-pixel transforms make the
+     bar's icons render blurry. */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -116,9 +120,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
   background: none;
   border: none;
   color: var(--ink-soft);
@@ -139,7 +143,54 @@
   opacity: 0.4;
   cursor: default;
 }
-.dock-tool-icon { width: 18px; height: 18px; }
+.dock-tool-icon { width: 21px; height: 21px; }
 
 /* Keep the floating dock clear of tldraw's bottom-left zoom/help controls. */
 .canvas-app .tlui-layout__bottom { padding-bottom: 84px; }
+
+/* ---- save / sync status (topbar) ---- */
+.save-state {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-faint);
+  margin-right: 4px;
+  transition: color var(--t-fast);
+}
+.save-saving { color: var(--ink-soft); }
+.save-error { color: #c0392b; font-weight: 600; }
+
+/* ---- shape picker popover ---- */
+.shape-wrap { position: relative; display: flex; }
+.shape-menu {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(4, 42px);
+  gap: 2px;
+  padding: 7px;
+  background: rgba(255, 253, 250, 0.97);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 10px 32px rgba(60, 42, 28, 0.16);
+  animation: dockSwap 0.15s ease;
+}
+.shape-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.shape-option:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}

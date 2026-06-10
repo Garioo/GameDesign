@@ -18,6 +18,7 @@ import {
 import "tldraw/tldraw.css";
 import { supabase } from "@/lib/supabase";
 import { loadCanvasScene, saveCanvasScene, type CanvasScene } from "@/lib/canvasRepo";
+import { canvasAssetStore } from "@/lib/canvasAssets";
 import type { SessionInfo } from "@/lib/session";
 
 type RecordsDiff = {
@@ -25,6 +26,8 @@ type RecordsDiff = {
   updated: Record<string, [TLRecord, TLRecord]>;
   removed: Record<string, TLRecord>;
 };
+
+export type SaveState = "saved" | "saving" | "error";
 
 /**
  * A single collaborative tldraw board. Document edits and live cursors are
@@ -36,6 +39,7 @@ export default function CanvasBoard({
   session,
   onReady,
   onToolChange,
+  onSaveState,
 }: {
   canvasId: string;
   session: SessionInfo;
@@ -43,6 +47,8 @@ export default function CanvasBoard({
   onReady?: (editor: Editor) => void;
   /** Reports the active tool id so the nav bar can highlight it. */
   onToolChange?: (toolId: string) => void;
+  /** Reports persistence status so the topbar can show Saved / Saving / error. */
+  onSaveState?: (state: SaveState) => void;
 }) {
   const handleMount = useCallback(
     (editor: Editor) => {
@@ -63,7 +69,12 @@ export default function CanvasBoard({
       // ---- persistence (debounced) ----
       const persist = throttle(() => {
         const { document } = getSnapshot(editor.store);
-        saveCanvasScene(canvasId, { document } as unknown as CanvasScene).catch(console.error);
+        saveCanvasScene(canvasId, { document } as unknown as CanvasScene)
+          .then(() => onSaveState?.("saved"))
+          .catch((e) => {
+            console.error(e);
+            onSaveState?.("error");
+          });
       }, 1500);
 
       // ---- load the persisted scene ----
@@ -83,6 +94,7 @@ export default function CanvasBoard({
       const unlistenDoc = editor.store.listen(
         (update) => {
           channel.send({ type: "broadcast", event: "doc", payload: update.changes });
+          onSaveState?.("saving");
           persist();
         },
         { source: "user", scope: "document" },
@@ -152,13 +164,14 @@ export default function CanvasBoard({
         supabase.removeChannel(channel);
       };
     },
-    [canvasId, session, onReady, onToolChange],
+    [canvasId, session, onReady, onToolChange, onSaveState],
   );
 
   return (
     <div style={{ position: "absolute", inset: 0 }}>
-      {/* The default bottom toolbar is hidden — its tools live in the app nav bar. */}
-      <Tldraw onMount={handleMount} components={{ Toolbar: null }} />
+      {/* Toolbar is hidden (tools live in the app nav bar); images upload to
+          Supabase Storage instead of being inlined as base64. */}
+      <Tldraw onMount={handleMount} components={{ Toolbar: null }} assets={canvasAssetStore} />
     </div>
   );
 }
