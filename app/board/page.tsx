@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { CSSProperties, DragEvent } from "react";
+import { useRouter } from "next/navigation";
+import { ensureSession, type SessionInfo } from "@/lib/session";
+import { listMembers } from "@/lib/docsRepo";
 
 /* ── shared types ──────────────────────────────────────────────────────────── */
 interface IconProps {
@@ -23,7 +26,7 @@ interface CardData {
   kind?: string;
   tags?: string[];
   priority?: string | null;
-  ownerId?: string | null;
+  ownerIds?: string[];
   deadline?: string | null;
   dragging?: boolean;
 }
@@ -369,11 +372,14 @@ const css = `
 
   .card-foot { display: flex; align-items: center; justify-content: space-between; }
   .card-owner { display: flex; align-items: center; gap: 6px; }
+  .card-avatar-group { display: flex; }
   .card-avatar {
     width: 20px; height: 20px; border-radius: 50%;
     display: grid; place-items: center;
     font-size: 9px; font-weight: 600; color: #fff;
+    border: 2px solid var(--surface); margin-left: -6px;
   }
+  .card-avatar:first-child { margin-left: 0; }
   .card-owner-name { font-size: 11.5px; color: var(--ink-faint); }
   .card-priority {
     font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
@@ -506,6 +512,21 @@ const css = `
   }
   .modal-textarea { resize: vertical; min-height: 72px; }
   .modal-input:focus, .modal-textarea:focus, .modal-select:focus { border-color: var(--ember-tint2); box-shadow: 0 0 0 2px var(--ember-tint2); }
+  .owner-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .owner-chip {
+    display: flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 12.5px; color: var(--ink-soft);
+    padding: 5px 10px 5px 6px; border-radius: 999px;
+    background: var(--bg); border: 1px solid var(--line);
+    cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+  }
+  .owner-chip:hover { border-color: var(--ember-tint2); }
+  .owner-chip.active { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ember-deep); font-weight: 600; }
+  .owner-chip-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 8.5px; font-weight: 600; color: #fff; flex-shrink: 0;
+  }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
   .modal-save { font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; padding: 8px 20px; border-radius: 9px; border: none; cursor: pointer; background: linear-gradient(150deg, #e98a45, #c0531c); box-shadow: 0 2px 8px rgba(191,99,43,0.35); transition: filter .1s; }
   .modal-save:hover { filter: brightness(1.06); }
@@ -591,13 +612,6 @@ const Flag = ({ className, style }: IconProps) => (
 );
 
 /* ── seed data ───────────────────────────────────────────────────────────── */
-const PEOPLE: Person[] = [
-  { id: "1", name: "Reva S.", initials: "RS", color: "#cf6a2c" },
-  { id: "2", name: "Mads L.", initials: "ML", color: "#3f7ebc" },
-  { id: "3", name: "Priya K.", initials: "PK", color: "#4caf7d" },
-  { id: "4", name: "Owen T.", initials: "OT", color: "#8a54b5" },
-];
-
 function mkId(): string { return Math.random().toString(36).slice(2, 9); }
 
 function defaultCols(): ColumnData[] {
@@ -616,31 +630,31 @@ const INIT_BOARDS: BoardData[] = [
       {
         id: "col-todo", name: "To Do", color: "#a59a8c",
         cards: [
-          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1", deadline: "2026-06-12" },
-          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2", deadline: "2026-06-19" },
-          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null, deadline: "2026-06-08" },
+          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerIds: ["1", "3"], deadline: "2026-06-12" },
+          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerIds: ["2"], deadline: "2026-06-19" },
+          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerIds: [], deadline: "2026-06-08" },
         ],
       },
       {
         id: "col-wip", name: "In Progress", color: "#cf6a2c",
         cards: [
-          { id: mkId(), title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", ownerId: "3" },
-          { id: mkId(), title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", ownerId: "1" },
+          { id: mkId(), title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", ownerIds: ["3"] },
+          { id: mkId(), title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", ownerIds: ["1", "2"] },
         ],
       },
       {
         id: "col-review", name: "Review", color: "#d9a441",
         cards: [
-          { id: mkId(), title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, ownerId: "4" },
-          { id: mkId(), title: "Audio ambience zones", sub: "Per-biome audio blending using distance cues.", kind: "mechanic", tags: ["audio"], priority: "medium", ownerId: "2" },
+          { id: mkId(), title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, ownerIds: ["4"] },
+          { id: mkId(), title: "Audio ambience zones", sub: "Per-biome audio blending using distance cues.", kind: "mechanic", tags: ["audio"], priority: "medium", ownerIds: ["2"] },
         ],
       },
       {
         id: "col-done", name: "Done", color: "#4caf7d",
         cards: [
-          { id: mkId(), title: "Player stats dashboard", sub: "In-game HUD displaying health, stamina, gold.", kind: "mechanic", tags: ["ui", "done"], priority: null, ownerId: "3" },
-          { id: mkId(), title: "Tutorial flow v1", sub: "Guided onboarding across first 10 minutes of play.", kind: "vision", tags: ["ux", "done"], priority: null, ownerId: "1" },
-          { id: mkId(), title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, ownerId: "4" },
+          { id: mkId(), title: "Player stats dashboard", sub: "In-game HUD displaying health, stamina, gold.", kind: "mechanic", tags: ["ui", "done"], priority: null, ownerIds: ["3"] },
+          { id: mkId(), title: "Tutorial flow v1", sub: "Guided onboarding across first 10 minutes of play.", kind: "vision", tags: ["ux", "done"], priority: null, ownerIds: ["1", "4"] },
+          { id: mkId(), title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, ownerIds: ["4"] },
         ],
       },
     ],
@@ -651,17 +665,17 @@ const INIT_BOARDS: BoardData[] = [
       {
         id: "col-econ-todo", name: "To Do", color: "#a59a8c",
         cards: [
-          { id: mkId(), title: "Crafting material sinks", sub: "Add high-tier recipes to drain late-game material surplus.", kind: "economy", tags: ["crafting"], priority: "medium", ownerId: "1" },
-          { id: mkId(), title: "Currency exchange rates", sub: "Define conversion between region-specific currencies.", kind: "economy", tags: ["world"], priority: null, ownerId: null },
+          { id: mkId(), title: "Crafting material sinks", sub: "Add high-tier recipes to drain late-game material surplus.", kind: "economy", tags: ["crafting"], priority: "medium", ownerIds: ["1"] },
+          { id: mkId(), title: "Currency exchange rates", sub: "Define conversion between region-specific currencies.", kind: "economy", tags: ["world"], priority: null, ownerIds: [] },
         ],
       },
       { id: "col-econ-wip", name: "In Progress", color: "#cf6a2c", cards: [
-          { id: mkId(), title: "Vendor restock logic", sub: "Tune restock intervals per vendor tier.", kind: "economy", tags: ["vendors"], priority: "high", ownerId: "3" },
+          { id: mkId(), title: "Vendor restock logic", sub: "Tune restock intervals per vendor tier.", kind: "economy", tags: ["vendors"], priority: "high", ownerIds: ["3"] },
         ],
       },
       { id: "col-econ-review", name: "Review", color: "#d9a441", cards: [] },
       { id: "col-econ-done", name: "Done", color: "#4caf7d", cards: [
-          { id: mkId(), title: "Starting gold balance", sub: "Set baseline gold for new characters per difficulty.", kind: "economy", tags: ["balance", "done"], priority: null, ownerId: "4" },
+          { id: mkId(), title: "Starting gold balance", sub: "Set baseline gold for new characters per difficulty.", kind: "economy", tags: ["balance", "done"], priority: null, ownerIds: ["4"] },
         ],
       },
     ],
@@ -670,14 +684,17 @@ const INIT_BOARDS: BoardData[] = [
     id: "board-narrative", name: "World & Narrative", color: "#8a54b5",
     cols: defaultCols().map((c, i) => i === 0 ? {
       ...c, cards: [
-        { id: mkId(), title: "Faction reputation arcs", sub: "Outline reputation thresholds and unlocks for the three major factions.", kind: "lore", tags: ["factions"], priority: "medium", ownerId: "4" },
+        { id: mkId(), title: "Faction reputation arcs", sub: "Outline reputation thresholds and unlocks for the three major factions.", kind: "lore", tags: ["factions"], priority: "medium", ownerIds: ["4"] },
       ],
     } : c),
   },
 ];
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
-function ownerById(id?: string | null) { return PEOPLE.find((p) => p.id === id) ?? null; }
+function ownerById(people: Person[], id?: string | null) { return people.find((p) => p.id === id) ?? null; }
+function ownersByIds(people: Person[], ids?: string[]): Person[] {
+  return (ids ?? []).map((id) => ownerById(people, id)).filter((p): p is Person => p !== null);
+}
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -696,14 +713,15 @@ function formatDeadline(key: string): string {
 /* ── Card component ──────────────────────────────────────────────────────── */
 interface CardProps {
   card: CardData;
+  people: Person[];
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
   onDragEnd: () => void;
   dropState: "above" | "below" | null;
   onClick: (card: CardData) => void;
 }
 
-function Card({ card, onDragStart, onDragEnd, dropState, onClick }: CardProps) {
-  const owner = ownerById(card.ownerId);
+function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: CardProps) {
+  const owners = ownersByIds(people, card.ownerIds);
   return (
     <div
       className={`card${card.dragging ? " dragging" : ""}${dropState === "above" ? " drop-above" : ""}${dropState === "below" ? " drop-below" : ""}`}
@@ -722,10 +740,16 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }: CardProps) {
       {card.sub && <div className="card-sub">{card.sub}</div>}
       <div className="card-foot">
         <div className="card-owner">
-          {owner ? (
+          {owners.length > 0 ? (
             <>
-              <span className="card-avatar" style={{ background: owner.color }}>{owner.initials}</span>
-              <span className="card-owner-name">{owner.name}</span>
+              <span className="card-avatar-group">
+                {owners.map((owner) => (
+                  <span key={owner.id} className="card-avatar" style={{ background: owner.color }} title={owner.name}>{owner.initials}</span>
+                ))}
+              </span>
+              <span className="card-owner-name">
+                {owners.length === 1 ? owners[0].name : `${owners[0].name} +${owners.length - 1}`}
+              </span>
             </>
           ) : (
             <span className="card-owner-name" style={{ color: "var(--ink-faint)" }}>Unassigned</span>
@@ -749,6 +773,7 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }: CardProps) {
 /* ── Column component ────────────────────────────────────────────────────── */
 interface ColumnProps {
   col: ColumnData;
+  people: Person[];
   onAddCard: (colId: string, title: string) => void;
   onCardClick: (card: CardData) => void;
   dragState: DragState | null;
@@ -759,7 +784,7 @@ interface ColumnProps {
   onDragLeave: () => void;
 }
 
-function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: ColumnProps) {
+function Column({ col, people, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: ColumnProps) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -794,6 +819,7 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
             >
               <Card
                 card={card}
+                people={people}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 dropState={dropState}
@@ -832,17 +858,22 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
 /* ── Card detail modal ───────────────────────────────────────────────────── */
 interface CardModalProps {
   card: CardData;
+  people: Person[];
   onClose: () => void;
   onSave: (updated: CardData) => void;
 }
 
-function CardModal({ card, onClose, onSave }: CardModalProps) {
+function CardModal({ card, people, onClose, onSave }: CardModalProps) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
   const [priority, setPriority] = useState(card.priority ?? "");
-  const [ownerId, setOwnerId] = useState(card.ownerId ?? "");
+  const [ownerIds, setOwnerIds] = useState<string[]>(card.ownerIds ?? []);
   const [deadline, setDeadline] = useState(card.deadline ?? "");
+
+  function toggleOwner(id: string) {
+    setOwnerIds((prev) => prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]);
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -876,22 +907,30 @@ function CardModal({ card, onClose, onSave }: CardModalProps) {
             </select>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div className="modal-field">
-            <label className="modal-label">Owner</label>
-            <select className="modal-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {PEOPLE.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+        <div className="modal-field">
+          <label className="modal-label">Assignees</label>
+          <div className="owner-chips">
+            {people.length === 0 && <div className="cal-due-empty">No registered users to assign yet.</div>}
+            {people.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`owner-chip${ownerIds.includes(p.id) ? " active" : ""}`}
+                onClick={() => toggleOwner(p.id)}
+              >
+                <span className="owner-chip-avatar" style={{ background: p.color }}>{p.initials}</span>
+                {p.name}
+              </button>
+            ))}
           </div>
-          <div className="modal-field">
-            <label className="modal-label">Deadline</label>
-            <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </div>
+        </div>
+        <div className="modal-field">
+          <label className="modal-label">Deadline</label>
+          <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </div>
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null }); onClose(); }}>Save</button>
+          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, deadline: deadline || null }); onClose(); }}>Save</button>
         </div>
       </div>
     </div>
@@ -900,6 +939,10 @@ function CardModal({ card, onClose, onSave }: CardModalProps) {
 
 /* ── Main BoardPage component ─────────────────────────────────────────────── */
 export default function BoardPage() {
+  const router = useRouter();
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [authLoading, setAuthLoading] = useState(true);
   const [boards, setBoards] = useState<BoardData[]>(INIT_BOARDS);
   const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
   const [filterKind, setFilterKind] = useState<string | null>(null);
@@ -911,6 +954,24 @@ export default function BoardPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragState | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const s = await ensureSession();
+      if (cancelled) return;
+      if (!s) {
+        router.replace("/login");
+        return;
+      }
+      setSession(s);
+      const members = await listMembers(s.workspaceId);
+      if (cancelled) return;
+      setPeople(members);
+      setAuthLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const cols = activeBoard.cols;
@@ -986,7 +1047,7 @@ export default function BoardPage() {
       c.id !== colId ? c : {
         ...c,
         cards: [...c.cards, {
-          id: mkId(), title, sub: "", kind: "", tags: [], priority: null, ownerId: null, deadline: selectedDate ?? null
+          id: mkId(), title, sub: "", kind: "", tags: [], priority: null, ownerIds: [], deadline: selectedDate ?? null
         }]
       }
     ));
@@ -1062,6 +1123,17 @@ export default function BoardPage() {
   const today = todayKey();
   const selectedDue = selectedDate ? (dueMap[selectedDate] ?? []) : [];
 
+  if (authLoading) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="board-app" style={{ alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+          <span className="online-text">Loading board…</span>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <style>{css}</style>
@@ -1079,9 +1151,9 @@ export default function BoardPage() {
           </div>
           <div className="top-right">
             <span className="online-dot" />
-            <span className="online-text">3 online</span>
+            <span className="online-text">{people.length} member{people.length === 1 ? "" : "s"}</span>
             <div className="avatar-stack">
-              {PEOPLE.slice(0, 3).map((p) => (
+              {people.slice(0, 3).map((p) => (
                 <span key={p.id} className="avatar" style={{ background: p.color }} title={p.name}>{p.initials}</span>
               ))}
             </div>
@@ -1201,6 +1273,7 @@ export default function BoardPage() {
                   <Column
                     key={col.id}
                     col={col}
+                    people={people}
                     onAddCard={handleAddCard}
                     onCardClick={setEditingCard}
                     dragState={dragState}
@@ -1241,6 +1314,7 @@ export default function BoardPage() {
         {editingCard && (
           <CardModal
             card={editingCard}
+            people={people}
             onClose={() => setEditingCard(null)}
             onSave={(updated) => { handleSaveCard(updated); setEditingCard(null); }}
           />
