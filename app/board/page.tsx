@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, type CSSProperties, type DragEvent } from "react";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
@@ -387,39 +387,77 @@ const css = `
 `;
 
 /* ── inline SVG icons ─────────────────────────────────────────────────────── */
-const Plus = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+type IconProps = { className?: string; style?: CSSProperties };
+
+const Plus = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
-const Dots = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const Dots = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="5" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none" />
   </svg>
 );
-const Filter = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const Filter = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
   </svg>
 );
-const ChevronLeft = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+const ChevronLeft = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="m15 18-6-6 6-6" />
   </svg>
 );
-const ChevronRight = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+const ChevronRight = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="m9 18 6-6-6-6" />
   </svg>
 );
-const Flag = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const Flag = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 22V4a1 1 0 0 1 1-1h11.5a.5.5 0 0 1 .4.8L13 9l3.9 5.2a.5.5 0 0 1-.4.8H5" />
   </svg>
 );
 
+/* ── data model ──────────────────────────────────────────────────────────── */
+interface Person {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+}
+interface CardData {
+  id: string;
+  title: string;
+  sub: string;
+  kind: string;
+  tags: string[];
+  priority: string | null;
+  ownerId: string | null;
+  deadline?: string | null;
+  dragging?: boolean;
+}
+interface ColData {
+  id: string;
+  name: string;
+  color: string;
+  cards: CardData[];
+}
+interface BoardData {
+  id: string;
+  name: string;
+  color: string;
+  cols: ColData[];
+}
+interface DragInfo {
+  overCol: string | null;
+  overCard: string | null;
+  position: "above" | "below" | null;
+}
+
 /* ── seed data ───────────────────────────────────────────────────────────── */
-const PEOPLE = [
+const PEOPLE: Person[] = [
   { id: "1", name: "Reva S.", initials: "RS", color: "#cf6a2c" },
   { id: "2", name: "Mads L.", initials: "ML", color: "#3f7ebc" },
   { id: "3", name: "Priya K.", initials: "PK", color: "#4caf7d" },
@@ -428,7 +466,7 @@ const PEOPLE = [
 
 function mkId() { return Math.random().toString(36).slice(2, 9); }
 
-function defaultCols() {
+function defaultCols(): ColData[] {
   return [
     { id: mkId(), name: "To Do", color: "#a59a8c", cards: [] },
     { id: mkId(), name: "In Progress", color: "#cf6a2c", cards: [] },
@@ -437,7 +475,7 @@ function defaultCols() {
   ];
 }
 
-const INIT_BOARDS = [
+const INIT_BOARDS: BoardData[] = [
   {
     id: "board-core", name: "Core Gameplay", color: "#cf6a2c",
     cols: [
@@ -505,24 +543,32 @@ const INIT_BOARDS = [
 ];
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
-function ownerById(id) { return PEOPLE.find((p) => p.id === id) ?? null; }
+function ownerById(id: string | null | undefined): Person | null {
+  return PEOPLE.find((p) => p.id === id) ?? null;
+}
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function pad2(n) { return String(n).padStart(2, "0"); }
-function dateKey(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+function pad2(n: number) { return String(n).padStart(2, "0"); }
+function dateKey(y: number, m: number, d: number) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
 function todayKey() {
   const d = new Date();
   return dateKey(d.getFullYear(), d.getMonth(), d.getDate());
 }
-function formatDeadline(key) {
+function formatDeadline(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return `${MONTH_NAMES[m - 1].slice(0, 3)} ${d}`;
 }
 
 /* ── Card component ──────────────────────────────────────────────────────── */
-function Card({ card, onDragStart, onDragEnd, dropState, onClick }) {
+function Card({ card, onDragStart, onDragEnd, dropState, onClick }: {
+  card: CardData;
+  onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
+  onDragEnd: () => void;
+  dropState: "above" | "below" | null;
+  onClick: (card: CardData) => void;
+}) {
   const owner = ownerById(card.ownerId);
   return (
     <div
@@ -532,10 +578,10 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }) {
       onDragEnd={onDragEnd}
       onClick={() => onClick(card)}
     >
-      {(card.kind || card.tags?.length > 0) && (
+      {(card.kind || card.tags.length > 0) && (
         <div className="card-tags">
           {card.kind && <span className={`card-tag kind-${card.kind}`}>{card.kind}</span>}
-          {card.tags?.map((t) => <span key={t} className="card-tag">{t}</span>)}
+          {card.tags.map((t) => <span key={t} className="card-tag">{t}</span>)}
         </div>
       )}
       <div className="card-title">{card.title}</div>
@@ -567,7 +613,17 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }) {
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }) {
+function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+  col: ColData;
+  onAddCard: (colId: string, title: string) => void;
+  onCardClick: (card: CardData) => void;
+  dragState: DragInfo | null;
+  onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) => void;
+  onDrop: (e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) => void;
+  onDragLeave: () => void;
+}) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -638,7 +694,11 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, onClose, onSave }) {
+function CardModal({ card, onClose, onSave }: {
+  card: CardData;
+  onClose: () => void;
+  onSave: (card: CardData) => void;
+}) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
@@ -702,22 +762,22 @@ function CardModal({ card, onClose, onSave }) {
 
 /* ── Main BoardPage component ─────────────────────────────────────────────── */
 export default function BoardPage() {
-  const [boards, setBoards] = useState(INIT_BOARDS);
+  const [boards, setBoards] = useState<BoardData[]>(INIT_BOARDS);
   const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
-  const [filterKind, setFilterKind] = useState(null);
-  const [editingCard, setEditingCard] = useState(null);
+  const [filterKind, setFilterKind] = useState<string | null>(null);
+  const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date();
     return { y: d.getFullYear(), m: d.getMonth() };
   });
-  const [selectedDate, setSelectedDate] = useState(null);
-  const drag = useRef({ cardId: null, srcColId: null });
-  const [dragState, setDragState] = useState(null); // { overCol, overCard, position }
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
+  const [dragState, setDragState] = useState<DragInfo | null>(null);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const cols = activeBoard.cols;
 
-  function setCols(updater) {
+  function setCols(updater: ColData[] | ((cols: ColData[]) => ColData[])) {
     setBoards((prev) => prev.map((b) =>
       b.id !== activeBoardId ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
     ));
@@ -732,9 +792,9 @@ export default function BoardPage() {
   }
 
   /* drag handlers */
-  function handleDragStart(e, cardId) {
+  function handleDragStart(e: DragEvent<HTMLDivElement>, cardId: string) {
     const srcCol = cols.find((c) => c.cards.some((k) => k.id === cardId));
-    drag.current = { cardId, srcColId: srcCol?.id };
+    drag.current = { cardId, srcColId: srcCol?.id ?? null };
     setCols((prev) => prev.map((c) => ({
       ...c, cards: c.cards.map((k) => k.id === cardId ? { ...k, dragging: true } : k)
     })));
@@ -745,10 +805,10 @@ export default function BoardPage() {
     setCols((prev) => prev.map((c) => ({ ...c, cards: c.cards.map((k) => ({ ...k, dragging: false })) })));
     setDragState(null);
   }
-  function handleDragOver(e, colId, cardId) {
+  function handleDragOver(e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const position = (() => {
+    const position = ((): "above" | "below" | null => {
       if (!cardId) return null;
       const el = e.currentTarget;
       const rect = el.getBoundingClientRect();
@@ -756,24 +816,26 @@ export default function BoardPage() {
     })();
     setDragState({ overCol: colId, overCard: cardId, position });
   }
-  function handleDrop(e, colId, targetCardId) {
+  function handleDrop(e: DragEvent<HTMLDivElement>, colId: string, targetCardId: string | null) {
     e.preventDefault();
-    const { cardId, srcColId } = drag.current;
+    const { cardId } = drag.current;
     if (!cardId) return;
     setCols((prev) => {
-      let card = null;
+      let card: CardData | undefined;
       const without = prev.map((c) => {
         const found = c.cards.find((k) => k.id === cardId);
         if (found) card = found;
         return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
       });
+      if (!card) return prev;
+      const moved = card;
       return without.map((c) => {
         if (c.id !== colId) return c;
-        if (!targetCardId) return { ...c, cards: [...c.cards, card] };
+        if (!targetCardId) return { ...c, cards: [...c.cards, moved] };
         const idx = c.cards.findIndex((k) => k.id === targetCardId);
         const pos = dragState?.position === "above" ? idx : idx + 1;
         const next = [...c.cards];
-        next.splice(pos, 0, card);
+        next.splice(pos, 0, moved);
         return { ...c, cards: next };
       });
     });
@@ -782,7 +844,7 @@ export default function BoardPage() {
   function handleDragLeave() { /* keep state for cross-card sub-regions */ }
 
   /* add card */
-  function handleAddCard(colId, title) {
+  function handleAddCard(colId: string, title: string) {
     setCols((prev) => prev.map((c) =>
       c.id !== colId ? c : {
         ...c,
@@ -794,7 +856,7 @@ export default function BoardPage() {
   }
 
   /* save card from modal */
-  function handleSaveCard(updated) {
+  function handleSaveCard(updated: CardData) {
     setCols((prev) => prev.map((c) => ({
       ...c, cards: c.cards.map((k) => k.id === updated.id ? updated : k)
     })));
@@ -818,7 +880,7 @@ export default function BoardPage() {
   }));
 
   /* ── calendar data ── */
-  const dueMap = {};
+  const dueMap: Record<string, (CardData & { colId: string; colName: string })[]> = {};
   for (const c of cols) {
     for (const k of c.cards) {
       if (!k.deadline) continue;
@@ -826,7 +888,7 @@ export default function BoardPage() {
     }
   }
 
-  function shiftMonth(delta) {
+  function shiftMonth(delta: number) {
     setCalMonth((prev) => {
       let m = prev.m + delta, y = prev.y;
       if (m < 0) { m = 11; y -= 1; }
@@ -842,7 +904,7 @@ export default function BoardPage() {
     let firstWeekday = new Date(y, m, 1).getDay();
     firstWeekday = (firstWeekday + 6) % 7; // Monday = 0
 
-    const cells = [];
+    const cells: { key: string; day: number; otherMonth: boolean }[] = [];
     for (let i = 0; i < firstWeekday; i++) {
       const d = daysInPrevMonth - firstWeekday + 1 + i;
       const pm = m === 0 ? 11 : m - 1, py = m === 0 ? y - 1 : y;
