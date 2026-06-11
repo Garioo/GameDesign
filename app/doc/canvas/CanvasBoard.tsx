@@ -178,10 +178,12 @@ export default function CanvasBoard({
       );
 
       // ---- broadcast our live presence (cursor / selection) ----
+      // The cursor label shows initials (matching the topbar avatars) rather
+      // than the full name, to keep the canvas uncluttered.
       const userSignal = computed<TLUser>("user", () => ({
         id: `user:${tabId}` as TLUser["id"],
         typeName: "user",
-        name: session.name,
+        name: session.initials,
         color: session.color,
         imageUrl: "",
         meta: {},
