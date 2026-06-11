@@ -84,14 +84,14 @@ const ImageIcon = ({ className }: IconProps) => (
 );
 
 // tldraw tool id -> nav-bar button. The geo (shape) tool has its own picker.
-const TOOLS: { id: string; label: string; Icon: ComponentType<IconProps> }[] = [
-  { id: "select", label: "Select", Icon: Cursor },
-  { id: "hand", label: "Hand", Icon: Hand },
-  { id: "draw", label: "Draw", Icon: Pencil },
-  { id: "eraser", label: "Eraser", Icon: Eraser },
-  { id: "arrow", label: "Arrow", Icon: ArrowTool },
-  { id: "text", label: "Text", Icon: TextTool },
-  { id: "note", label: "Note", Icon: Note },
+const TOOLS: { id: string; label: string; tip: string; Icon: ComponentType<IconProps> }[] = [
+  { id: "select", label: "Select", tip: "Select & move things · V", Icon: Cursor },
+  { id: "hand", label: "Hand", tip: "Pan around the canvas · H", Icon: Hand },
+  { id: "draw", label: "Draw", tip: "Draw freehand · D", Icon: Pencil },
+  { id: "eraser", label: "Eraser", tip: "Erase things · E", Icon: Eraser },
+  { id: "arrow", label: "Arrow", tip: "Connect with arrows · A", Icon: ArrowTool },
+  { id: "text", label: "Text", tip: "Add text · T", Icon: TextTool },
+  { id: "note", label: "Note", tip: "Add a sticky note · N", Icon: Note },
 ];
 
 /* ---------- geo shape picker ---------- */
@@ -454,7 +454,7 @@ export default function CanvasPage() {
               <button
                 key={t.id}
                 className={"dock-tool" + (tool === t.id ? " is-active" : "")}
-                title={t.label}
+                data-tip={t.tip}
                 aria-label={t.label}
                 disabled={!editor}
                 onClick={() => pickTool(t.id)}
@@ -465,7 +465,7 @@ export default function CanvasPage() {
             <span className="shape-wrap">
               <button
                 className={"dock-tool" + (tool === "geo" ? " is-active" : "")}
-                title="Shapes"
+                data-tip="Add shapes — boxes, circles & more"
                 aria-label="Shapes"
                 aria-expanded={shapeMenuOpen}
                 disabled={!editor}
@@ -479,7 +479,7 @@ export default function CanvasPage() {
                     <button
                       key={s.id}
                       className="shape-option"
-                      title={s.label}
+                      data-tip={s.label}
                       aria-label={s.label}
                       onClick={() => pickShape(s.id)}
                     >
@@ -491,7 +491,7 @@ export default function CanvasPage() {
             </span>
             <button
               className="dock-tool"
-              title="Insert image"
+              data-tip="Insert an image"
               aria-label="Insert image"
               disabled={!editor}
               onClick={() => fileRef.current?.click()}
@@ -501,7 +501,7 @@ export default function CanvasPage() {
             <span className="dock-divider" />
             <button
               className="dock-tool"
-              title="Undo (Ctrl+Z)"
+              data-tip="Undo · Ctrl+Z"
               aria-label="Undo"
               disabled={!editor || !history.canUndo}
               onClick={() => editor?.undo()}
@@ -510,7 +510,7 @@ export default function CanvasPage() {
             </button>
             <button
               className="dock-tool"
-              title="Redo (Ctrl+Shift+Z)"
+              data-tip="Redo · Ctrl+Shift+Z"
               aria-label="Redo"
               disabled={!editor || !history.canRedo}
               onClick={() => editor?.redo()}

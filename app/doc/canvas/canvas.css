@@ -88,8 +88,57 @@
 }
 .dock-tool-icon { width: 21px; height: 21px; }
 
+/* ---- hover tooltips (data-tip) on the tool buttons ---- */
+.dock-tool,
+.shape-option {
+  position: relative;
+}
+.dock-tool[data-tip]::after,
+.shape-option[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, transform var(--t-fast) ease;
+  transition-delay: 0s;
+  z-index: 10;
+}
+.dock-tool[data-tip]:hover:not(:disabled)::after,
+.shape-option[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%);
+  /* small delay so tooltips don't flash while sweeping across the bar */
+  transition-delay: 0.35s;
+}
+
 /* Keep the floating dock clear of tldraw's bottom-left zoom/help controls. */
 .canvas-app .tlui-layout__bottom { padding-bottom: 84px; }
+
+/* Collaborator cursor label: initials in a small circle (matches the
+   topbar avatar style) instead of a wide name pill. */
+.canvas-app .tl-nametag {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
 
 /* save / sync status styling comes from the global chrome
    (.save-state in app/components/chrome.css) */
