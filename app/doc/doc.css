@@ -244,7 +244,17 @@
 .ref-card:active { transform: translateY(-1px); }
 .ref-title { display: flex; align-items: center; gap: var(--sp-2); font-weight: 600; font-size: 13.5px; margin-bottom: 6px; color: var(--ink); }
 .ref-icon { width: 15px; height: 15px; color: var(--ember); flex-shrink: 0; }
-.ref-text { font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.ref-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-kind {
+  margin-left: auto; flex-shrink: 0;
+  padding: 1px 7px 2px; border-radius: 999px;
+  background: var(--line-soft); color: var(--ink-faint);
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+.ref-text {
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 
 .rail-footer { margin-top: 18px; padding-top: var(--sp-4); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-3); }
 .foot-row { display: flex; align-items: center; justify-content: space-between; }

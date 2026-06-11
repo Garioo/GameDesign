@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BLOCK_TONES, type Block, type BlockTone, type BlockType } from "./data";
 import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
+import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
 import "./BlockEditor.css";
 
 /* ---------- slash-menu icons (no emoji) ---------- */
@@ -83,6 +84,20 @@ const ICode = () => (
     <path d="m8 7-5 5 5 5M16 7l5 5-5 5M13 4l-2 16" />
   </svg>
 );
+const IPage = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5M9 13h6M9 17h4" />
+  </svg>
+);
+const IGrid = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+);
 
 type MenuItem = { type: BlockType; label: string; hint: string; Icon: () => React.ReactElement };
 const MENU: MenuItem[] = [
@@ -160,8 +175,10 @@ async function readImageFile(file: File, maxDim = 1600): Promise<string> {
 
 /* ---------- inline-HTML sanitizer ---------- */
 // Block text is stored as a tiny HTML subset so ⌘B/⌘I/⌘E formatting survives
-// persistence and realtime. Everything else (attributes, unknown tags) is
-// stripped down to its text content at every read and write.
+// persistence and realtime. Mention chips (<a data-mention>) are normalized to
+// a canonical attribute set with the href re-derived from data-page, so no
+// markup or URL from the outside is ever trusted. Everything else (attributes,
+// unknown tags) is stripped down to its text content at every read and write.
 const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "CODE", "BR"]);
 
 function sanitizeHtml(html: string): string {
@@ -172,6 +189,20 @@ function sanitizeHtml(html: string): string {
     for (const child of Array.from(node.childNodes)) {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as Element;
+        if (el.tagName === "A" && el.hasAttribute("data-mention")) {
+          const ref = el.getAttribute("data-page") ?? "";
+          const label = (el.textContent ?? "").trim();
+          if (MENTION_REF_RE.test(ref) && label) {
+            el.textContent = label; // flatten any formatting nested in the chip
+            while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+            el.setAttribute("data-mention", "");
+            el.setAttribute("data-page", ref);
+            el.setAttribute("contenteditable", "false");
+            el.setAttribute("href", mentionHref(ref));
+            continue;
+          }
+          // invalid ref / empty label — falls through and gets unwrapped
+        }
         walk(el);
         if (ALLOWED_TAGS.has(el.tagName)) {
           while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
@@ -204,6 +235,15 @@ function isCollapsed(): boolean {
   const sel = window.getSelection();
   return !sel || sel.isCollapsed;
 }
+// Non-editable atom (mention chip) wrapping a node, if any.
+function closestAtom(n: Node, root: HTMLElement): Element | null {
+  let cur: Node | null = n.parentNode;
+  while (cur && cur !== root) {
+    if (cur instanceof Element && cur.getAttribute("contenteditable") === "false") return cur;
+    cur = cur.parentNode;
+  }
+  return null;
+}
 function placeCaret(el: HTMLElement, pos: "start" | "end" | number) {
   el.focus();
   const sel = window.getSelection();
@@ -217,7 +257,10 @@ function placeCaret(el: HTMLElement, pos: "start" | "end" | number) {
     let node: Text | null;
     while ((node = walker.nextNode() as Text | null)) {
       if (remaining <= node.length) {
-        range.setStart(node, remaining);
+        // Never land inside a non-editable chip — settle right after it.
+        const atom = closestAtom(node, el);
+        if (atom) range.setStartAfter(atom);
+        else range.setStart(node, remaining);
         placed = true;
         break;
       }
@@ -237,7 +280,72 @@ function placeCaret(el: HTMLElement, pos: "start" | "end" | number) {
   sel.addRange(range);
 }
 
+// Build a range between two text offsets (same walk as placeCaret).
+function rangeFromOffsets(el: HTMLElement, start: number, end: number): Range | null {
+  const range = document.createRange();
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  let startSet = false;
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    const next = offset + node.length;
+    if (!startSet && start <= next) {
+      range.setStart(node, start - offset);
+      startSet = true;
+    }
+    if (startSet && end <= next) {
+      range.setEnd(node, end - offset);
+      return range;
+    }
+    offset = next;
+  }
+  return null;
+}
+
+// Total text-node length (matches the offset space of caretOffset).
+function textLength(el: HTMLElement): number {
+  let n = 0;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) n += node.length;
+  return n;
+}
+
+// Plain text from the block start to the (collapsed) caret.
+function textBeforeCaret(el: HTMLElement): string | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+  const pre = sel.getRangeAt(0).cloneRange();
+  const at = pre.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(at.endContainer, at.endOffset);
+  return pre.toString();
+}
+
+// The mention chip sitting immediately before a collapsed caret, if any.
+// (Chromium deletes contenteditable=false atoms atomically on Backspace;
+// this makes Safari behave the same.)
+function chipBeforeCaret(): Element | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+  const { startContainer, startOffset } = sel.getRangeAt(0);
+  let prev: Node | null = null;
+  if (startContainer.nodeType === Node.TEXT_NODE) {
+    if (startOffset > 0) return null; // caret is mid-text
+    prev = startContainer.previousSibling;
+  } else {
+    prev = startContainer.childNodes[startOffset - 1] ?? null;
+  }
+  return prev instanceof Element && prev.matches("a[data-mention]") ? prev : null;
+}
+
+// "@query" must start the block or follow whitespace / an opening bracket, so
+// emails and mid-word @s never open the menu. "[[query" works anywhere.
+const AT_TRIGGER_RE = /(^|[\s([{])@([^@\n]{0,40})$/;
+const WIKI_TRIGGER_RE = /\[\[([^[\]\n]{0,40})$/;
+
 type Slash = { id: string; query: string; index: number };
+type Mention = { id: string; query: string; trigger: "@" | "[["; index: number };
 type FocusReq = { id: string; pos: "start" | "end" | number };
 
 export default function BlockEditor({
@@ -245,6 +353,9 @@ export default function BlockEditor({
   onChange,
   onLiveInput,
   repo,
+  mentionTargets = [],
+  validRefs,
+  onNavigate,
 }: {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
@@ -253,9 +364,16 @@ export default function BlockEditor({
   onLiveInput?: (blockId: string, text: string, blocks: Block[]) => void;
   // Workspace GitHub repository ("owner/name") for script blocks, if linked.
   repo?: string | null;
+  // Pages/canvases offered by the @-mention autocomplete.
+  mentionTargets?: MentionTarget[];
+  // Refs that still resolve — chips pointing elsewhere render as dangling.
+  validRefs?: Set<string>;
+  // Follow a mention chip ("<pageId>" or "canvas:<id>").
+  onNavigate?: (ref: string) => void;
 }) {
   const refs = useRef(new Map<string, HTMLDivElement>());
   const [slash, setSlash] = useState<Slash | null>(null);
+  const [mention, setMention] = useState<Mention | null>(null);
   const [focusReq, setFocusReq] = useState<FocusReq | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -298,6 +416,11 @@ export default function BlockEditor({
   const filtered = (q: string) =>
     MENU.filter((m) => m.label.toLowerCase().includes(q.toLowerCase()));
 
+  const mentionMatches = (q: string): MentionTarget[] => {
+    const s = q.trim().toLowerCase();
+    return mentionTargets.filter((t) => !s || t.title.toLowerCase().includes(s)).slice(0, 8);
+  };
+
   const isListType = (t: BlockType) => t === "bullet" || t === "numbered" || t === "todo";
 
   /* ---------- structural operations ---------- */
@@ -307,11 +430,7 @@ export default function BlockEditor({
     const block = cur[idx];
     const el = refs.current.get(id)!;
     const offset = caretOffset(el);
-    // Split on plain text — a mid-block split drops inline formatting, which
-    // beats slicing an HTML string at a character offset.
     const plain = el.innerText.replace(/\n$/, "");
-    const before = plain.slice(0, offset);
-    const after = plain.slice(offset);
 
     if (isListType(block.type) && plain === "") {
       const next = [...cur];
@@ -321,13 +440,65 @@ export default function BlockEditor({
       return;
     }
 
+    // Split the live DOM at the caret so inline formatting and mention chips
+    // survive on both sides. (A chip split exactly at its edge leaves an
+    // empty-label half, which the sanitizer drops.)
+    let before = block.text;
+    let after = "";
+    const total = textLength(el);
+    if (offset < total) {
+      const range = rangeFromOffsets(el, offset, total);
+      if (range) {
+        const tmp = document.createElement("div");
+        tmp.appendChild(range.extractContents());
+        after = sanitizeHtml(tmp.innerHTML);
+        before = sanitizeHtml(el.innerHTML);
+      } else {
+        before = plain.slice(0, offset);
+        after = plain.slice(offset);
+      }
+    }
+
     const nextType: BlockType = isListType(block.type) ? block.type : "text";
     const nb: Block = { id: newId(), type: nextType, text: after };
     const next = [...cur];
-    next[idx] = { ...block, text: offset >= plain.length ? block.text : before };
+    next[idx] = { ...block, text: before };
     next.splice(idx + 1, 0, nb);
     onChange(next);
     setFocusReq({ id: nb.id, pos: "start" });
+  };
+
+  // Replace the trigger + query before the caret with a mention chip.
+  const insertMention = (id: string, target: MentionTarget) => {
+    const el = refs.current.get(id);
+    const m = mention;
+    setMention(null);
+    if (!el || !m || m.id !== id) return;
+    const end = caretOffset(el);
+    const start = Math.max(end - m.query.length - m.trigger.length, 0);
+    const range = rangeFromOffsets(el, start, end);
+    if (!range) return;
+    range.deleteContents();
+    const chip = document.createElement("a");
+    chip.setAttribute("data-mention", "");
+    chip.setAttribute("data-page", target.ref);
+    chip.setAttribute("contenteditable", "false");
+    chip.setAttribute("href", mentionHref(target.ref));
+    chip.textContent = target.title;
+    range.insertNode(chip);
+    const space = document.createTextNode(" ");
+    chip.after(space);
+    // Caret directly after the space, via the DOM (not focusReq) so there is
+    // no re-render race; the state commit below round-trips to the same HTML.
+    const sel = window.getSelection();
+    if (sel) {
+      const r = document.createRange();
+      r.setStart(space, 1);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    onChange(readBlocks());
   };
 
   // Returns true if it consumed the keystroke.
@@ -462,9 +633,31 @@ export default function BlockEditor({
     const text = el.innerText;
     if (text.startsWith("/") && !text.slice(1).includes(" ")) {
       setSlash({ id, query: text.slice(1), index: 0 });
+      if (mention) setMention(null);
       return; // don't broadcast a slash query
     }
     if (slash && slash.id === id) setSlash(null);
+
+    // @-mention session — recomputed from the text before the caret on every
+    // input, so deletions close it naturally. Unlike slash queries this is
+    // real prose and broadcasts as normal text.
+    const before = textBeforeCaret(el);
+    const at = before?.match(AT_TRIGGER_RE);
+    const wiki = before?.match(WIKI_TRIGGER_RE);
+    if (at || wiki) {
+      // If both triggers match, the one closer to the caret (shorter query) wins.
+      const useAt = !!at && (!wiki || at[2].length <= wiki[1].length);
+      const query = useAt ? at![2] : wiki![1];
+      // A query that ran past every title (and contains a space) is prose, not
+      // a lookup — stop shadowing the user's sentence with an empty menu.
+      if (mentionMatches(query).length === 0 && /\s/.test(query)) {
+        if (mention) setMention(null);
+      } else {
+        setMention({ id, query, trigger: useAt ? "@" : "[[", index: 0 });
+      }
+    } else if (mention) {
+      setMention(null);
+    }
     onLiveInput?.(id, sanitizeHtml(el.innerHTML), readBlocks());
   };
 
@@ -539,6 +732,37 @@ export default function BlockEditor({
   };
 
   const onKeyDownRest = (e: React.KeyboardEvent<HTMLDivElement>, id: string) => {
+    // Mention menu first, so Enter never splits the block while it's open.
+    if (mention && mention.id === id) {
+      const items = mentionMatches(mention.query);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMention({ ...mention, index: Math.min(mention.index + 1, Math.max(items.length - 1, 0)) });
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMention({ ...mention, index: Math.max(mention.index - 1, 0) });
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        const pick = items[Math.min(mention.index, items.length - 1)];
+        if (pick) {
+          e.preventDefault();
+          insertMention(id, pick);
+          return;
+        }
+        setMention(null); // nothing to pick — let Enter split as usual
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+      // Caret left the query without an input event — close, keep the key.
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") setMention(null);
+    }
+
     if (slash && slash.id === id) {
       const items = filtered(slash.query);
       if (e.key === "ArrowDown") {
@@ -570,6 +794,15 @@ export default function BlockEditor({
       return;
     }
     if (e.key === "Backspace") {
+      // A chip directly before the caret deletes as one atom.
+      const chip = chipBeforeCaret();
+      if (chip) {
+        e.preventDefault();
+        chip.remove();
+        const el = refs.current.get(id);
+        if (el) onInput(id, el);
+        return;
+      }
       const el = refs.current.get(id);
       if (el && isCollapsed() && caretOffset(el) === 0) {
         if (handleBackspaceAtStart(id)) e.preventDefault();
@@ -585,13 +818,25 @@ export default function BlockEditor({
   };
 
   return (
-    <div className="blocks">
+    <div
+      className="blocks"
+      onClick={(e) => {
+        // Mention chips: plain click navigates in-app; cmd/ctrl/shift-click
+        // falls through to the real href (open in new tab).
+        const chip = (e.target as HTMLElement).closest?.("a[data-mention]");
+        if (!chip || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault();
+        const ref = chip.getAttribute("data-page");
+        if (ref) onNavigate?.(ref);
+      }}
+    >
       {blocks.map((b) => (
         <BlockRow
           key={b.id}
           block={b}
           index={numberFor(b)}
           repo={repo}
+          validRefs={validRefs}
           onToggleChecked={() => updateBlock(b.id, { checked: !b.checked })}
           onSetScript={(patch) => updateBlock(b.id, patch)}
           register={register}
@@ -601,12 +846,16 @@ export default function BlockEditor({
           dropTarget={dropId === b.id && dragId !== null && dragId !== b.id}
           slash={slash && slash.id === b.id ? slash : null}
           menuItems={slash && slash.id === b.id ? filtered(slash.query) : []}
+          mention={mention && mention.id === b.id ? mention : null}
+          mentionItems={mention && mention.id === b.id ? mentionMatches(mention.query) : []}
           onPick={(type) => chooseType(b.id, type)}
+          onPickMention={(t) => insertMention(b.id, t)}
           onInput={onInput}
           onKeyDown={onKeyDown}
           onFocus={() => setFocusedId(b.id)}
           onBlur={() => {
             setFocusedId((f) => (f === b.id ? null : f));
+            setMention((m) => (m && m.id === b.id ? null : m));
             onChange(readBlocks());
           }}
           onTableChange={(rows) => updateBlock(b.id, { rows })}
@@ -641,6 +890,7 @@ function BlockRow({
   block,
   index,
   repo,
+  validRefs,
   onToggleChecked,
   onSetScript,
   register,
@@ -650,7 +900,10 @@ function BlockRow({
   dropTarget,
   slash,
   menuItems,
+  mention,
+  mentionItems,
   onPick,
+  onPickMention,
   onInput,
   onKeyDown,
   onFocus,
@@ -671,6 +924,7 @@ function BlockRow({
   block: Block;
   index: number;
   repo?: string | null;
+  validRefs?: Set<string>;
   onToggleChecked: () => void;
   onSetScript: (patch: Partial<Block>) => void;
   register: (id: string, el: HTMLDivElement | null) => void;
@@ -680,7 +934,10 @@ function BlockRow({
   dropTarget: boolean;
   slash: Slash | null;
   menuItems: MenuItem[];
+  mention: Mention | null;
+  mentionItems: MentionTarget[];
   onPick: (type: BlockType) => void;
+  onPickMention: (target: MentionTarget) => void;
   onInput: (id: string, el: HTMLDivElement) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, id: string) => void;
   onFocus: () => void;
@@ -708,6 +965,17 @@ function BlockRow({
     if (sanitizeHtml(el.innerHTML) !== block.text) el.innerHTML = block.text;
   }, [block.text, block.type]);
 
+  // Decorate mentions of deleted pages as dangling. Class-only: the sanitizer
+  // strips attributes on every read, so it never reaches state or the DB.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || isChromeBlock(block.type) || !validRefs) return;
+    el.querySelectorAll("a[data-mention]").forEach((a) => {
+      const target = a.getAttribute("data-page");
+      a.classList.toggle("is-dangling", !target || !validRefs.has(target));
+    });
+  }, [block.text, block.type, validRefs]);
+
   const editable = !isChromeBlock(block.type) && (
     <div
       ref={(el) => {
@@ -721,9 +989,15 @@ function BlockRow({
       onInput={(e) => onInput(block.id, e.currentTarget)}
       onKeyDown={(e) => onKeyDown(e, block.id)}
       onPaste={(e) => {
-        // Paste as plain text — the DOM is the source of truth for block HTML.
+        // Paste as plain text — except for internal rich content carrying
+        // mention chips, which round-trips through the sanitizer instead.
         e.preventDefault();
-        document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+        const html = e.clipboardData.getData("text/html");
+        if (html && html.includes("data-mention")) {
+          document.execCommand("insertHTML", false, sanitizeHtml(html));
+        } else {
+          document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+        }
         onInput(block.id, e.currentTarget);
       }}
       onFocus={onFocus}
@@ -876,6 +1150,30 @@ function BlockRow({
               <span className="slash-copy">
                 <span className="slash-label">{m.label}</span>
                 <span className="slash-hint">{m.hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mention && (
+        <div className="slash-menu mention-menu" contentEditable={false}>
+          {mentionItems.length === 0 && (
+            <div className="slash-empty">No matching pages</div>
+          )}
+          {mentionItems.map((t, i) => (
+            <button
+              key={t.ref}
+              className={"slash-item" + (i === mention.index ? " is-active" : "")}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onPickMention(t);
+              }}
+            >
+              <span className="slash-glyph">{t.kind === "canvas" ? <IGrid /> : <IPage />}</span>
+              <span className="slash-copy">
+                <span className="slash-label">{t.title}</span>
+                <span className="slash-hint">{t.group}</span>
               </span>
             </button>
           ))}

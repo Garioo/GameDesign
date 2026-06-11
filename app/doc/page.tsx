@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor from "./BlockEditor";
 import Sidebar from "./Sidebar";
@@ -47,6 +47,12 @@ import {
 } from "@/lib/commentsRepo";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
 import {
+  mentionToken,
+  relabelMentions,
+  stripInlineHtml,
+  type MentionTarget,
+} from "./mentions";
+import {
   STATUS_LABEL,
   type Block,
   type DesignDoc,
@@ -55,6 +61,9 @@ import {
 import "./doc.css";
 
 interface PresenceUser { key: string; name: string; initials: string; color: string }
+
+// One "Linked references" rail entry: a page that points at the current one.
+interface Backlink { doc: DesignDoc; kind: "link" | "mention"; snippet: string }
 
 function relativeTime(iso?: string): string {
   if (!iso) return "just now";
@@ -416,7 +425,6 @@ function DocPageInner() {
               tags: row.tags ?? [],
               links: [],
               blocks,
-              refs: [],
               updatedAt: row.updated_at,
             };
             setDocs((prev) => (prev.some((d) => d.id === row.id) ? prev : [...prev, doc]));
@@ -520,10 +528,88 @@ function DocPageInner() {
   // Keep the realtime handlers pointed at the page currently in view.
   activeIdRef.current = active?.id ?? null;
 
-  // Incoming backlinks: pages whose "Links to" includes the current page.
-  const backlinks = active
-    ? docs.filter((d) => d.id !== active.id && d.links.includes(active.id))
+  // Incoming backlinks: pages that reference the current page, either through
+  // an inline @-mention in their body (shown with the mentioning block as a
+  // snippet) or via their meta-card "Links to" list. One entry per source page.
+  const backlinks: Backlink[] = active
+    ? docs.flatMap((d): Backlink[] => {
+        if (d.id === active.id) return [];
+        const token = mentionToken(active.id);
+        const mentionBlock = d.blocks.find((b) => b.text.includes(token));
+        if (mentionBlock) {
+          const text = stripInlineHtml(mentionBlock.text);
+          const snippet = text.length > 140 ? text.slice(0, 140) + "…" : text;
+          return [{ doc: d, kind: "mention", snippet: snippet || d.subtitle || d.group }];
+        }
+        if (d.links.includes(active.id)) {
+          return [{ doc: d, kind: "link", snippet: d.subtitle || d.group }];
+        }
+        return [];
+      })
     : [];
+
+  // Everything the @-mention autocomplete can point at (self excluded), and
+  // the set of refs that still resolve (deleted targets render as dangling).
+  const mentionTargets: MentionTarget[] = active
+    ? [
+        ...docs
+          .filter((d) => d.id !== active.id)
+          .map((d) => ({ ref: d.id, title: d.title, group: d.group, kind: "page" as const })),
+        ...canvases.map((c) => ({
+          ref: "canvas:" + c.id,
+          title: c.name,
+          group: "Canvas",
+          kind: "canvas" as const,
+        })),
+      ]
+    : [];
+  const refsKey =
+    docs.map((d) => d.id).join("|") + "§" + canvases.map((c) => c.id).join("|");
+  const validRefs = useMemo(
+    () =>
+      new Set<string>([...docs.map((d) => d.id), ...canvases.map((c) => "canvas:" + c.id)]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refsKey],
+  );
+
+  const handleMentionNavigate = (ref: string) => {
+    if (ref.startsWith("canvas:")) {
+      const id = ref.slice("canvas:".length);
+      if (canvases.some((c) => c.id === id)) router.push(`/doc/canvas?c=${id}`);
+      return;
+    }
+    if (docs.some((d) => d.id === ref)) openPage(ref);
+  };
+
+  // Keep mention chip labels in sync with current page/canvas titles. Display
+  // only — corrected labels persist the next time the host page is edited.
+  // Keyed on a title fingerprint so per-keystroke block edits never trigger it.
+  const titleKey =
+    docs.map((d) => d.id + ":" + d.title).join("|") +
+    "§" +
+    canvases.map((c) => c.id + ":" + c.name).join("|");
+  useEffect(() => {
+    setDocs((prev) => {
+      const titles = new Map<string, string>(prev.map((d) => [d.id, d.title]));
+      for (const c of canvases) titles.set("canvas:" + c.id, c.name);
+      let changed = false;
+      const next = prev.map((d) => {
+        let blocksChanged = false;
+        const blocks = d.blocks.map((b) => {
+          if (!b.text.includes("data-mention")) return b;
+          const text = relabelMentions(b.text, titles);
+          if (text === b.text) return b;
+          blocksChanged = true;
+          return { ...b, text };
+        });
+        if (!blocksChanged) return d;
+        changed = true;
+        return { ...d, blocks };
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleKey, canvases]);
 
   // Browser back/forward: follow the URL's page param.
   const urlPageId = searchParams.get("page");
@@ -1089,6 +1175,9 @@ function DocPageInner() {
               key={active.id}
               repo={workspace?.repo || null}
               blocks={active.blocks}
+              mentionTargets={mentionTargets}
+              validRefs={validRefs}
+              onNavigate={handleMentionNavigate}
               onChange={(b) => update(active.id, { blocks: b })}
               onLiveInput={(blockId, text, blocks) => {
                 // instant: per-block delta to other clients (no local re-render)
@@ -1114,13 +1203,14 @@ function DocPageInner() {
                 No pages link here yet.
               </p>
             )}
-            {backlinks.map((d) => (
+            {backlinks.map(({ doc: d, kind, snippet }) => (
               <button key={d.id} className="ref-card" onClick={() => openPage(d.id)}>
                 <div className="ref-title">
                   <Doc className="ref-icon" />
-                  {d.title}
+                  <span className="ref-name">{d.title}</span>
+                  <span className="ref-kind">{kind === "mention" ? "mention" : "link"}</span>
                 </div>
-                <p className="ref-text">{d.subtitle || d.group}</p>
+                <p className="ref-text">{snippet}</p>
               </button>
             ))}
           </div>

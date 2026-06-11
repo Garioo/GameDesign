@@ -58,15 +58,6 @@ export interface Block {
   code?: string; // cached file content for script blocks
 }
 
-// Icon hint for linked-reference cards in the right rail.
-export type RefIcon = "mechanic" | "doc" | "vision" | "economy";
-
-export interface LinkedRef {
-  icon: RefIcon;
-  title: string;
-  text: string;
-}
-
 export interface DesignDoc {
   id: string;
   sectionId?: string; // owning section (DB id)
@@ -84,7 +75,6 @@ export interface DesignDoc {
   tags: string[];
   links: string[]; // "Links to" chips
   blocks: Block[]; // the editable body
-  refs: LinkedRef[]; // "Linked references" rail
   updatedAt?: string; // ISO timestamp from the DB (for "last edited")
 }
 
@@ -137,15 +127,6 @@ export const seedDocs: DesignDoc[] = [
         ],
       },
     ],
-    refs: [
-      { icon: "mechanic", title: "Warmth Meter", text: "The single survival stat. Replaces health, hunger, and stamina with one legible…" },
-      { icon: "mechanic", title: "Shrine Network", text: "Rekindling shrines is the game's spine of progression — each one you relight…" },
-      { icon: "mechanic", title: "Crafting & Foraging", text: "Gentle, legible crafting focused on fuel, light, and comfort rather than weapons." },
-      { icon: "doc", title: "The Wick-bearer", text: "The player character — the last person trusted to carry fire through the Long…" },
-      { icon: "doc", title: "Lantern HUD", text: "A near-diegetic HUD: the lantern ring is the warmth meter, and almost everythin…" },
-      { icon: "vision", title: "Vision & Pillars", text: "A cozy survival game where warmth is the only resource and rekindling the…" },
-      { icon: "economy", title: "Ember Economy", text: "Embers and kindling are the only currencies — spent on shrines, comfort,…" },
-    ],
   },
   {
     id: "warmth",
@@ -183,10 +164,6 @@ export const seedDocs: DesignDoc[] = [
         text: "Open question: should warmth drain pause entirely indoors, or merely slow? Needs a balance pass.",
       },
     ],
-    refs: [
-      { icon: "mechanic", title: "The Ember", text: "The single living flame the whole game is built around. Warmth is its read-out." },
-      { icon: "doc", title: "Lantern HUD", text: "The lantern ring renders the warmth meter near-diegetically around the flame." },
-    ],
   },
   {
     id: "wickbearer",
@@ -214,10 +191,6 @@ export const seedDocs: DesignDoc[] = [
         text: "Chosen not for strength but for stubbornness: the one villager who refused to let the central hearth die when everyone else fled the cold.",
       },
     ],
-    refs: [
-      { icon: "mechanic", title: "The Ember", text: "The flame the Wick-bearer is sworn to protect across the whole journey." },
-      { icon: "vision", title: "Vision & Pillars", text: "A cozy survival game where warmth is the only resource and rekindling the…" },
-    ],
   },
   {
     id: "frostmere",
@@ -244,9 +217,6 @@ export const seedDocs: DesignDoc[] = [
         type: "text",
         text: "A cluster of half-sunken cabins on a frozen lake. The first shrine sits at the church at the town's heart — relighting it opens the road north.",
       },
-    ],
-    refs: [
-      { icon: "mechanic", title: "Warmth Meter", text: "Frostmere is the tutorial space where the warmth loop is first taught." },
     ],
   },
 ];

@@ -4,27 +4,25 @@ import {
   type Block,
   type BlockType,
   type DesignDoc,
-  type LinkedRef,
   type Status,
 } from "@/app/doc/data";
 
 /* ---------------------------------------------------------------------------
- * Display-only attributes (owner avatar, "links to", "linked references")
- * are NOT persisted in this foundation phase — they are re-attached from the
- * seed by page title so the page looks identical after a reload. Editing them
- * comes with the metadata phase.
+ * Owner display fallback: pages whose owner column is unset (seed content
+ * nobody has claimed yet) re-attach avatar initials/colors from the seed by
+ * page title. Everything else is persisted — links live on the pages row, and
+ * the "Linked references" rail is computed client-side from links + inline
+ * mentions (see app/doc/mentions.ts).
  * ------------------------------------------------------------------------- */
 interface Display {
   owner: string;
   ownerName: string;
   ownerColor: string;
-  links: string[];
-  refs: LinkedRef[];
 }
 const SEED_DISPLAY: Record<string, Display> = Object.fromEntries(
   seedDocs.map((d) => [
     d.title,
-    { owner: d.owner, ownerName: d.ownerName, ownerColor: d.ownerColor, links: d.links, refs: d.refs },
+    { owner: d.owner, ownerName: d.ownerName, ownerColor: d.ownerColor },
   ]),
 );
 function displayFor(title: string): Display {
@@ -33,8 +31,6 @@ function displayFor(title: string): Display {
       owner: title.slice(0, 2).toUpperCase(),
       ownerName: "Unassigned",
       ownerColor: "#a59a8c",
-      links: [],
-      refs: [],
     }
   );
 }
@@ -195,7 +191,6 @@ export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {
       tags: p.tags ?? [],
       links: p.links ?? [], // page ids
       blocks: blocksByPage.get(p.id) ?? [],
-      refs: d.refs,
       updatedAt: p.updated_at,
     };
   });
@@ -365,7 +360,6 @@ export async function createPage(
     tags: [],
     links: [],
     blocks: [firstBlock],
-    refs: [],
     updatedAt: page.updated_at as string,
   };
 }
