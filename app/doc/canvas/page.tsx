@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { GeoShapeGeoStyle, type Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
 import CanvasBoard, { type SaveState } from "./CanvasBoard";
+import TopBar from "@/app/components/TopBar";
+import Dock from "@/app/components/Dock";
+import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import {
@@ -21,34 +24,9 @@ interface PresenceUser { key: string; name: string; initials: string; color: str
 
 type IconProps = { className?: string };
 
-const Flame = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-  </svg>
-);
-const Doc = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h6" />
-  </svg>
-);
 const Grid = ({ className, style }: IconProps & { style?: CSSProperties }) => (
   <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-  </svg>
-);
-const HomeIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-  </svg>
-);
-const Columns = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M15 3v18" />
-  </svg>
-);
-const TableIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />
   </svg>
 );
 const Plus = ({ className }: IconProps) => (
@@ -189,25 +167,11 @@ export default function CanvasPage() {
   const [online, setOnline] = useState<PresenceUser[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tool, setTool] = useState("select");
-  const [navHover, setNavHover] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
 
   const wsRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const navRevert = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Grace period: brief mouse excursions outside the bar don't snap it back.
-  const cancelNavRevert = () => {
-    if (navRevert.current) {
-      clearTimeout(navRevert.current);
-      navRevert.current = null;
-    }
-  };
-  const scheduleNavRevert = () => {
-    cancelNavRevert();
-    navRevert.current = setTimeout(() => setNavHover(false), 600);
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -216,6 +180,7 @@ export default function CanvasPage() {
         const s = await ensureSession();
         if (cancelled) return;
         if (!s) { router.replace("/login"); return; }
+        if (!s.onboarded) { router.replace("/onboarding"); return; }
         setSession(s);
         wsRef.current = s.workspaceId;
         const list = await listCanvases(s.workspaceId);
@@ -397,45 +362,28 @@ export default function CanvasPage() {
 
   return (
     <div className="app canvas-app">
-      {/* top bar */}
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo">
-            <Flame className="logo-icon" />
+      {/* top bar (global chrome) */}
+      <TopBar
+        crumbs={active ? ["Canvas", active.name] : ["Canvas"]}
+        online={onlineList}
+      >
+        {active && (
+          <span className={"save-state save-" + saveState}>
+            {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ Save failed" : "Saved"}
           </span>
-          <span className="brand-name">EMBERWICK</span>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-muted">Canvas</span>
-          {active && <span className="crumb-sep">/</span>}
-          {active && <span className="crumb-current">{active.name}</span>}
-        </div>
-        <div className="top-right">
-          {active && (
-            <span className={"save-state save-" + saveState}>
-              {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ Save failed" : "Saved"}
-            </span>
-          )}
-          <span className="online-dot" />
-          <span className="online-text">{onlineList.length} online</span>
-          <div className="avatar-stack">
-            {onlineList.slice(0, 4).map((u) => (
-              <span key={u.key} className="avatar" style={{ background: u.color }} title={u.name}>
-                {u.initials}
-              </span>
-            ))}
-          </div>
-          <button className="share-btn">Share</button>
-          <button
-            className="share-btn"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              router.replace("/login");
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+        )}
+        <button className="share-btn">Share</button>
+        <button
+          className="share-btn"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            router.replace("/login");
+          }}
+        >
+          Sign out
+        </button>
+        <SettingsButton session={session} onSessionChange={setSession} />
+      </TopBar>
 
       <div className="body">
         {/* canvas sidebar */}
@@ -482,99 +430,63 @@ export default function CanvasPage() {
         </main>
       </div>
 
-      {/* dock — tldraw tools by default; hovering the strip underneath swaps
-          in the app nav until the mouse leaves the bar again */}
-      <div
-        className={"dock-wrap" + (navHover ? " is-nav" : "")}
-        onMouseEnter={cancelNavRevert}
-        onMouseLeave={scheduleNavRevert}
-      >
-        <nav className="dock">
-          {navHover ? (
-            <div key="nav" className="dock-row">
-              <button className="dock-item" onClick={() => router.push("/doc")}>
-                <HomeIcon className="dock-icon" /> Home
+      {/* dock (global chrome) — tldraw tools by default; hovering the strip
+          underneath swaps in the app nav until the mouse leaves the bar */}
+      <Dock
+        onNew={handleNew}
+        tools={
+          <div className="dock-tools">
+            {TOOLS.map((t) => (
+              <button
+                key={t.id}
+                className={"dock-tool" + (tool === t.id ? " is-active" : "")}
+                title={t.label}
+                aria-label={t.label}
+                disabled={!editor}
+                onClick={() => pickTool(t.id)}
+              >
+                <t.Icon className="dock-tool-icon" />
               </button>
-              <button className="dock-item" onClick={() => router.push("/doc")}>
-                <Doc className="dock-icon" /> Pages
+            ))}
+            <span className="shape-wrap">
+              <button
+                className={"dock-tool" + (tool === "geo" ? " is-active" : "")}
+                title="Shapes"
+                aria-label="Shapes"
+                aria-expanded={shapeMenuOpen}
+                disabled={!editor}
+                onClick={() => setShapeMenuOpen((o) => !o)}
+              >
+                <Square className="dock-tool-icon" />
               </button>
-              <button className="dock-item is-active">
-                <Grid className="dock-icon" /> Canvas
-              </button>
-              <button className="dock-item">
-                <Columns className="dock-icon" /> Board
-              </button>
-              <button className="dock-item">
-                <TableIcon className="dock-icon" /> Table
-              </button>
-              <span className="dock-divider" />
-              <button className="dock-new" onClick={handleNew}>
-                <Plus className="dock-new-icon" /> New
-              </button>
-            </div>
-          ) : (
-            <div key="tools" className="dock-row">
-              <div className="dock-tools">
-                {TOOLS.map((t) => (
-                  <button
-                    key={t.id}
-                    className={"dock-tool" + (tool === t.id ? " is-active" : "")}
-                    title={t.label}
-                    aria-label={t.label}
-                    disabled={!editor}
-                    onClick={() => pickTool(t.id)}
-                  >
-                    <t.Icon className="dock-tool-icon" />
-                  </button>
-                ))}
-                <span className="shape-wrap">
-                  <button
-                    className={"dock-tool" + (tool === "geo" ? " is-active" : "")}
-                    title="Shapes"
-                    aria-label="Shapes"
-                    aria-expanded={shapeMenuOpen}
-                    disabled={!editor}
-                    onClick={() => setShapeMenuOpen((o) => !o)}
-                  >
-                    <Square className="dock-tool-icon" />
-                  </button>
-                  {shapeMenuOpen && (
-                    <div className="shape-menu">
-                      {SHAPES.map((s) => (
-                        <button
-                          key={s.id}
-                          className="shape-option"
-                          title={s.label}
-                          aria-label={s.label}
-                          onClick={() => pickShape(s.id)}
-                        >
-                          <s.Icon className="dock-tool-icon" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </span>
-                <button
-                  className="dock-tool"
-                  title="Insert image"
-                  aria-label="Insert image"
-                  disabled={!editor}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <ImageIcon className="dock-tool-icon" />
-                </button>
-              </div>
-            </div>
-          )}
-        </nav>
-        <div
-          className="dock-hint"
-          title="Menu"
-          onMouseEnter={() => setNavHover(true)}
-        >
-          <span className="dock-hint-bar" />
-        </div>
-      </div>
+              {shapeMenuOpen && (
+                <div className="shape-menu">
+                  {SHAPES.map((s) => (
+                    <button
+                      key={s.id}
+                      className="shape-option"
+                      title={s.label}
+                      aria-label={s.label}
+                      onClick={() => pickShape(s.id)}
+                    >
+                      <s.Icon className="dock-tool-icon" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </span>
+            <button
+              className="dock-tool"
+              title="Insert image"
+              aria-label="Insert image"
+              disabled={!editor}
+              onClick={() => fileRef.current?.click()}
+            >
+              <ImageIcon className="dock-tool-icon" />
+            </button>
+          </div>
+        }
+      />
 
       <input
         ref={fileRef}
