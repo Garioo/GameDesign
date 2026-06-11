@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { appUrl } from "./siteUrl";
 
 /* ---------------------------------------------------------------------------
  * Workspaces (projects) the user belongs to, plus invite links.
@@ -86,7 +87,7 @@ export async function createInviteLink(projectId: string, userId: string): Promi
     .select("token")
     .single();
   if (error) throw new Error(`createInviteLink failed: ${error.message}`);
-  return `${window.location.origin}/join?token=${data.token}`;
+  return appUrl(`/join?token=${data.token}`);
 }
 
 /** Redeem an invite token; returns the joined workspace id. */

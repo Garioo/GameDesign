@@ -16,12 +16,14 @@ npm install
 # Create .env.local in the repo root with your Supabase project keys:
 #   NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+#   NEXT_PUBLIC_SITE_URL=https://game-design-two.vercel.app
 
 npm run dev   # http://localhost:3000
 ```
 
 You also need a Supabase project with `supabase/schema.sql` applied and OAuth providers
-(Google / GitHub) enabled. See the full setup in
+(Google / GitHub) enabled. Add redirect URLs for `http://localhost:3000/auth/callback`
+and `https://game-design-two.vercel.app/auth/callback`. See the full setup in
 [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md#running-locally).
 
 ## Scripts

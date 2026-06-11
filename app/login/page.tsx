@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { appUrl } from "@/lib/siteUrl";
 import "./auth.css";
 
 type Provider = "google" | "github";
@@ -25,7 +26,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: appUrl("/auth/callback"),
         // repo scope lets script blocks read the user's private repositories
         ...(provider === "github" ? { scopes: "repo" } : {}),
       },
