@@ -55,6 +55,7 @@ export default function CanvasSidebar({
   onDelete,
 }: CanvasSidebarProps) {
   const [menu, setMenu] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
 
@@ -62,7 +63,10 @@ export default function CanvasSidebar({
     if (!menu) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (!t.closest(".row-menu") && !t.closest(".row-dots")) setMenu(null);
+      if (!t.closest(".row-menu") && !t.closest(".row-dots")) {
+        setMenu(null);
+        setConfirmId(null);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -138,15 +142,37 @@ export default function CanvasSidebar({
               </button>
               {menu === c.id && (
                 <div className="row-menu" onClick={(e) => e.stopPropagation()}>
-                  <button onMouseDown={(e) => { e.preventDefault(); startRename(c); }}>
-                    <Pencil /> Rename
-                  </button>
-                  <button
-                    className="danger"
-                    onMouseDown={(e) => { e.preventDefault(); setMenu(null); onDelete(c.id); }}
-                  >
-                    <Trash /> Delete
-                  </button>
+                  {confirmId === c.id ? (
+                    <>
+                      <div className="row-menu-confirm">Delete &ldquo;{c.name}&rdquo;? This can&apos;t be undone.</div>
+                      <button
+                        className="danger"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setMenu(null);
+                          setConfirmId(null);
+                          onDelete(c.id);
+                        }}
+                      >
+                        <Trash /> Yes, delete
+                      </button>
+                      <button onMouseDown={(e) => { e.preventDefault(); setConfirmId(null); }}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onMouseDown={(e) => { e.preventDefault(); startRename(c); }}>
+                        <Pencil /> Rename
+                      </button>
+                      <button
+                        className="danger"
+                        onMouseDown={(e) => { e.preventDefault(); setConfirmId(c.id); }}
+                      >
+                        <Trash /> Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

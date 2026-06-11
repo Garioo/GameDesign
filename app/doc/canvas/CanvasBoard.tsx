@@ -8,7 +8,6 @@ import {
   type TLUser,
   type TLInstancePresence,
   getSnapshot,
-  loadSnapshot,
   createPresenceStateDerivation,
   InstancePresenceRecordType,
   computed,
@@ -18,7 +17,7 @@ import {
 import "tldraw/tldraw.css";
 import { supabase } from "@/lib/supabase";
 import { loadCanvasScene, saveCanvasScene, type CanvasScene } from "@/lib/canvasRepo";
-import { canvasAssetStore } from "@/lib/canvasAssets";
+import { canvasAssetStore, removeAssetUrls, isCanvasAssetUrl } from "@/lib/canvasAssets";
 import type { SessionInfo } from "@/lib/session";
 
 type RecordsDiff = {
@@ -27,7 +26,16 @@ type RecordsDiff = {
   removed: Record<string, TLRecord>;
 };
 
+/** Snapshot of the document scope, as produced by getSnapshot(store).document. */
+type DocumentSnapshot = { store: Record<string, TLRecord>; schema: unknown };
+
 export type SaveState = "saved" | "saving" | "error";
+
+// Supabase Realtime rejects broadcasts beyond ~256KB; stay safely under it.
+const MAX_BROADCAST_CHARS = 200_000;
+
+// Record types that belong to the document scope (everything that syncs).
+const DOC_TYPES = new Set(["document", "page", "shape", "asset", "binding"]);
 
 /**
  * A single collaborative tldraw board. Document edits and live cursors are
@@ -40,6 +48,7 @@ export default function CanvasBoard({
   onReady,
   onToolChange,
   onSaveState,
+  onHistoryChange,
 }: {
   canvasId: string;
   session: SessionInfo;
@@ -49,14 +58,22 @@ export default function CanvasBoard({
   onToolChange?: (toolId: string) => void;
   /** Reports persistence status so the topbar can show Saved / Saving / error. */
   onSaveState?: (state: SaveState) => void;
+  /** Reports undo/redo availability so the nav bar can enable its buttons. */
+  onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
 }) {
   const handleMount = useCallback(
     (editor: Editor) => {
       let disposed = false;
+      let localEdits = false; // the user has drawn since mount
+      let peerSnapshotApplied = false;
+      let refetchTimer: ReturnType<typeof setTimeout> | null = null;
       onReady?.(editor);
 
-      // Mirror the active tool up to the nav bar.
+      // Mirror the active tool + undo/redo availability up to the nav bar.
       const stopTool = react("active-tool", () => onToolChange?.(editor.getCurrentToolId()));
+      const stopHistory = react("history-state", () =>
+        onHistoryChange?.(editor.getCanUndo(), editor.getCanRedo()),
+      );
       // Unique per browser tab so each open editor is its own "peer".
       const tabId = crypto.randomUUID();
       const presenceId = InstancePresenceRecordType.createId(tabId);
@@ -77,23 +94,72 @@ export default function CanvasBoard({
           });
       }, 1500);
 
+      /**
+       * Replace the document scope with a snapshot, applied as *remote* changes:
+       * no broadcast echo, no persist loop, and the camera/session is untouched.
+       * (Raw loadSnapshot would re-fire the "user" listener and broadcast a
+       * stale full scene to everyone — clobbering their newest edits.)
+       */
+      const reconcileDocument = (document: DocumentSnapshot) => {
+        const incoming = Object.values(document.store ?? {});
+        if (incoming.length === 0) return;
+        const incomingIds = new Set(incoming.map((r) => r.id));
+        const toRemove = editor.store
+          .allRecords()
+          .filter((r) => DOC_TYPES.has(r.typeName) && !incomingIds.has(r.id))
+          .map((r) => r.id);
+        editor.store.mergeRemoteChanges(() => {
+          editor.store.put(incoming);
+          if (toRemove.length) editor.store.remove(toRemove);
+        });
+      };
+
       // ---- load the persisted scene ----
       (async () => {
         try {
-          const scene = await loadCanvasScene(canvasId);
+          const scene = (await loadCanvasScene(canvasId)) as { document?: DocumentSnapshot };
           if (disposed) return;
-          if (scene && (scene as { document?: unknown }).document) {
-            loadSnapshot(editor.store, scene as Parameters<typeof loadSnapshot>[1]);
-          }
+          if (scene?.document) reconcileDocument(scene.document);
         } catch (e) {
-          console.error("canvas loadSnapshot failed", e);
+          console.error("canvas scene load failed", e);
         }
       })();
+
+      // Late-join gap: the DB snapshot can trail live edits by ~1.5s, so a
+      // doc-big sender (or a joiner) needs a delayed refetch / peer snapshot.
+      const scheduleRefetch = (delay: number) => {
+        if (refetchTimer) clearTimeout(refetchTimer);
+        refetchTimer = setTimeout(async () => {
+          refetchTimer = null;
+          try {
+            const scene = (await loadCanvasScene(canvasId)) as { document?: DocumentSnapshot };
+            if (!disposed && scene?.document) reconcileDocument(scene.document);
+          } catch (e) {
+            console.error("canvas refetch failed", e);
+          }
+        }, delay);
+      };
 
       // ---- broadcast local document edits ----
       const unlistenDoc = editor.store.listen(
         (update) => {
-          channel.send({ type: "broadcast", event: "doc", payload: update.changes });
+          localEdits = true;
+
+          // Free Storage files for images the user just deleted.
+          const removedAssets = Object.values(update.changes.removed)
+            .filter((r) => r.typeName === "asset")
+            .map((r) => (r as { props?: { src?: string } }).props?.src)
+            .filter((src): src is string => !!src && isCanvasAssetUrl(src));
+          if (removedAssets.length) removeAssetUrls(removedAssets).catch(console.error);
+
+          // Oversized diffs (huge paste, big image set) would be rejected by
+          // Realtime — tell peers to refetch from the DB after our save lands.
+          const json = JSON.stringify(update.changes);
+          if (json.length > MAX_BROADCAST_CHARS) {
+            channel.send({ type: "broadcast", event: "doc-big", payload: { from: tabId } });
+          } else {
+            channel.send({ type: "broadcast", event: "doc", payload: update.changes });
+          }
           onSaveState?.("saving");
           persist();
         },
@@ -138,7 +204,29 @@ export default function CanvasBoard({
         .on("broadcast", { event: "presence" }, ({ payload }) =>
           applyPresence(payload as TLInstancePresence),
         )
-        .subscribe();
+        // A peer made an edit too large to broadcast: refetch once it's saved.
+        .on("broadcast", { event: "doc-big" }, () => scheduleRefetch(2500))
+        // A new peer joined: offer them our live state (fresher than the DB).
+        .on("broadcast", { event: "sync-req" }, ({ payload }) => {
+          const from = (payload as { from?: string })?.from;
+          if (!from || from === tabId) return;
+          const { document } = getSnapshot(editor.store);
+          const json = JSON.stringify(document);
+          if (json.length > MAX_BROADCAST_CHARS) return; // joiner falls back to DB
+          channel.send({ type: "broadcast", event: "sync-res", payload: { to: from, document } });
+        })
+        // Our join request was answered: adopt the first live snapshot offered.
+        .on("broadcast", { event: "sync-res" }, ({ payload }) => {
+          const p = payload as { to?: string; document?: DocumentSnapshot };
+          if (p.to !== tabId || peerSnapshotApplied || localEdits || !p.document) return;
+          peerSnapshotApplied = true;
+          reconcileDocument(p.document);
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            channel.send({ type: "broadcast", event: "sync-req", payload: { from: tabId } });
+          }
+        });
 
       // ---- prune cursors of peers that went quiet ----
       const prune = setInterval(() => {
@@ -158,13 +246,15 @@ export default function CanvasBoard({
       return () => {
         disposed = true;
         clearInterval(prune);
+        if (refetchTimer) clearTimeout(refetchTimer);
         stopTool();
+        stopHistory();
         unlistenDoc();
         unlistenPresence();
         supabase.removeChannel(channel);
       };
     },
-    [canvasId, session, onReady, onToolChange, onSaveState],
+    [canvasId, session, onReady, onToolChange, onSaveState, onHistoryChange],
   );
 
   return (

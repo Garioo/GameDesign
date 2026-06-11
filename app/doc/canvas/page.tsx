@@ -141,6 +141,17 @@ const CheckBox = ({ className }: IconProps) => (
   </svg>
 );
 
+const UndoIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </svg>
+);
+const RedoIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+  </svg>
+);
+
 type GeoShape = (typeof GeoShapeGeoStyle)["values"] extends Iterable<infer V> ? V : never;
 
 const SHAPES: { id: GeoShape; label: string; Icon: ComponentType<IconProps> }[] = [
@@ -169,6 +180,7 @@ export default function CanvasPage() {
   const [tool, setTool] = useState("select");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
+  const [history, setHistory] = useState({ canUndo: false, canRedo: false });
 
   const wsRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -288,6 +300,7 @@ export default function CanvasPage() {
   // Fresh board, fresh status.
   useEffect(() => {
     setSaveState("saved");
+    setHistory({ canUndo: false, canRedo: false });
   }, [activeId]);
 
   // Keep ?c=<id> in the URL so refresh / sharing reopens the same canvas.
@@ -406,6 +419,7 @@ export default function CanvasPage() {
               onReady={setEditor}
               onToolChange={setTool}
               onSaveState={setSaveState}
+              onHistoryChange={(canUndo, canRedo) => setHistory({ canUndo, canRedo })}
             />
           ) : (
             <div
@@ -483,6 +497,25 @@ export default function CanvasPage() {
               onClick={() => fileRef.current?.click()}
             >
               <ImageIcon className="dock-tool-icon" />
+            </button>
+            <span className="dock-divider" />
+            <button
+              className="dock-tool"
+              title="Undo (Ctrl+Z)"
+              aria-label="Undo"
+              disabled={!editor || !history.canUndo}
+              onClick={() => editor?.undo()}
+            >
+              <UndoIcon className="dock-tool-icon" />
+            </button>
+            <button
+              className="dock-tool"
+              title="Redo (Ctrl+Shift+Z)"
+              aria-label="Redo"
+              disabled={!editor || !history.canRedo}
+              onClick={() => editor?.redo()}
+            >
+              <RedoIcon className="dock-tool-icon" />
             </button>
           </div>
         }

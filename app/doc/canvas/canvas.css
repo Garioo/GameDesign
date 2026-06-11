@@ -94,6 +94,15 @@
 /* save / sync status styling comes from the global chrome
    (.save-state in app/components/chrome.css) */
 
+/* ---- delete confirmation (canvas sidebar row menu) ---- */
+.row-menu-confirm {
+  padding: 7px 10px 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  max-width: 190px;
+}
+
 /* ---- shape picker popover ---- */
 .shape-wrap { position: relative; display: flex; }
 .shape-menu {

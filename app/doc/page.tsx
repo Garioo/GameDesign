@@ -45,6 +45,7 @@ import {
   setCommentResolved,
   type CommentRow,
 } from "@/lib/commentsRepo";
+import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
 import {
   STATUS_LABEL,
   type Block,
@@ -84,6 +85,11 @@ const Chevron = ({ className }: IconProps) => (
 const LinkIcon = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+const Grid = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
   </svg>
 );
 const ChevronDown = ({ className }: IconProps) => (
@@ -133,6 +139,7 @@ function DocPageInner() {
   const [online, setOnline] = useState<PresenceUser[]>([]);
   const [sections, setSections] = useState<SectionInfo[]>([]);
   const [people, setPeople] = useState<ProfileInfo[]>([]);
+  const [canvases, setCanvases] = useState<CanvasInfo[]>([]);
   const [focusTitleId, setFocusTitleId] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
@@ -235,16 +242,18 @@ function DocPageInner() {
         setSession(s);
         wsRef.current = s.workspaceId;
         await seedIfEmpty(s.workspaceId);
-        const [loaded, secs, members, wsInfo] = await Promise.all([
+        const [loaded, secs, members, wsInfo, boards] = await Promise.all([
           loadWorkspace(s.workspaceId),
           listSections(s.workspaceId),
           listMembers(s.workspaceId),
           getWorkspaceInfo(s.workspaceId),
+          listCanvases(s.workspaceId).catch(() => [] as CanvasInfo[]),
         ]);
         if (cancelled) return;
         setSections(secs);
         setPeople(members);
         setWorkspace(wsInfo);
+        setCanvases(boards);
         setDocs(loaded);
         // Land on the page in the URL when valid, else the first page.
         // (Read from location, not useSearchParams, so this effect doesn't
@@ -978,6 +987,24 @@ function DocPageInner() {
                 <span className="meta-key">Links to</span>
                 <span className="links">
                   {active.links.map((id) => {
+                    // Canvas links are stored as "canvas:<id>"; page links are bare ids.
+                    if (id.startsWith("canvas:")) {
+                      const board = canvases.find((c) => "canvas:" + c.id === id);
+                      if (!board) return null;
+                      return (
+                        <span key={id} className="link-chip link-editable">
+                          <button
+                            className="link-go"
+                            onClick={() => router.push(`/doc/canvas?c=${board.id}`)}
+                          >
+                            <Grid className="link-icon" /> {board.name}
+                          </button>
+                          <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
+                            ×
+                          </button>
+                        </span>
+                      );
+                    }
                     const target = docs.find((d) => d.id === id);
                     if (!target) return null;
                     return (
@@ -1009,9 +1036,22 @@ function DocPageInner() {
                               <span className="link-menu-group">{d.group}</span>
                             </button>
                           ))}
-                        {docs.filter((d) => d.id !== active.id && !active.links.includes(d.id)).length === 0 && (
-                          <div className="link-menu-empty">No other pages</div>
-                        )}
+                        {canvases
+                          .filter((c) => !active.links.includes("canvas:" + c.id))
+                          .map((c) => (
+                            <button
+                              key={c.id}
+                              onMouseDown={(e) => { e.preventDefault(); addLink("canvas:" + c.id); }}
+                            >
+                              <Grid className="link-icon" />
+                              <span className="link-menu-title">{c.name}</span>
+                              <span className="link-menu-group">Canvas</span>
+                            </button>
+                          ))}
+                        {docs.filter((d) => d.id !== active.id && !active.links.includes(d.id)).length === 0 &&
+                          canvases.filter((c) => !active.links.includes("canvas:" + c.id)).length === 0 && (
+                            <div className="link-menu-empty">Nothing to link</div>
+                          )}
                       </div>
                     )}
                   </span>

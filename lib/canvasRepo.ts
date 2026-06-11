@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { isCanvasAssetUrl, removeAssetUrls } from "./canvasAssets";
 
 /* ---------------------------------------------------------------------------
  * Canvases — freeform visual boards. Each canvas stores its scene (shapes,
@@ -56,8 +57,20 @@ export async function renameCanvas(id: string, name: string): Promise<void> {
   await supabase.from("canvases").update({ name }).eq("id", id);
 }
 
-/** Delete a canvas. */
+/** Delete a canvas, cleaning up any images it had uploaded to Storage. */
 export async function deleteCanvas(id: string): Promise<void> {
+  try {
+    const scene = (await loadCanvasScene(id)) as {
+      document?: { store?: Record<string, { typeName?: string; props?: { src?: string } }> };
+    };
+    const srcs = Object.values(scene.document?.store ?? {})
+      .filter((r) => r.typeName === "asset")
+      .map((r) => r.props?.src)
+      .filter((s): s is string => !!s && isCanvasAssetUrl(s));
+    if (srcs.length) await removeAssetUrls(srcs);
+  } catch (e) {
+    console.error("canvas asset cleanup failed", e); // still delete the canvas
+  }
   await supabase.from("canvases").delete().eq("id", id);
 }
 
