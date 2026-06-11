@@ -144,6 +144,31 @@ function DocPageInner() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
+  const ownerWrapRef = useRef<HTMLSpanElement>(null);
+  const linkWrapRef = useRef<HTMLSpanElement>(null);
+
+  // Close the meta-card dropdowns on outside click or Escape (instead of
+  // mouse-leave, which dismissed them mid-reach).
+  useEffect(() => {
+    if (!ownerMenuOpen && !linkMenuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (ownerMenuOpen && !ownerWrapRef.current?.contains(t)) setOwnerMenuOpen(false);
+      if (linkMenuOpen && !linkWrapRef.current?.contains(t)) setLinkMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOwnerMenuOpen(false);
+        setLinkMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [ownerMenuOpen, linkMenuOpen]);
   const [tagDraft, setTagDraft] = useState("");
   const [tagEditing, setTagEditing] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -924,7 +949,7 @@ function DocPageInner() {
               </div>
               <div className="meta-row">
                 <span className="meta-key">Owner</span>
-                <span className="owner-wrap">
+                <span className="owner-wrap" ref={ownerWrapRef}>
                   <button className="owner owner-btn" onClick={() => setOwnerMenuOpen((o) => !o)}>
                     <span className="owner-avatar" style={{ background: active.ownerColor }}>
                       {active.owner}
@@ -933,9 +958,9 @@ function DocPageInner() {
                     <ChevronDown className="status-chevron" />
                   </button>
                   {ownerMenuOpen && (
-                    <div className="owner-menu" onMouseLeave={() => setOwnerMenuOpen(false)}>
+                    <div className="owner-menu">
                       {session && (
-                        <button onMouseDown={(e) => { e.preventDefault(); handleSetOwner({ id: session.userId, name: session.name, initials: session.initials, color: session.color }); }}>
+                        <button onClick={() => handleSetOwner({ id: session.userId, name: session.name, initials: session.initials, color: session.color })}>
                           <span className="owner-avatar" style={{ background: session.color }}>{session.initials}</span>
                           Assign to me
                         </button>
@@ -943,12 +968,12 @@ function DocPageInner() {
                       {people
                         .filter((p) => p.id !== session?.userId)
                         .map((p) => (
-                          <button key={p.id} onMouseDown={(e) => { e.preventDefault(); handleSetOwner(p); }}>
+                          <button key={p.id} onClick={() => handleSetOwner(p)}>
                             <span className="owner-avatar" style={{ background: p.color }}>{p.initials}</span>
                             {p.name}
                           </button>
                         ))}
-                      <button className="owner-clear" onMouseDown={(e) => { e.preventDefault(); handleSetOwner(null); }}>
+                      <button className="owner-clear" onClick={() => handleSetOwner(null)}>
                         Unassign
                       </button>
                     </div>
@@ -1018,18 +1043,18 @@ function DocPageInner() {
                       </span>
                     );
                   })}
-                  <span className="link-add-wrap">
+                  <span className="link-add-wrap" ref={linkWrapRef}>
                     <button className="tag-add" onClick={() => setLinkMenuOpen((o) => !o)}>
                       + Link
                     </button>
                     {linkMenuOpen && (
-                      <div className="link-menu" onMouseLeave={() => setLinkMenuOpen(false)}>
+                      <div className="link-menu">
                         {docs
                           .filter((d) => d.id !== active.id && !active.links.includes(d.id))
                           .map((d) => (
                             <button
                               key={d.id}
-                              onMouseDown={(e) => { e.preventDefault(); addLink(d.id); }}
+                              onClick={() => addLink(d.id)}
                             >
                               <LinkIcon className="link-icon" />
                               <span className="link-menu-title">{d.title}</span>
@@ -1041,7 +1066,7 @@ function DocPageInner() {
                           .map((c) => (
                             <button
                               key={c.id}
-                              onMouseDown={(e) => { e.preventDefault(); addLink("canvas:" + c.id); }}
+                              onClick={() => addLink("canvas:" + c.id)}
                             >
                               <Grid className="link-icon" />
                               <span className="link-menu-title">{c.name}</span>

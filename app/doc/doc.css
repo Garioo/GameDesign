@@ -133,8 +133,11 @@
 }
 .owner-btn:hover { background: var(--line-soft); }
 .owner-menu {
-  position: absolute; left: 0; top: calc(100% + 4px); z-index: 30;
+  /* above the floating dock (z-40), which otherwise swallows clicks on
+     the bottom options when the list reaches the lower viewport */
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 50;
   min-width: 200px;
+  max-height: min(320px, 40vh); overflow-y: auto;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
   box-shadow: var(--shadow-menu);
   padding: 5px;
@@ -146,6 +149,13 @@
 }
 .owner-menu button:hover { background: var(--line-soft); }
 .owner-menu .owner-clear { color: var(--ink-faint); border-top: 1px solid var(--line-soft); border-radius: 0 0 7px 7px; margin-top: 3px; padding-top: 9px; }
+
+/* While a meta-card dropdown is open, mute the editor behind it so blocks
+   don't flash their hover tint / gutter handles underneath the menu. */
+.doc:has(.owner-menu) .blocks,
+.doc:has(.link-menu) .blocks {
+  pointer-events: none;
+}
 .links { display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; }
 .link-chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -177,7 +187,7 @@
 
 .link-add-wrap { position: relative; display: inline-flex; }
 .link-menu {
-  position: absolute; left: 0; top: calc(100% + 6px); z-index: 30;
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 50;
   width: 240px; max-height: 260px; overflow-y: auto;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
   box-shadow: var(--shadow-menu);

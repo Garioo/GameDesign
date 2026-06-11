@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase";
 import "./auth.css";
 
 type Provider = "google" | "github";
-const AUTH_CALLBACK_URL = "https://game-design-two.vercel.app/auth/callback";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,7 +25,11 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: AUTH_CALLBACK_URL,
+        // Come back to whatever origin we signed in from, so localhost dev
+        // sessions land on localhost instead of production. Each origin's
+        // /auth/callback must be allowlisted in Supabase → Auth → URL
+        // Configuration → Redirect URLs.
+        redirectTo: `${window.location.origin}/auth/callback`,
         // repo scope lets script blocks read the user's private repositories
         ...(provider === "github" ? { scopes: "repo" } : {}),
       },
