@@ -3,10 +3,13 @@ import { captureGithubToken } from "./github";
 
 export interface SessionInfo {
   userId: string;
+  /** Empty string until the user has onboarded into (or been invited to) a workspace. */
   workspaceId: string;
   name: string;
   initials: string;
   color: string;
+  /** False until the first-run onboarding flow has been completed. */
+  onboarded: boolean;
 }
 
 export const PALETTE = ["#5a83d6", "#3f9d6e", "#d4763a", "#b7553d", "#7b61c9", "#c2417a"];
@@ -18,8 +21,53 @@ function pick<T>(arr: T[], seed: string): T {
   return arr[h % arr.length];
 }
 
+/** localStorage key remembering which workspace the user last opened. */
+const ACTIVE_WORKSPACE_KEY = "gd-active-workspace";
+
+/** Remember the workspace to open on the next ensureSession() call. */
+export function setActiveWorkspace(workspaceId: string): void {
+  try {
+    localStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
+  } catch {
+    /* storage unavailable (private mode) — session still works, just unsticky */
+  }
+}
+
+function storedActiveWorkspace(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /**
- * If the user is signed in (Google or GitHub), ensure they belong to the shared
+ * Resolve which workspace this session should open: the remembered one if the
+ * user is still a member, otherwise their first membership. Users who haven't
+ * onboarded yet get "" — the onboarding flow creates their first workspace.
+ * (The shared bootstrap workspace remains only as a legacy fallback for
+ * onboarded users with no memberships left.)
+ */
+async function resolveWorkspace(userId: string, onboarded: boolean): Promise<string> {
+  const { data, error } = await supabase
+    .from("project_members")
+    .select("project_id")
+    .eq("user_id", userId);
+  if (error) throw new Error(`resolveWorkspace failed: ${error.message}`);
+
+  const memberships = (data ?? []).map((r) => r.project_id as string);
+  const stored = storedActiveWorkspace();
+  if (stored && memberships.includes(stored)) return stored;
+  if (memberships.length > 0) return memberships[0];
+  if (!onboarded) return "";
+
+  const { data: workspaceId, error: rpcError } = await supabase.rpc("ensure_workspace");
+  if (rpcError) throw new Error(`ensure_workspace failed: ${rpcError.message}`);
+  return workspaceId as string;
+}
+
+/**
+ * If the user is signed in (Google or GitHub), ensure they belong to a
  * workspace and have a presentable profile, then return their session info.
  * Returns `null` when there is no session — the caller should redirect to /login.
  */
@@ -32,10 +80,6 @@ export async function ensureSession(): Promise<SessionInfo | null> {
   captureGithubToken(session); // present right after an OAuth sign-in
   const userId = session.user.id;
 
-  // Create the shared project (if needed) and join it.
-  const { data: workspaceId, error: rpcError } = await supabase.rpc("ensure_workspace");
-  if (rpcError) throw new Error(`ensure_workspace failed: ${rpcError.message}`);
-
   // Give the anonymous user a friendly identity if the profile is blank.
   const name = pick(NAMES, userId);
   const color = pick(PALETTE, userId);
@@ -43,7 +87,7 @@ export async function ensureSession(): Promise<SessionInfo | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, initials, color")
+    .select("name, initials, color, onboarded_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -54,11 +98,16 @@ export async function ensureSession(): Promise<SessionInfo | null> {
       .eq("id", userId);
   }
 
+  const onboarded = !!profile?.onboarded_at;
+  const workspaceId = await resolveWorkspace(userId, onboarded);
+  if (workspaceId) setActiveWorkspace(workspaceId);
+
   return {
     userId,
-    workspaceId: workspaceId as string,
+    workspaceId,
     name: profile?.name ?? name,
     initials: profile?.initials ?? initials,
     color: profile?.color ?? color,
+    onboarded,
   };
 }

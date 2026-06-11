@@ -46,6 +46,9 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- added later: set when the user completes the first-run onboarding flow
+alter table public.profiles add column if not exists onboarded_at timestamptz;
+
 -- projects — a game design document
 create table if not exists public.projects (
   id         uuid primary key default gen_random_uuid(),
@@ -156,6 +159,17 @@ create table if not exists public.milestones (
   created_at timestamptz not null default now()
 );
 
+-- workspace_invites — shareable invite links; redeemed via redeem_invite()
+create table if not exists public.workspace_invites (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  token      uuid not null unique default gen_random_uuid(),
+  role       text not null default 'editor',  -- role granted on redeem
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '14 days'
+);
+
 -- activity — feed of who did what
 create table if not exists public.activity (
   id         uuid primary key default gen_random_uuid(),
@@ -180,6 +194,7 @@ create index if not exists idx_canvases_project     on public.canvases(project_i
 create index if not exists idx_comments_page       on public.comments(page_id);
 create index if not exists idx_milestones_project  on public.milestones(project_id, position);
 create index if not exists idx_activity_project    on public.activity(project_id, created_at desc);
+create index if not exists idx_invites_project     on public.workspace_invites(project_id);
 
 -- ============================================================================
 -- Triggers
@@ -253,6 +268,96 @@ returns boolean language sql security definer stable set search_path = public as
   );
 $$;
 
+-- Shared single-workspace bootstrap used by the web client on every /doc load.
+-- If the workspace already exists, this restores the caller's membership even
+-- when the project owner was changed manually in Supabase.
+create or replace function public.ensure_workspace()
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  workspace_id uuid := '11111111-1111-1111-1111-111111111111';
+  caller uuid := auth.uid();
+begin
+  if caller is null then
+    raise exception 'ensure_workspace requires an authenticated user';
+  end if;
+
+  insert into public.profiles (id, email, name)
+  values (
+    caller,
+    auth.jwt() ->> 'email',
+    split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1)
+  )
+  on conflict (id) do nothing;
+
+  insert into public.projects (id, name, tagline, genre, owner)
+  values (
+    workspace_id,
+    'EMBERWICK',
+    'Collaborative game design workspace',
+    'Action RPG',
+    caller
+  )
+  on conflict (id) do nothing;
+
+  insert into public.project_members (project_id, user_id, role)
+  values (
+    workspace_id,
+    caller,
+    case
+      when exists (
+        select 1 from public.projects p
+        where p.id = workspace_id and p.owner = caller
+      )
+      then 'owner'
+      else 'editor'
+    end
+  )
+  on conflict (project_id, user_id) do nothing;
+
+  return workspace_id;
+end$$;
+
+grant execute on function public.ensure_workspace() to authenticated;
+
+-- Redeem an invite link: a non-member holding a valid token joins the project.
+-- SECURITY DEFINER because members_insert RLS only allows existing members to
+-- add rows — the invitee is by definition not a member yet.
+create or replace function public.redeem_invite(p_token uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  caller uuid := auth.uid();
+  invite record;
+begin
+  if caller is null then
+    raise exception 'redeem_invite requires an authenticated user';
+  end if;
+
+  select * into invite
+  from public.workspace_invites
+  where token = p_token and expires_at > now();
+
+  if not found then
+    raise exception 'Invite link is invalid or has expired';
+  end if;
+
+  -- the trigger normally creates the profile, but be safe (mirrors ensure_workspace)
+  insert into public.profiles (id, email, name)
+  values (
+    caller,
+    auth.jwt() ->> 'email',
+    split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1)
+  )
+  on conflict (id) do nothing;
+
+  insert into public.project_members (project_id, user_id, role)
+  values (invite.project_id, caller, invite.role)
+  on conflict (project_id, user_id) do nothing;
+
+  return invite.project_id;
+end$$;
+
+grant execute on function public.redeem_invite(uuid) to authenticated;
+
 -- ============================================================================
 -- Row-Level Security
 -- ============================================================================
@@ -266,6 +371,7 @@ alter table public.canvases        enable row level security;
 alter table public.comments        enable row level security;
 alter table public.milestones      enable row level security;
 alter table public.activity        enable row level security;
+alter table public.workspace_invites enable row level security;
 
 -- profiles ----------------------------------------------------------------
 drop policy if exists profiles_select on public.profiles;
@@ -281,9 +387,12 @@ create policy profiles_update on public.profiles
   for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
 -- projects ----------------------------------------------------------------
+-- owner = auth.uid() matters at INSERT … RETURNING time: the membership row
+-- is added by an AFTER trigger, so can_access_project() is still false when
+-- the SELECT policy is checked against the freshly created project.
 drop policy if exists projects_select on public.projects;
 create policy projects_select on public.projects
-  for select to authenticated using (public.can_access_project(id));
+  for select to authenticated using (owner = auth.uid() or public.can_access_project(id));
 
 drop policy if exists projects_insert on public.projects;
 create policy projects_insert on public.projects
@@ -374,6 +483,22 @@ create policy activity_select on public.activity
 drop policy if exists activity_insert on public.activity;
 create policy activity_insert on public.activity
   for insert to authenticated with check (public.can_access_project(project_id) and actor = auth.uid());
+
+-- workspace_invites ---------------------------------------------------------
+-- Members manage their project's invites; redemption goes through the
+-- SECURITY DEFINER redeem_invite() so non-members never read this table.
+drop policy if exists invites_select on public.workspace_invites;
+create policy invites_select on public.workspace_invites
+  for select to authenticated using (public.can_access_project(project_id));
+
+drop policy if exists invites_insert on public.workspace_invites;
+create policy invites_insert on public.workspace_invites
+  for insert to authenticated
+  with check (public.can_access_project(project_id) and created_by = auth.uid());
+
+drop policy if exists invites_delete on public.workspace_invites;
+create policy invites_delete on public.workspace_invites
+  for delete to authenticated using (public.can_access_project(project_id));
 
 -- ============================================================================
 -- Done. Tables are created with RLS; access flows through project_members.

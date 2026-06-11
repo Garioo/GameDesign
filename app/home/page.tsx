@@ -4,19 +4,23 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { ensureSession, type SessionInfo } from "@/lib/session";
+import { ensureSession, setActiveWorkspace, type SessionInfo } from "@/lib/session";
 import { loadWorkspace, listMembers, type ProfileInfo } from "@/lib/docsRepo";
+import {
+  listWorkspaces,
+  createWorkspace,
+  createInviteLink,
+  type WorkspaceSummary,
+} from "@/lib/workspacesRepo";
 import { STATUS_LABEL, type DesignDoc, type Status } from "@/app/doc/data";
+import TopBar from "@/app/components/TopBar";
+import Dock from "@/app/components/Dock";
+import SettingsButton from "@/app/components/SettingsButton";
 import styles from "./home.module.css";
 
 /* ---------- inline icon set (lucide-flavoured, no deps) ---------- */
 type IconProps = { className?: string };
 
-const Flame = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-  </svg>
-);
 const ArrowRight = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M5 12h14M13 6l6 6-6 6" />
@@ -72,7 +76,12 @@ export default function HomeDashboard() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [recent, setRecent] = useState<DesignDoc[]>([]);
   const [members, setMembers] = useState<ProfileInfo[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [docCount, setDocCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,10 +92,15 @@ export default function HomeDashboard() {
         router.replace("/login");
         return;
       }
+      if (!s.onboarded) {
+        router.replace("/onboarding");
+        return;
+      }
       setSession(s);
-      const [docs, team] = await Promise.all([
+      const [docs, team, spaces] = await Promise.all([
         loadWorkspace(s.workspaceId),
         listMembers(s.workspaceId),
+        listWorkspaces(s.userId),
       ]);
       if (cancelled) return;
       setRecent(
@@ -94,7 +108,9 @@ export default function HomeDashboard() {
           .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
           .slice(0, 6),
       );
+      setDocCount(docs.length);
       setMembers(team);
+      setWorkspaces(spaces);
       setLoaded(true);
     })().catch(console.error);
     return () => {
@@ -107,42 +123,125 @@ export default function HomeDashboard() {
     router.replace("/login");
   };
 
+  /** Make a workspace active and reload its docs + members. */
+  const switchWorkspace = async (id: string) => {
+    if (!session || id === session.workspaceId) return;
+    setActiveWorkspace(id);
+    setSession({ ...session, workspaceId: id });
+    setLoaded(false);
+    try {
+      const [docs, team] = await Promise.all([loadWorkspace(id), listMembers(id)]);
+      setRecent(
+        [...docs]
+          .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+          .slice(0, 6),
+      );
+      setDocCount(docs.length);
+      setMembers(team);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoaded(true);
+  };
+
+  const handleCreateWorkspace = async () => {
+    const name = newName.trim();
+    if (!session || !name || creating) return;
+    setCreating(true);
+    try {
+      const id = await createWorkspace(session.userId, name);
+      setNewName("");
+      setWorkspaces(await listWorkspaces(session.userId));
+      await switchWorkspace(id);
+    } catch (e) {
+      console.error(e);
+    }
+    setCreating(false);
+  };
+
+  const handleInvite = async (id: string) => {
+    if (!session) return;
+    try {
+      const link = await createInviteLink(id, session.userId);
+      try {
+        await navigator.clipboard.writeText(link);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2500);
+      } catch {
+        // Clipboard blocked (permissions / insecure context) — show the link.
+        window.prompt("Copy this invite link:", link);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.brand}>
-          <span className={styles.logo}>
-            <Flame className={styles.logoIcon} />
+      <TopBar crumbs={["Home"]}>
+        {session && (
+          <span
+            className={styles.me}
+            style={{ background: session.color }}
+            title={session.name}
+          >
+            {session.initials}
           </span>
-          <span className={styles.brandName}>EMBERWICK</span>
-        </div>
-        <div className={styles.topRight}>
-          {session && (
-            <span
-              className={styles.me}
-              style={{ background: session.color }}
-              title={session.name}
-            >
-              {session.initials}
-            </span>
-          )}
-          <button type="button" className={styles.signOut} onClick={handleSignOut}>
-            Sign out
-          </button>
-        </div>
-      </header>
+        )}
+        <button type="button" className="share-btn" onClick={handleSignOut}>
+          Sign out
+        </button>
+        <SettingsButton session={session} onSessionChange={setSession} />
+      </TopBar>
 
       {!loaded ? (
         <div className={styles.loading}>Opening your workspace…</div>
       ) : (
         <main className={styles.shell}>
-          <p className={styles.eyebrow}>Home</p>
-          <h1 className={styles.greeting}>
-            {timeOfDayGreeting()}, {session?.name}.
-          </h1>
-          <p className={styles.greetingSub}>
-            Pick up where the team left off, or jump straight into a workspace.
-          </p>
+          <header className={styles.hero}>
+            <p className={styles.eyebrow}>
+              <span className={styles.spark} aria-hidden="true" />
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+            <h1 className={styles.greeting}>
+              {timeOfDayGreeting()},{" "}
+              <em className={styles.greetName}>{session?.name}</em>.
+            </h1>
+            <p className={styles.greetingSub}>
+              You&apos;re in{" "}
+              <strong>
+                {workspaces.find((w) => w.id === session?.workspaceId)?.name ??
+                  "your workspace"}
+              </strong>{" "}
+              — pick up where the team left off.
+            </p>
+            <div className={styles.stats}>
+              <div className={styles.stat}>
+                <span className={styles.statNum}>{docCount}</span>
+                <span className={styles.statLabel}>
+                  {docCount === 1 ? "page" : "pages"}
+                </span>
+              </div>
+              <span className={styles.statRule} aria-hidden="true" />
+              <div className={styles.stat}>
+                <span className={styles.statNum}>{members.length}</span>
+                <span className={styles.statLabel}>
+                  {members.length === 1 ? "teammate" : "teammates"}
+                </span>
+              </div>
+              <span className={styles.statRule} aria-hidden="true" />
+              <div className={styles.stat}>
+                <span className={styles.statNum}>{workspaces.length}</span>
+                <span className={styles.statLabel}>
+                  {workspaces.length === 1 ? "workspace" : "workspaces"}
+                </span>
+              </div>
+            </div>
+          </header>
 
           <nav className={styles.destinations}>
             <Link href="/doc" className={styles.dest}>
@@ -150,7 +249,10 @@ export default function HomeDashboard() {
                 <span className={styles.destIcon}>
                   <Doc />
                 </span>
-                <ArrowRight className={styles.destArrow} />
+                <span className={styles.destNo}>
+                  01
+                  <ArrowRight className={styles.destArrow} />
+                </span>
               </div>
               <h2 className={styles.destTitle}>Docs</h2>
               <p className={styles.destBody}>
@@ -162,7 +264,10 @@ export default function HomeDashboard() {
                 <span className={styles.destIcon}>
                   <Shapes />
                 </span>
-                <ArrowRight className={styles.destArrow} />
+                <span className={styles.destNo}>
+                  02
+                  <ArrowRight className={styles.destArrow} />
+                </span>
               </div>
               <h2 className={styles.destTitle}>Canvas</h2>
               <p className={styles.destBody}>
@@ -174,7 +279,10 @@ export default function HomeDashboard() {
                 <span className={styles.destIcon}>
                   <Columns />
                 </span>
-                <ArrowRight className={styles.destArrow} />
+                <span className={styles.destNo}>
+                  03
+                  <ArrowRight className={styles.destArrow} />
+                </span>
               </div>
               <h2 className={styles.destTitle}>Board</h2>
               <p className={styles.destBody}>
@@ -183,70 +291,136 @@ export default function HomeDashboard() {
             </Link>
           </nav>
 
-          <section className={styles.section}>
-            <div className={styles.sectionHead}>
-              <h2 className={styles.sectionTitle}>Recently edited</h2>
-              <Link href="/doc" className={styles.sectionLink}>
-                All pages →
-              </Link>
-            </div>
-            <div className={styles.recentList}>
-              {recent.length === 0 ? (
-                <p className={styles.empty}>
-                  No pages yet — <Link href="/doc">open the docs</Link> to start
-                  your first one.
-                </p>
-              ) : (
-                recent.map((d) => (
-                  <Link
-                    key={d.id}
-                    href={`/doc?page=${d.id}`}
-                    className={styles.recentRow}
-                  >
-                    <span className={styles.recentMain}>
-                      <span className={styles.recentTitle}>{d.title}</span>
-                      <span className={styles.recentGroup}>{d.group}</span>
-                    </span>
-                    <span className={`${styles.statusPill} ${STATUS_CLASS[d.status]}`}>
-                      {STATUS_LABEL[d.status]}
-                    </span>
-                    <span
-                      className={styles.recentOwner}
-                      style={{ background: d.ownerColor }}
-                      title={d.ownerName}
-                    >
-                      {d.owner}
-                    </span>
-                    <span className={styles.recentWhen}>{timeAgo(d.updatedAt)}</span>
-                  </Link>
-                ))
-              )}
-            </div>
-          </section>
-
-          {members.length > 0 && (
-            <section className={styles.team}>
-              <div className={styles.teamAvatars}>
-                {members.slice(0, 8).map((m) => (
-                  <span
-                    key={m.id}
-                    className={styles.teamAvatar}
-                    style={{ background: m.color }}
-                    title={m.name}
-                  >
-                    {m.initials}
-                  </span>
-                ))}
+          <div className={styles.columns}>
+            <section className={styles.section}>
+              <div className={styles.sectionHead}>
+                <h2 className={styles.sectionTitle}>Recently edited</h2>
+                <Link href="/doc" className={styles.sectionLink}>
+                  All pages →
+                </Link>
               </div>
-              <p className={styles.teamNote}>
-                {members.length === 1
-                  ? "Just you in this workspace so far."
-                  : `${members.length} people are designing in this workspace.`}
-              </p>
+              <div className={styles.recentList}>
+                {recent.length === 0 ? (
+                  <p className={styles.empty}>
+                    No pages yet — <Link href="/doc">open the docs</Link> to
+                    start your first one.
+                  </p>
+                ) : (
+                  recent.map((d) => (
+                    <Link
+                      key={d.id}
+                      href={`/doc?page=${d.id}`}
+                      className={styles.recentRow}
+                    >
+                      <span className={styles.recentMain}>
+                        <span className={styles.recentTitle}>{d.title}</span>
+                        <span className={styles.recentGroup}>{d.group}</span>
+                      </span>
+                      <span className={`${styles.statusPill} ${STATUS_CLASS[d.status]}`}>
+                        {STATUS_LABEL[d.status]}
+                      </span>
+                      <span
+                        className={styles.recentOwner}
+                        style={{ background: d.ownerColor }}
+                        title={d.ownerName}
+                      >
+                        {d.owner}
+                      </span>
+                      <span className={styles.recentWhen}>{timeAgo(d.updatedAt)}</span>
+                    </Link>
+                  ))
+                )}
+              </div>
             </section>
-          )}
+
+            <aside className={styles.rail}>
+              <section className={styles.railCard}>
+                <div className={styles.sectionHead}>
+                  <h2 className={styles.sectionTitle}>Workspaces</h2>
+                  <span className={styles.railCount}>{workspaces.length}</span>
+                </div>
+                <div className={styles.wsList}>
+                  {workspaces.map((w) => (
+                    <div
+                      key={w.id}
+                      className={`${styles.wsRow} ${
+                        w.id === session?.workspaceId ? styles.wsActive : ""
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className={styles.wsMain}
+                        onClick={() => switchWorkspace(w.id)}
+                      >
+                        <span className={styles.wsName}>{w.name}</span>
+                        <span className={styles.wsMeta}>
+                          {w.memberCount}{" "}
+                          {w.memberCount === 1 ? "member" : "members"}
+                          {w.genre ? ` · ${w.genre}` : ""}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.wsInvite}
+                        onClick={() => handleInvite(w.id)}
+                        title="Copy an invite link (valid 14 days)"
+                      >
+                        {copiedId === w.id ? "Copied!" : "Invite"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <form
+                  className={styles.wsNew}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleCreateWorkspace();
+                  }}
+                >
+                  <input
+                    className={styles.wsInput}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="New workspace…"
+                    maxLength={60}
+                  />
+                  <button
+                    type="submit"
+                    className={styles.wsCreate}
+                    disabled={creating || !newName.trim()}
+                  >
+                    {creating ? "…" : "Create"}
+                  </button>
+                </form>
+              </section>
+
+              {members.length > 0 && (
+                <section className={styles.teamCard}>
+                  <div className={styles.teamAvatars}>
+                    {members.slice(0, 8).map((m) => (
+                      <span
+                        key={m.id}
+                        className={styles.teamAvatar}
+                        style={{ background: m.color }}
+                        title={m.name}
+                      >
+                        {m.initials}
+                      </span>
+                    ))}
+                  </div>
+                  <p className={styles.teamNote}>
+                    {members.length === 1
+                      ? "Just you in this workspace so far."
+                      : `${members.length} people are designing here.`}
+                  </p>
+                </section>
+              )}
+            </aside>
+          </div>
         </main>
       )}
+
+      <Dock />
     </div>
   );
 }

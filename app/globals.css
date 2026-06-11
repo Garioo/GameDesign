@@ -13,6 +13,7 @@
      7. Global utility classes (.screen, .editable)
 
    Component-specific styling lives next to each component:
+     app/components/chrome.css global top bar + dock/nav (TopBar, Dock)
      app/landing.module.css .. the public landing screen
      app/home/home.module.css  the signed-in home dashboard
      app/login/auth.css ...... login + auth/callback screens

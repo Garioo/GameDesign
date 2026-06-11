@@ -4,6 +4,8 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor from "./BlockEditor";
 import Sidebar from "./Sidebar";
+import TopBar from "@/app/components/TopBar";
+import Dock from "@/app/components/Dock";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import {
@@ -69,11 +71,6 @@ const STATUS_ORDER: Status[] = ["todo", "wip", "review", "done"];
 /* ---------- inline icon set (lucide-flavoured, no deps) ---------- */
 type IconProps = { className?: string };
 
-const Flame = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-  </svg>
-);
 const Doc = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h6" />
@@ -94,34 +91,9 @@ const ChevronDown = ({ className }: IconProps) => (
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
-const Plus = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
 const Search = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-  </svg>
-);
-const HomeIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-  </svg>
-);
-const Grid = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-  </svg>
-);
-const Columns = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M15 3v18" />
-  </svg>
-);
-const TableIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />
   </svg>
 );
 const Gear = ({ className }: IconProps) => (
@@ -254,6 +226,10 @@ function DocPageInner() {
         if (cancelled) return;
         if (!s) {
           router.replace("/login");
+          return;
+        }
+        if (!s.onboarded) {
+          router.replace("/onboarding");
           return;
         }
         setSession(s);
@@ -810,7 +786,17 @@ function DocPageInner() {
     return (
       <div className="app">
         <div className="screen">
-          <p style={{ color: "var(--ink-soft)" }}>No pages yet.</p>
+          <h1>{workspace?.name ?? "This workspace"} is empty</h1>
+          <p style={{ color: "var(--ink-soft)" }}>
+            Start the design doc with its first page.
+          </p>
+          <button
+            type="button"
+            className="share-btn"
+            onClick={() => handleNewPage(null, "General")}
+          >
+            Create your first page
+          </button>
         </div>
       </div>
     );
@@ -825,63 +811,46 @@ function DocPageInner() {
 
   return (
     <div className="app">
-      {/* ---------------- top bar ---------------- */}
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo">
-            <Flame className="logo-icon" />
-          </span>
-          <span className="brand-name">{workspace?.name || "EMBERWICK"}</span>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-muted">{active.group}</span>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-current">{active.title}</span>
-        </div>
-        <div className="top-right">
-          <span className="online-dot" />
-          <span className="online-text">{onlineList.length} online</span>
-          <div className="avatar-stack">
-            {onlineList.slice(0, 4).map((u) => (
-              <span key={u.key} className="avatar" style={{ background: u.color }} title={u.name}>
-                {u.initials}
-              </span>
-            ))}
-          </div>
-          <span className={"save-state save-" + saveState}>
-            {saveState === "saving" && "Saving…"}
-            {saveState === "saved" && "Saved"}
-            {saveState === "error" && (
-              <>
-                Save failed
-                <button className="save-retry" onClick={retryFailedSave}>
-                  Retry
-                </button>
-              </>
-            )}
-          </span>
-          <button
-            className="share-btn"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(window.location.href);
-                setShareCopied(true);
-                setTimeout(() => setShareCopied(false), 1500);
-              } catch (e) {
-                console.error(e);
-              }
-            }}
-          >
-            {shareCopied ? "Copied!" : "Share"}
-          </button>
-          <button
-            className="share-btn settings-btn"
-            title="Settings"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Gear className="settings-gear" />
-          </button>
-        </div>
-      </header>
+      {/* ---------------- top bar (global chrome) ---------------- */}
+      <TopBar
+        brandName={workspace?.name}
+        crumbs={[active.group, active.title]}
+        online={onlineList}
+      >
+        <span className={"save-state save-" + saveState}>
+          {saveState === "saving" && "Saving…"}
+          {saveState === "saved" && "Saved"}
+          {saveState === "error" && (
+            <>
+              Save failed
+              <button className="save-retry" onClick={retryFailedSave}>
+                Retry
+              </button>
+            </>
+          )}
+        </span>
+        <button
+          className="share-btn"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(window.location.href);
+              setShareCopied(true);
+              setTimeout(() => setShareCopied(false), 1500);
+            } catch (e) {
+              console.error(e);
+            }
+          }}
+        >
+          {shareCopied ? "Copied!" : "Share"}
+        </button>
+        <button
+          className="share-btn settings-btn"
+          title="Settings"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Gear className="settings-gear" />
+        </button>
+      </TopBar>
 
       <div className="body">
         {/* ---------------- left sidebar ---------------- */}
@@ -1124,32 +1093,16 @@ function DocPageInner() {
         </aside>
       </div>
 
-      {/* ---------------- floating dock ---------------- */}
-      <nav className="dock">
-        <button className="dock-search" onClick={() => setPaletteOpen(true)}>
-          <Search className="dock-search-icon" />
-          <kbd className="kbd">⌘K</kbd>
-        </button>
-        <span className="dock-divider" />
-        <button className="dock-item">
-          <HomeIcon className="dock-icon" /> Home
-        </button>
-        <button className="dock-item is-active">
-          <Doc className="dock-icon" /> Pages
-        </button>
-        <button className="dock-item" onClick={() => router.push("/doc/canvas")}>
-          <Grid className="dock-icon" /> Canvas
-        </button>
-        <button className="dock-item">
-          <Columns className="dock-icon" /> Board
-        </button>
-        <button className="dock-item">
-          <TableIcon className="dock-icon" /> Table
-        </button>
-        <button className="dock-new" onClick={() => handleNewPage(activeSectionId, active.group)}>
-          <Plus className="dock-new-icon" /> New
-        </button>
-      </nav>
+      {/* ---------------- floating dock (global chrome) ---------------- */}
+      <Dock
+        leading={
+          <button className="dock-search" onClick={() => setPaletteOpen(true)}>
+            <Search className="dock-search-icon" />
+            <kbd className="kbd">⌘K</kbd>
+          </button>
+        }
+        onNew={() => handleNewPage(activeSectionId, active.group)}
+      />
 
       <CommandPalette
         open={paletteOpen}

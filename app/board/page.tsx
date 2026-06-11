@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useRef } from "react";
+import TopBar from "@/app/components/TopBar";
+import Dock from "@/app/components/Dock";
+import SettingsButton from "@/app/components/SettingsButton";
 
 /* ── CSS injected into the component (mirrors globals.css tokens) ─────────── */
 const css = `
@@ -31,46 +34,7 @@ const css = `
     display: flex; flex-direction: column;
   }
 
-  /* ── topbar ── */
-  .topbar {
-    position: sticky; top: 0; z-index: 30;
-    display: flex; align-items: center; justify-content: space-between;
-    height: 58px; padding: 0 22px;
-    border-bottom: 1px solid var(--line);
-    background: rgba(246,241,233,0.82);
-    backdrop-filter: blur(10px);
-  }
-  .brand { display: flex; align-items: center; gap: 9px; font-size: 14px; }
-  .logo {
-    width: 28px; height: 28px; border-radius: 9px;
-    display: grid; place-items: center;
-    background: linear-gradient(150deg, #e98a45, #c0531c);
-    box-shadow: 0 2px 8px rgba(191,99,43,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
-    flex-shrink: 0;
-  }
-  .brand-name { font-weight: 700; letter-spacing: 0.06em; font-size: 13.5px; }
-  .crumb-sep { color: var(--ink-faint); }
-  .crumb-muted { color: var(--ink-soft); }
-  .crumb-current { color: var(--ink); font-weight: 500; }
-  .top-right { display: flex; align-items: center; gap: 12px; }
-  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf7d; box-shadow: 0 0 0 3px rgba(76,175,125,0.18); }
-  .online-text { font-size: 13px; color: var(--ink-soft); margin-right: 2px; }
-  .avatar-stack { display: flex; }
-  .avatar {
-    width: 26px; height: 26px; border-radius: 50%;
-    display: grid; place-items: center;
-    font-size: 10.5px; font-weight: 600; color: #fff;
-    border: 2px solid var(--bg); margin-left: -7px;
-  }
-  .avatar:first-child { margin-left: 0; }
-  .share-btn {
-    margin-left: 6px; font: inherit; font-size: 13px; font-weight: 600;
-    padding: 7px 16px; border-radius: 9px;
-    background: var(--surface); color: var(--ink);
-    border: 1px solid var(--line); cursor: pointer;
-    transition: background .15s, border-color .15s, transform .15s, box-shadow .15s;
-  }
-  .share-btn:hover { background: #fff; border-color: #ddd0bd; transform: translateY(-1px); box-shadow: 0 3px 10px rgba(42,36,30,0.08); }
+  /* ── topbar + dock come from the global chrome (app/components) ── */
 
   /* ── body layout (sidebar + main) ── */
   .body-row {
@@ -376,50 +340,6 @@ const css = `
   .add-col-ghost:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-tint); }
   .add-col-ghost svg { width: 16px; height: 16px; }
 
-  /* ── floating dock (same as original) ── */
-  .dock {
-    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
-    z-index: 40;
-    display: flex; align-items: center; gap: 4px;
-    padding: 7px;
-    background: rgba(255,253,250,0.9);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    box-shadow: 0 12px 40px rgba(42,36,30,0.16), 0 2px 6px rgba(42,36,30,0.06);
-  }
-  .dock-search {
-    display: flex; align-items: center; gap: 8px;
-    font: inherit; padding: 8px 12px; border-radius: 11px;
-    background: var(--line-soft); border: none; color: var(--ink-soft); cursor: pointer;
-  }
-  .dock-search:hover { background: #ece4d6; }
-  .dock-search-icon { width: 16px; height: 16px; }
-  .kbd { font-size: 11px; color: var(--ink-faint); }
-  .dock-divider { width: 1px; height: 24px; background: var(--line); margin: 0 4px; }
-  .dock-item {
-    display: flex; align-items: center; gap: 7px;
-    font: inherit; font-size: 13.5px; font-weight: 500; color: var(--ink-soft);
-    padding: 9px 14px; border-radius: 11px;
-    background: none; border: none; cursor: pointer;
-    transition: background .12s, color .12s, transform .12s;
-  }
-  .dock-item:hover { background: var(--line-soft); color: var(--ink); transform: translateY(-1px); }
-  .dock-icon { width: 16px; height: 16px; }
-  .dock-item.is-active { background: var(--ember); color: #fff; }
-  .dock-item.is-active:hover { background: var(--ember); color: #fff; transform: none; }
-  .dock-new {
-    display: flex; align-items: center; gap: 6px;
-    font: inherit; font-size: 13.5px; font-weight: 600; color: #fff;
-    padding: 9px 16px; border-radius: 11px; margin-left: 2px;
-    background: linear-gradient(150deg, #e98a45, #c0531c);
-    border: none; cursor: pointer;
-    box-shadow: 0 2px 8px rgba(191,99,43,0.35);
-    transition: filter .12s, transform .12s, box-shadow .12s;
-  }
-  .dock-new:hover { filter: brightness(1.05); transform: translateY(-1px); }
-  .dock-new-icon { width: 16px; height: 16px; }
-
   /* ── modal overlay ── */
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 60;
@@ -467,44 +387,9 @@ const css = `
 `;
 
 /* ── inline SVG icons ─────────────────────────────────────────────────────── */
-const Flame = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-  </svg>
-);
 const Plus = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 5v14M5 12h14" />
-  </svg>
-);
-const Search = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-  </svg>
-);
-const HomeIcon = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-  </svg>
-);
-const Doc = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h6" />
-  </svg>
-);
-const Grid = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-  </svg>
-);
-const Columns = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M15 3v18" />
-  </svg>
-);
-const TableIcon = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />
   </svg>
 );
 const Dots = ({ className }) => (
@@ -983,27 +868,19 @@ export default function BoardPage() {
       <style>{css}</style>
       <div className="board-app">
 
-        {/* topbar */}
-        <header className="topbar">
-          <div className="brand">
-            <span className="logo"><Flame style={{ width: 16, height: 16, color: "#fff4e8" }} /></span>
-            <span className="brand-name">EMBERWICK</span>
-            <span className="crumb-sep">/</span>
-            <span className="crumb-muted">Design</span>
-            <span className="crumb-sep">/</span>
-            <span className="crumb-current">Board</span>
-          </div>
-          <div className="top-right">
-            <span className="online-dot" />
-            <span className="online-text">3 online</span>
-            <div className="avatar-stack">
-              {PEOPLE.slice(0, 3).map((p) => (
-                <span key={p.id} className="avatar" style={{ background: p.color }} title={p.name}>{p.initials}</span>
-              ))}
-            </div>
-            <button className="share-btn">Share</button>
-          </div>
-        </header>
+        {/* topbar (global chrome) */}
+        <TopBar
+          crumbs={["Design", "Board"]}
+          online={PEOPLE.slice(0, 3).map((p) => ({
+            key: p.id,
+            name: p.name,
+            initials: p.initials,
+            color: p.color,
+          }))}
+        >
+          <button className="share-btn">Share</button>
+          <SettingsButton />
+        </TopBar>
 
         <div className="body-row">
           {/* sidebar: board list */}
@@ -1136,22 +1013,8 @@ export default function BoardPage() {
           </div>
         </div>
 
-        {/* floating dock */}
-        <nav className="dock">
-          <button className="dock-search">
-            <Search className="dock-search-icon" />
-            <kbd className="kbd">⌘K</kbd>
-          </button>
-          <span className="dock-divider" />
-          <button className="dock-item"><HomeIcon className="dock-icon" /> Home</button>
-          <button className="dock-item"><Doc className="dock-icon" /> Pages</button>
-          <button className="dock-item"><Grid className="dock-icon" /> Canvas</button>
-          <button className="dock-item is-active"><Columns className="dock-icon" /> Board</button>
-          <button className="dock-item"><TableIcon className="dock-icon" /> Table</button>
-          <button className="dock-new">
-            <Plus className="dock-new-icon" /> New
-          </button>
-        </nav>
+        {/* floating dock (global chrome) */}
+        <Dock onNew={handleAddBoard} />
 
         {/* card edit modal */}
         {editingCard && (

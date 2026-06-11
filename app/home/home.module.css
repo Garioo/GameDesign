@@ -1,9 +1,10 @@
 /* ============================================================
    EMBERWICK · home/home.module.css  (imported by app/home/page.tsx)
    ------------------------------------------------------------
-   The signed-in home dashboard: topbar, greeting, destination
-   cards (Docs / Canvas / Board), recently-edited list and the
-   team strip. Tokens come from globals.css.
+   The signed-in home dashboard: dated masthead greeting with a
+   stat strip, numbered destination cards (Docs / Canvas / Board),
+   then a two-column spread — recently-edited pages beside the
+   workspace rail (switcher, invites, team). Tokens: globals.css.
    ============================================================ */
 
 .page {
@@ -12,55 +13,12 @@
   flex-direction: column;
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
-    radial-gradient(1100px 560px at 82% -8%, #fbe9d6 0%, rgba(251, 233, 214, 0) 55%),
-    radial-gradient(900px 520px at -6% 104%, #f3ece0 0%, rgba(243, 236, 224, 0) 60%),
     var(--bg);
-  background-blend-mode: soft-light, normal, normal, normal;
+  background-blend-mode: soft-light, normal;
 }
 
-/* ---------------- topbar ---------------- */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 58px;
-  padding: 0 22px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(246, 241, 233, 0.82);
-  backdrop-filter: blur(10px);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: var(--grad-ember);
-  box-shadow: 0 2px 8px rgba(191, 99, 43, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-.logoIcon {
-  width: 16px;
-  height: 16px;
-  color: #fff4e8;
-}
-.brandName {
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  font-size: 13.5px;
-}
-.topRight {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-}
+/* ---------------- topbar extras ----------------
+   (the bar itself is global chrome — app/components/chrome.css) */
 .me {
   width: 28px;
   height: 28px;
@@ -71,32 +29,13 @@
   font-weight: 600;
   color: #fff;
 }
-.signOut {
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 9px;
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  cursor: pointer;
-  transition: background var(--t-med), border-color var(--t-med),
-    transform var(--t-med), box-shadow var(--t-med);
-}
-.signOut:hover {
-  background: #fff;
-  border-color: #ddd0bd;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(42, 36, 30, 0.08);
-}
 
 /* ---------------- shell ---------------- */
 .shell {
   width: 100%;
-  max-width: 980px;
+  max-width: 1060px;
   margin: 0 auto;
-  padding: clamp(36px, 6vh, 64px) 32px 96px;
+  padding: clamp(36px, 6vh, 64px) 32px 110px;
 }
 
 /* full-height centered loading state */
@@ -107,28 +46,104 @@
   color: var(--ink-soft);
 }
 
-/* ---------------- greeting ---------------- */
+/* ---------------- masthead / greeting ---------------- */
+.hero {
+  position: relative;
+  padding-bottom: 30px;
+  margin-bottom: 34px;
+  border-bottom: 1px solid var(--line);
+}
+/* short ember tick on the masthead rule — the editorial signature */
+.hero::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1.5px;
+  width: 64px;
+  height: 2.5px;
+  border-radius: 99px;
+  background: var(--ember);
+}
+
 .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ember);
-  margin-bottom: 10px;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
   animation: riseIn 0.5s var(--ease-rise) both;
 }
+.spark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0 3px var(--ember-tint2);
+  animation: sparkPulse 2.6s ease-in-out infinite;
+}
+@keyframes sparkPulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--ember-tint2); }
+  50%      { box-shadow: 0 0 0 6px rgba(248, 226, 207, 0.45); }
+}
+
 .greeting {
   font-family: var(--font-display);
-  font-size: clamp(26px, 3.4vw, 34px);
+  font-size: clamp(30px, 4.4vw, 44px);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
   animation: riseIn 0.5s var(--ease-rise) 0.05s both;
 }
+.greetName {
+  font-style: normal;
+  color: var(--ember-deep);
+}
 .greetingSub {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: var(--text-base);
   color: var(--ink-soft);
   animation: riseIn 0.5s var(--ease-rise) 0.1s both;
+}
+.greetingSub strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* stat strip — editorial figures under the greeting */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-top: 24px;
+  animation: riseIn 0.5s var(--ease-rise) 0.14s both;
+}
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.statNum {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.statLabel {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.statRule {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
 }
 
 /* ---------------- destination cards ---------------- */
@@ -136,47 +151,65 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-4);
-  margin-top: 30px;
 }
 .dest {
+  position: relative;
   display: block;
-  padding: 20px;
-  border-radius: var(--r-xl);
+  padding: 22px 20px 20px;
+  border-radius: var(--r-2xl);
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-card);
   text-decoration: none;
   color: var(--ink);
+  overflow: hidden;
   transition: transform var(--t-slow) var(--ease-rise), box-shadow var(--t-slow),
     border-color var(--t-slow);
   animation: riseIn 0.5s var(--ease-rise) both;
 }
-.dest:nth-child(1) { animation-delay: 0.14s; }
-.dest:nth-child(2) { animation-delay: 0.2s; }
-.dest:nth-child(3) { animation-delay: 0.26s; }
+.dest:nth-child(1) { animation-delay: 0.18s; }
+.dest:nth-child(2) { animation-delay: 0.24s; }
+.dest:nth-child(3) { animation-delay: 0.3s; }
 .dest:hover {
   transform: translateY(-3px);
   border-color: var(--ember-tint2);
   box-shadow: var(--shadow-menu);
 }
 .destHead {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .destIcon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--r-lg);
   display: grid;
   place-items: center;
   color: var(--ember-deep);
   background: var(--ember-tint);
   border: 1px solid var(--ember-tint2);
+  transition: background var(--t-slow), color var(--t-slow), box-shadow var(--t-slow);
 }
 .destIcon svg {
   width: 17px;
   height: 17px;
+}
+.dest:hover .destIcon {
+  background: var(--ember);
+  color: #fff4e8;
+  box-shadow: 0 4px 12px rgba(191, 99, 43, 0.35);
+}
+.destNo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 .destArrow {
   width: 15px;
@@ -189,22 +222,31 @@
   color: var(--ember);
 }
 .destTitle {
-  margin-top: 14px;
-  font-size: var(--text-base);
+  position: relative;
+  margin-top: 16px;
+  font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 .destBody {
+  position: relative;
   margin-top: 4px;
   font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--ink-soft);
 }
 
-/* ---------------- recent pages ---------------- */
-.section {
+/* ---------------- two-column spread ---------------- */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--sp-5);
+  align-items: start;
   margin-top: 44px;
-  animation: riseIn 0.5s var(--ease-rise) 0.3s both;
+}
+
+.section {
+  animation: riseIn 0.5s var(--ease-rise) 0.34s both;
 }
 .sectionHead {
   display: flex;
@@ -227,6 +269,7 @@
   color: var(--ember-deep);
 }
 
+/* ---------------- recent pages ---------------- */
 .recentList {
   display: flex;
   flex-direction: column;
@@ -257,6 +300,7 @@
   min-width: 0;
 }
 .recentTitle {
+  display: block;
   font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
@@ -326,13 +370,160 @@
   font-weight: 600;
 }
 
-/* ---------------- team strip ---------------- */
-.team {
+/* ---------------- workspace rail ---------------- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  animation: riseIn 0.5s var(--ease-rise) 0.4s both;
+}
+.railCard {
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  padding: 16px 16px 14px;
+}
+.railCount {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border: 1px solid var(--ember-tint2);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.wsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wsRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 9px 10px 9px 12px;
+  border-radius: var(--r-lg);
+  border-left: 2.5px solid transparent;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.wsRow:hover {
+  background: var(--line-soft);
+}
+.wsActive {
+  background: var(--ember-tint);
+  border-left-color: var(--ember);
+}
+.wsActive:hover {
+  background: var(--ember-tint);
+}
+.wsMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.wsName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wsActive .wsName {
+  color: var(--ember-deep);
+}
+.wsMeta {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+.wsInvite {
+  flex: none;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.wsInvite:hover {
+  border-color: var(--ember-tint2);
+  background: var(--ember-tint);
+  color: var(--ember-deep);
+}
+
+.wsNew {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.wsInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: 7px 11px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+}
+.wsInput::placeholder {
+  color: var(--ink-faint);
+}
+.wsInput:focus {
+  outline: none;
+  border-color: var(--ember-tint2);
+  box-shadow: 0 0 0 3px var(--ember-tint);
+}
+.wsCreate {
+  flex: none;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: var(--r-lg);
+  border: none;
+  background: var(--ember);
+  color: #fff4e8;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(191, 99, 43, 0.3);
+  transition: background var(--t-fast), transform var(--t-fast), opacity var(--t-fast);
+}
+.wsCreate:hover:not(:disabled) {
+  background: var(--ember-deep);
+  transform: translateY(-1px);
+}
+.wsCreate:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* ---------------- team strip (in the rail) ---------------- */
+.teamCard {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  margin-top: 44px;
-  animation: riseIn 0.5s var(--ease-rise) 0.36s both;
+  padding: 12px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-xl);
 }
 .teamAvatars {
   display: flex;
@@ -353,11 +544,17 @@
   margin-left: 0;
 }
 .teamNote {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 
 /* ---------------- responsive ---------------- */
+@media (max-width: 880px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 760px) {
   .destinations {
     grid-template-columns: 1fr;
@@ -369,15 +566,25 @@
   .recentWhen {
     display: none;
   }
+  .stats {
+    gap: var(--sp-4);
+  }
+  .statNum {
+    font-size: 22px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .eyebrow,
   .greeting,
   .greetingSub,
+  .stats,
   .dest,
   .section,
-  .team {
+  .rail {
+    animation: none;
+  }
+  .spark {
     animation: none;
   }
 }

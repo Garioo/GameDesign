@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, WORKSPACE_ID } from "./supabase";
 import {
   seedDocs,
   type Block,
@@ -64,10 +64,11 @@ export interface ProfileInfo {
 
 /** Workspace members (for the owner picker + owner display resolution). */
 export async function listMembers(workspaceId: string): Promise<ProfileInfo[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("project_members")
     .select("profile:user_id (id, name, initials, color)")
     .eq("project_id", workspaceId);
+  if (error) throw new Error(`listMembers failed: ${error.message}`);
   const out: ProfileInfo[] = [];
   for (const row of (data ?? []) as { profile: ProfileInfo | ProfileInfo[] | null }[]) {
     const p = Array.isArray(row.profile) ? row.profile[0] : row.profile;
@@ -85,7 +86,8 @@ export async function listMembers(workspaceId: string): Promise<ProfileInfo[]> {
 
 /** Assign / clear a page owner. */
 export async function setPageOwner(pageId: string, userId: string | null): Promise<void> {
-  await supabase.from("pages").update({ owner: userId }).eq("id", pageId);
+  const { error } = await supabase.from("pages").update({ owner: userId }).eq("id", pageId);
+  if (error) throw new Error(`setPageOwner failed: ${error.message}`);
 }
 
 interface PageRow {
@@ -136,7 +138,7 @@ const rowToBlock = (r: BlockRow): Block => ({
 
 /** Load the whole workspace into the in-memory DesignDoc[] the UI expects. */
 export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {
-  const [{ data: sections }, { data: pages }, members] = await Promise.all([
+  const [sectionsResult, pagesResult, members] = await Promise.all([
     supabase.from("sections").select("id, name, position").eq("project_id", workspaceId),
     supabase
       .from("pages")
@@ -145,14 +147,18 @@ export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {
       .order("position", { ascending: true }),
     listMembers(workspaceId),
   ]);
+  if (sectionsResult.error) throw new Error(`loadWorkspace sections failed: ${sectionsResult.error.message}`);
+  if (pagesResult.error) throw new Error(`loadWorkspace pages failed: ${pagesResult.error.message}`);
 
+  const sections = sectionsResult.data;
+  const pages = pagesResult.data;
   const ownerMap = new Map(members.map((m) => [m.id, m]));
   const sectionName = new Map((sections ?? []).map((s) => [s.id as string, s.name as string]));
   const sectionPos = new Map((sections ?? []).map((s) => [s.id as string, s.position as number]));
   const pageRows = (pages ?? []) as PageRow[];
   if (pageRows.length === 0) return [];
 
-  const { data: blocks } = await supabase
+  const { data: blocks, error: blocksError } = await supabase
     .from("blocks")
     .select("id, page_id, type, content, position")
     .in(
@@ -160,6 +166,7 @@ export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {
       pageRows.map((p) => p.id),
     )
     .order("position", { ascending: true });
+  if (blocksError) throw new Error(`loadWorkspace blocks failed: ${blocksError.message}`);
 
   const blocksByPage = new Map<string, Block[]>();
   for (const r of (blocks ?? []) as BlockRow[]) {
@@ -202,18 +209,25 @@ export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {
   return docs;
 }
 
-/** Seed the workspace from `seedDocs` exactly once (first run). */
+/**
+ * Seed the workspace from `seedDocs` exactly once (first run). Only the shared
+ * bootstrap workspace gets the demo content — user-created workspaces start
+ * completely clean.
+ */
 export async function seedIfEmpty(workspaceId: string): Promise<void> {
-  const { count } = await supabase
+  if (workspaceId !== WORKSPACE_ID) return;
+  const { count, error: countError } = await supabase
     .from("pages")
     .select("id", { count: "exact", head: true })
     .eq("project_id", workspaceId);
+  if (countError) throw new Error(`seedIfEmpty count failed: ${countError.message}`);
   if ((count ?? 0) > 0) return;
 
-  const { data: sections } = await supabase
+  const { data: sections, error: sectionsError } = await supabase
     .from("sections")
     .select("id, name")
     .eq("project_id", workspaceId);
+  if (sectionsError) throw new Error(`seedIfEmpty sections failed: ${sectionsError.message}`);
   const sectionId = new Map((sections ?? []).map((s) => [s.name as string, s.id as string]));
   const titleToId = new Map<string, string>();
 
@@ -253,7 +267,8 @@ export async function seedIfEmpty(workspaceId: string): Promise<void> {
     const selfId = titleToId.get(d.title);
     const linkIds = d.links.map((t) => titleToId.get(t)).filter((x): x is string => !!x);
     if (selfId && linkIds.length) {
-      await supabase.from("pages").update({ links: linkIds }).eq("id", selfId);
+      const { error } = await supabase.from("pages").update({ links: linkIds }).eq("id", selfId);
+      if (error) throw new Error(`Seed links failed: ${error.message}`);
     }
   }
 }
@@ -266,23 +281,25 @@ export interface SectionInfo {
 
 /** List the workspace sections, ordered. */
 export async function listSections(workspaceId: string): Promise<SectionInfo[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("sections")
     .select("id, name, position")
     .eq("project_id", workspaceId)
     .order("position", { ascending: true });
+  if (error) throw new Error(`listSections failed: ${error.message}`);
   return (data ?? []) as SectionInfo[];
 }
 
 /** Create a new section (top-level group). Returns it with its assigned position. */
 export async function createSection(workspaceId: string, name: string): Promise<SectionInfo> {
-  const { data: maxRow } = await supabase
+  const { data: maxRow, error: maxError } = await supabase
     .from("sections")
     .select("position")
     .eq("project_id", workspaceId)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (maxError) throw new Error(`createSection position failed: ${maxError.message}`);
   const position = ((maxRow?.position as number | undefined) ?? -1) + 1;
 
   const { data, error } = await supabase
@@ -300,13 +317,14 @@ export async function createPage(
   sectionId: string | null,
   sectionName: string,
 ): Promise<DesignDoc> {
-  const { data: maxRow } = await supabase
+  const { data: maxRow, error: maxError } = await supabase
     .from("pages")
     .select("position")
     .eq("project_id", workspaceId)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (maxError) throw new Error(`createPage position failed: ${maxError.message}`);
   const position = ((maxRow?.position as number | undefined) ?? -1) + 1;
 
   const { data: page, error } = await supabase
@@ -354,36 +372,42 @@ export async function createPage(
 
 /** Fetch a single page's blocks (used by realtime to merge remote edits). */
 export async function fetchPageBlocks(pageId: string): Promise<Block[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("blocks")
     .select("id, page_id, type, content, position")
     .eq("page_id", pageId)
     .order("position", { ascending: true });
+  if (error) throw new Error(`fetchPageBlocks failed: ${error.message}`);
   return ((data ?? []) as BlockRow[]).map(rowToBlock);
 }
 
 /** Delete a page (blocks cascade via FK; child pages cascade too). */
 export async function deletePage(pageId: string): Promise<void> {
-  await supabase.from("pages").delete().eq("id", pageId);
+  const { error } = await supabase.from("pages").delete().eq("id", pageId);
+  if (error) throw new Error(`deletePage failed: ${error.message}`);
 }
 
 /** Rename a section. */
 export async function renameSection(sectionId: string, name: string): Promise<void> {
-  await supabase.from("sections").update({ name }).eq("id", sectionId);
+  const { error } = await supabase.from("sections").update({ name }).eq("id", sectionId);
+  if (error) throw new Error(`renameSection failed: ${error.message}`);
 }
 
 /** Delete a section (only call when it has no pages). */
 export async function deleteSection(sectionId: string): Promise<void> {
-  await supabase.from("sections").delete().eq("id", sectionId);
+  const { error } = await supabase.from("sections").delete().eq("id", sectionId);
+  if (error) throw new Error(`deleteSection failed: ${error.message}`);
 }
 
 /** Persist new positions for a set of sections. */
 export async function reorderSections(orderedIds: string[]): Promise<void> {
-  await Promise.all(
+  const results = await Promise.all(
     orderedIds.map((id, i) =>
       supabase.from("sections").update({ position: i }).eq("id", id),
     ),
   );
+  const error = results.find((result) => result.error)?.error;
+  if (error) throw new Error(`reorderSections failed: ${error.message}`);
 }
 
 export interface PagePlacement {
@@ -395,7 +419,7 @@ export interface PagePlacement {
 
 /** Persist page placement: positions for a sibling group, plus section/parent for the moved one. */
 export async function updatePagePlacement(updates: PagePlacement[]): Promise<void> {
-  await Promise.all(
+  const results = await Promise.all(
     updates.map((u) => {
       const patch: Record<string, unknown> = { position: u.position };
       if (u.sectionId !== undefined) patch.section_id = u.sectionId;
@@ -403,11 +427,13 @@ export async function updatePagePlacement(updates: PagePlacement[]): Promise<voi
       return supabase.from("pages").update(patch).eq("id", u.id);
     }),
   );
+  const error = results.find((result) => result.error)?.error;
+  if (error) throw new Error(`updatePagePlacement failed: ${error.message}`);
 }
 
 /** Persist editable page fields. */
 export async function savePage(doc: DesignDoc): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from("pages")
     .update({
       title: doc.title,
@@ -418,6 +444,7 @@ export async function savePage(doc: DesignDoc): Promise<void> {
       links: doc.links,
     })
     .eq("id", doc.id);
+  if (error) throw new Error(`savePage failed: ${error.message}`);
 }
 
 /** Persist a page's blocks: upsert current, delete removed. */
@@ -425,7 +452,8 @@ export async function saveBlocks(pageId: string, blocks: Block[]): Promise<void>
   const rows = blocks.map((b, i) => blockToRow(b, pageId, i));
   const incoming = new Set(blocks.map((b) => b.id));
 
-  const { data: existing } = await supabase.from("blocks").select("id").eq("page_id", pageId);
+  const { data: existing, error: existingError } = await supabase.from("blocks").select("id").eq("page_id", pageId);
+  if (existingError) throw new Error(`saveBlocks existing failed: ${existingError.message}`);
   const toDelete = (existing ?? [])
     .map((r) => r.id as string)
     .filter((id) => !incoming.has(id));
@@ -435,6 +463,7 @@ export async function saveBlocks(pageId: string, blocks: Block[]): Promise<void>
     if (error) throw new Error(`saveBlocks upsert failed: ${error.message}`);
   }
   if (toDelete.length) {
-    await supabase.from("blocks").delete().in("id", toDelete);
+    const { error } = await supabase.from("blocks").delete().in("id", toDelete);
+    if (error) throw new Error(`saveBlocks delete failed: ${error.message}`);
   }
 }

@@ -39,74 +39,10 @@
   overflow: hidden;
 }
 
-/* ---- tldraw tools, embedded in the app nav bar ---- */
-.canvas-app .dock { max-width: calc(100vw - 32px); }
-
-/* Wrapper takes over the dock's fixed positioning so the hover strip
-   underneath belongs to the same hover area (mouse-leave reverts to tools). */
-.canvas-app .dock-wrap {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Invisible buffer: the hover region extends well past the visible bar,
-     so small mouse drifts don't snap the nav back to the tldraw tools. */
-  padding: 36px 64px 8px;
-  /* …but never steal canvas clicks: only the bar and hint strip are
-     interactive until the nav is showing. */
-  pointer-events: none;
-}
-.canvas-app .dock-wrap .dock,
-.canvas-app .dock-wrap .dock-hint {
-  pointer-events: auto;
-}
-.canvas-app .dock-wrap.is-nav {
-  pointer-events: auto;
-}
-.canvas-app .dock-wrap .dock {
-  position: static;
-  left: auto;
-  bottom: auto;
-  transform: none;
-}
-
-/* Cross-fade when the bar content swaps between tools and nav. */
-.dock-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  animation: dockSwap 0.18s ease;
-}
-@keyframes dockSwap {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: none; }
-}
-
-/* Hover strip under the bar: the subtle "there's more here" affordance. */
-.dock-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 16px;
-  cursor: pointer;
-}
-.dock-hint-bar {
-  width: 44px;
-  height: 4px;
-  border-radius: 99px;
-  background: var(--line);
-  transition: background var(--t-fast), width var(--t-fast);
-}
-.dock-hint:hover .dock-hint-bar {
-  width: 64px;
-  background: var(--ember);
-}
-
+/* ---- tldraw tools, embedded in the app nav bar ----
+   The dock-wrap / hover-swap shell itself is global chrome now —
+   see app/components/chrome.css (Dock.tsx). Only the tool buttons
+   rendered into it are canvas-specific. */
 .dock-tools {
   display: flex;
   align-items: center;

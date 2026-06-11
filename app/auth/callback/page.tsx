@@ -25,22 +25,32 @@ export default function AuthCallbackPage() {
     }
 
     let done = false;
-    const finish = (path: string) => {
+    const finish = () => {
       if (done) return;
       done = true;
+      // Replay an interrupted deep link (e.g. /join?token=… stored by the
+      // invite page before it bounced to /login).
+      let path = "/home";
+      try {
+        const stored = localStorage.getItem("gd-post-login-redirect");
+        if (stored?.startsWith("/")) path = stored;
+        localStorage.removeItem("gd-post-login-redirect");
+      } catch {
+        /* storage unavailable — default to /home */
+      }
       router.replace(path);
     };
 
     // If the session is already available, go straight in.
     supabase.auth.getSession().then(({ data }) => {
       captureGithubToken(data.session); // GitHub token only exists right now
-      if (data.session) finish("/home");
+      if (data.session) finish();
     });
 
     // Otherwise wait for the client to finish exchanging the code/token.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       captureGithubToken(session);
-      if (session) finish("/home");
+      if (session) finish();
     });
 
     // Fallback so we never hang forever on a failed exchange.
