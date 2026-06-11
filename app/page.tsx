@@ -1,3 +1,4 @@
+import AuthHashRedirect from "./AuthHashRedirect";
 import Link from "next/link";
 import styles from "./landing.module.css";
 
@@ -79,6 +80,7 @@ const FEATURES = [
 export default function HomePage() {
   return (
     <div className={styles.page}>
+      <AuthHashRedirect />
       <header className={styles.topbar}>
         <div className={styles.brand}>
           <span className={styles.logo}>
