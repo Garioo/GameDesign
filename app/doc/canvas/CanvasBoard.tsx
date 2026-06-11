@@ -260,8 +260,14 @@ export default function CanvasBoard({
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       {/* Toolbar is hidden (tools live in the app nav bar); images upload to
-          Supabase Storage instead of being inlined as base64. */}
-      <Tldraw onMount={handleMount} components={{ Toolbar: null }} assets={canvasAssetStore} />
+          Supabase Storage instead of being inlined as base64. The license key
+          is required on production domains (localhost works without one). */}
+      <Tldraw
+        onMount={handleMount}
+        components={{ Toolbar: null }}
+        assets={canvasAssetStore}
+        licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
+      />
     </div>
   );
 }
