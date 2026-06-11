@@ -36,6 +36,8 @@ const MAX_BROADCAST_CHARS = 200_000;
 
 // Record types that belong to the document scope (everything that syncs).
 const DOC_TYPES = new Set(["document", "page", "shape", "asset", "binding"]);
+const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
+const needsTldrawLicenseKey = process.env.NODE_ENV === "production" && !tldrawLicenseKey;
 
 /**
  * A single collaborative tldraw board. Document edits and live cursors are
@@ -82,6 +84,15 @@ export default function CanvasBoard({
       const channel = supabase.channel(`canvas-board:${canvasId}`, {
         config: { broadcast: { self: false } },
       });
+      const sendBroadcast = (event: string, payload: unknown) => {
+        if (channel.state !== "joined") return;
+        channel
+          .send({ type: "broadcast", event, payload })
+          .then((result) => {
+            if (result !== "ok") console.warn(`canvas broadcast ${event} ${result}`);
+          })
+          .catch(console.error);
+      };
 
       // ---- persistence (debounced) ----
       const persist = throttle(() => {
@@ -156,9 +167,9 @@ export default function CanvasBoard({
           // Realtime — tell peers to refetch from the DB after our save lands.
           const json = JSON.stringify(update.changes);
           if (json.length > MAX_BROADCAST_CHARS) {
-            channel.send({ type: "broadcast", event: "doc-big", payload: { from: tabId } });
+            sendBroadcast("doc-big", { from: tabId });
           } else {
-            channel.send({ type: "broadcast", event: "doc", payload: update.changes });
+            sendBroadcast("doc", update.changes);
           }
           onSaveState?.("saving");
           persist();
@@ -179,7 +190,7 @@ export default function CanvasBoard({
         editor.store,
       );
       const sendPresence = throttle((p: TLInstancePresence) => {
-        channel.send({ type: "broadcast", event: "presence", payload: p });
+        sendBroadcast("presence", p);
       }, 60);
       const unlistenPresence = react("broadcast-presence", () => {
         const p = presence$.get();
@@ -213,7 +224,7 @@ export default function CanvasBoard({
           const { document } = getSnapshot(editor.store);
           const json = JSON.stringify(document);
           if (json.length > MAX_BROADCAST_CHARS) return; // joiner falls back to DB
-          channel.send({ type: "broadcast", event: "sync-res", payload: { to: from, document } });
+          sendBroadcast("sync-res", { to: from, document });
         })
         // Our join request was answered: adopt the first live snapshot offered.
         .on("broadcast", { event: "sync-res" }, ({ payload }) => {
@@ -224,7 +235,7 @@ export default function CanvasBoard({
         })
         .subscribe((status) => {
           if (status === "SUBSCRIBED") {
-            channel.send({ type: "broadcast", event: "sync-req", payload: { from: tabId } });
+            sendBroadcast("sync-req", { from: tabId });
           }
         });
 
@@ -257,6 +268,20 @@ export default function CanvasBoard({
     [canvasId, session, onReady, onToolChange, onSaveState, onHistoryChange],
   );
 
+  if (needsTldrawLicenseKey) {
+    return (
+      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+        <div style={{ maxWidth: 440, textAlign: "center", color: "var(--ink-soft)" }}>
+          <h2 style={{ color: "var(--ink)", marginBottom: 8 }}>Canvas license required</h2>
+          <p style={{ margin: 0 }}>
+            Set <code>NEXT_PUBLIC_TLDRAW_LICENSE_KEY</code> in Vercel to enable the production
+            canvas.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       {/* Toolbar is hidden (tools live in the app nav bar); images upload to
@@ -266,7 +291,7 @@ export default function CanvasBoard({
         onMount={handleMount}
         components={{ Toolbar: null }}
         assets={canvasAssetStore}
-        licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
+        licenseKey={tldrawLicenseKey}
       />
     </div>
   );
