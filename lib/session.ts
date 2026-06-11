@@ -43,7 +43,11 @@ export function setActiveWorkspace(workspaceId: string): void {
   }
 }
 
-function storedActiveWorkspace(): string | null {
+/**
+ * The remembered workspace id, if any — a hint for rendering cached data
+ * before ensureSession() resolves. Membership is NOT verified here.
+ */
+export function storedActiveWorkspace(): string | null {
   try {
     return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
   } catch {

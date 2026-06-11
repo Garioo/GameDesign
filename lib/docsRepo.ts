@@ -1,4 +1,5 @@
 import { supabase, WORKSPACE_ID } from "./supabase";
+import { assertMaxBytes, cleanText, LIMITS, ValidationError } from "./validate";
 import {
   seedDocs,
   type Block,
@@ -287,6 +288,7 @@ export async function listSections(workspaceId: string): Promise<SectionInfo[]> 
 
 /** Create a new section (top-level group). Returns it with its assigned position. */
 export async function createSection(workspaceId: string, name: string): Promise<SectionInfo> {
+  name = cleanText(name, LIMITS.name, "Section name") || "Untitled";
   const { data: maxRow, error: maxError } = await supabase
     .from("sections")
     .select("position")
@@ -383,6 +385,8 @@ export async function deletePage(pageId: string): Promise<void> {
 
 /** Rename a section. */
 export async function renameSection(sectionId: string, name: string): Promise<void> {
+  name = cleanText(name, LIMITS.name, "Section name");
+  if (!name) return;
   const { error } = await supabase.from("sections").update({ name }).eq("id", sectionId);
   if (error) throw new Error(`renameSection failed: ${error.message}`);
 }
@@ -427,14 +431,17 @@ export async function updatePagePlacement(updates: PagePlacement[]): Promise<voi
 
 /** Persist editable page fields. */
 export async function savePage(doc: DesignDoc): Promise<void> {
+  if (doc.tags.length > LIMITS.tagCount) {
+    throw new ValidationError(`Too many tags (max ${LIMITS.tagCount})`);
+  }
   const { error } = await supabase
     .from("pages")
     .update({
-      title: doc.title,
-      summary: doc.subtitle,
+      title: cleanText(doc.title, LIMITS.title, "Title") || "Untitled page",
+      summary: cleanText(doc.subtitle, LIMITS.summary, "Summary"),
       kind: doc.kind,
       status: doc.status,
-      tags: doc.tags,
+      tags: doc.tags.map((t) => cleanText(t, LIMITS.tag, "Tag")).filter(Boolean),
       links: doc.links,
     })
     .eq("id", doc.id);
@@ -443,7 +450,11 @@ export async function savePage(doc: DesignDoc): Promise<void> {
 
 /** Persist a page's blocks: upsert current, delete removed. */
 export async function saveBlocks(pageId: string, blocks: Block[]): Promise<void> {
+  if (blocks.length > LIMITS.blockCount) {
+    throw new ValidationError(`Too many blocks on one page (max ${LIMITS.blockCount})`);
+  }
   const rows = blocks.map((b, i) => blockToRow(b, pageId, i));
+  for (const row of rows) assertMaxBytes(row.content, LIMITS.blockBytes, "Block content");
   const incoming = new Set(blocks.map((b) => b.id));
 
   const { data: existing, error: existingError } = await supabase.from("blocks").select("id").eq("page_id", pageId);

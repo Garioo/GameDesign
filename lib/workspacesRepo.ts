@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { appUrl } from "./siteUrl";
+import { cleanText, LIMITS, ValidationError } from "./validate";
 
 /* ---------------------------------------------------------------------------
  * Workspaces (projects) the user belongs to, plus invite links.
@@ -70,6 +71,10 @@ export async function createWorkspace(
   tagline = "",
   genre = "",
 ): Promise<string> {
+  name = cleanText(name, LIMITS.name, "Workspace name");
+  if (!name) throw new ValidationError("Workspace name is required");
+  tagline = cleanText(tagline, LIMITS.tagline, "Tagline");
+  genre = cleanText(genre, LIMITS.genre, "Genre");
   const { data, error } = await supabase
     .from("projects")
     .insert({ name, tagline, genre, owner: userId })

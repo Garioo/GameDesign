@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { cleanText, HEX_COLOR_RE, LIMITS, REPO_RE, ValidationError } from "./validate";
 
 /* ---------------------------------------------------------------------------
  * Settings: own profile, workspace (project) info, and membership.
@@ -34,7 +35,20 @@ export async function updateWorkspaceInfo(
   projectId: string,
   patch: Partial<WorkspaceInfo>,
 ): Promise<void> {
-  const { error } = await supabase.from("projects").update(patch).eq("id", projectId);
+  const clean: Partial<WorkspaceInfo> = {};
+  if (patch.name !== undefined) {
+    clean.name = cleanText(patch.name, LIMITS.name, "Workspace name");
+    if (!clean.name) throw new ValidationError("Workspace name is required");
+  }
+  if (patch.tagline !== undefined) clean.tagline = cleanText(patch.tagline, LIMITS.tagline, "Tagline");
+  if (patch.genre !== undefined) clean.genre = cleanText(patch.genre, LIMITS.genre, "Genre");
+  if (patch.repo !== undefined) {
+    clean.repo = patch.repo.trim();
+    if (clean.repo && !REPO_RE.test(clean.repo)) {
+      throw new ValidationError('Repository must look like "owner/name"');
+    }
+  }
+  const { error } = await supabase.from("projects").update(clean).eq("id", projectId);
   if (error) throw new Error(`updateWorkspaceInfo failed: ${error.message}`);
 }
 
@@ -45,7 +59,14 @@ export interface ProfilePatch {
 }
 
 export async function updateProfile(userId: string, patch: ProfilePatch): Promise<void> {
-  const { error } = await supabase.from("profiles").update(patch).eq("id", userId);
+  const clean: ProfilePatch = {
+    name: cleanText(patch.name, LIMITS.profileName, "Name"),
+    initials: cleanText(patch.initials, LIMITS.initials, "Initials").toUpperCase(),
+    color: patch.color.trim(),
+  };
+  if (!clean.name) throw new ValidationError("Name is required");
+  if (!HEX_COLOR_RE.test(clean.color)) throw new ValidationError("Color must be #rrggbb");
+  const { error } = await supabase.from("profiles").update(clean).eq("id", userId);
   if (error) throw new Error(`updateProfile failed: ${error.message}`);
 }
 

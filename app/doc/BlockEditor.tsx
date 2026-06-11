@@ -151,7 +151,14 @@ async function readImageFile(file: File, maxDim = 1600): Promise<string> {
     fr.onerror = () => reject(fr.error);
     fr.readAsDataURL(file);
   });
-  if (file.type === "image/gif" || file.type === "image/svg+xml") return dataUrl;
+  // GIF/SVG bypass canvas re-encoding, so enforce the size budget directly —
+  // oversized data URLs would otherwise be stored verbatim in block content.
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    if (dataUrl.length > 1_200_000) {
+      throw new Error("Image is too large (max ~1 MB for GIF/SVG)");
+    }
+    return dataUrl;
+  }
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const im = new Image();
@@ -959,10 +966,13 @@ function BlockRow({
 
   // Keep DOM content in sync with state without disturbing the caret.
   // Compared on the sanitized form so browser HTML normalization can't loop.
+  // block.text is sanitized again here: rows written to the DB by other
+  // clients (or directly via the REST API) must never reach innerHTML raw.
   useEffect(() => {
     const el = ref.current;
     if (!el || isChromeBlock(block.type)) return;
-    if (sanitizeHtml(el.innerHTML) !== block.text) el.innerHTML = block.text;
+    const clean = sanitizeHtml(block.text);
+    if (sanitizeHtml(el.innerHTML) !== clean) el.innerHTML = clean;
   }, [block.text, block.type]);
 
   // Decorate mentions of deleted pages as dangling. Class-only: the sanitizer
@@ -1372,6 +1382,8 @@ function ImageBlock({
     setLoading(true);
     try {
       onSetImage(await readImageFile(file));
+    } catch {
+      /* unreadable or oversized image — keep the drop zone as-is */
     } finally {
       setLoading(false);
     }

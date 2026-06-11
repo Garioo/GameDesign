@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { cleanText, LIMITS } from "./validate";
 
 /* ---------------------------------------------------------------------------
  * Threaded comments on a page. Backed by the `public.comments` table
@@ -29,6 +30,31 @@ export async function listComments(pageId: string): Promise<CommentRow[]> {
   return (data ?? []) as CommentRow[];
 }
 
+export interface CommentMetaRow {
+  page_id: string;
+  author: string; // profiles.id
+  created_at: string; // ISO timestamp
+}
+
+/**
+ * Recent comment metadata across many pages, newest first — enough for the
+ * home dashboard's "For you" view without pulling comment bodies.
+ */
+export async function listRecentCommentMeta(
+  pageIds: string[],
+  limit = 200,
+): Promise<CommentMetaRow[]> {
+  if (pageIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("comments")
+    .select("page_id, author, created_at")
+    .in("page_id", pageIds)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`listRecentCommentMeta failed: ${error.message}`);
+  return (data ?? []) as CommentMetaRow[];
+}
+
 /** Post a comment (or a reply, when parentId is given). */
 export async function addComment(
   pageId: string,
@@ -36,7 +62,7 @@ export async function addComment(
   body: string,
   parentId: string | null = null,
 ): Promise<void> {
-  const text = body.trim();
+  const text = cleanText(body, LIMITS.comment, "Comment");
   if (!text) return;
   const { error } = await supabase
     .from("comments")
@@ -46,7 +72,7 @@ export async function addComment(
 
 /** Edit a comment's body (the UI only offers this on the caller's own rows). */
 export async function editComment(id: string, body: string): Promise<void> {
-  const text = body.trim();
+  const text = cleanText(body, LIMITS.comment, "Comment");
   if (!text) return;
   const { error } = await supabase
     .from("comments")

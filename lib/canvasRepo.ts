@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { isCanvasAssetUrl, removeAssetUrls } from "./canvasAssets";
+import { assertMaxBytes, cleanText, LIMITS } from "./validate";
 
 /* ---------------------------------------------------------------------------
  * Canvases — freeform visual boards. Each canvas stores its scene (shapes,
@@ -34,6 +35,7 @@ export async function createCanvas(
   workspaceId: string,
   name = "Untitled canvas",
 ): Promise<CanvasInfo> {
+  name = cleanText(name, LIMITS.name, "Canvas name") || "Untitled canvas";
   const { data: maxRow } = await supabase
     .from("canvases")
     .select("position")
@@ -54,7 +56,9 @@ export async function createCanvas(
 
 /** Rename a canvas. */
 export async function renameCanvas(id: string, name: string): Promise<void> {
-  await supabase.from("canvases").update({ name }).eq("id", id);
+  const clean = cleanText(name, LIMITS.name, "Canvas name");
+  if (!clean) return;
+  await supabase.from("canvases").update({ name: clean }).eq("id", id);
 }
 
 /** Delete a canvas, cleaning up any images it had uploaded to Storage. */
@@ -89,5 +93,6 @@ export async function loadCanvasScene(id: string): Promise<CanvasScene> {
 
 /** Persist a canvas's scene. */
 export async function saveCanvasScene(id: string, scene: CanvasScene): Promise<void> {
+  assertMaxBytes(scene, LIMITS.sceneBytes, "Canvas scene");
   await supabase.from("canvases").update({ data: scene }).eq("id", id);
 }

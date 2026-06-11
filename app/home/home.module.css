@@ -2,9 +2,11 @@
    EMBERWICK · home/home.module.css  (imported by app/home/page.tsx)
    ------------------------------------------------------------
    The signed-in home dashboard: dated masthead greeting with a
-   stat strip, numbered destination cards (Docs / Canvas / Board),
-   then a two-column spread — recently-edited pages beside the
-   workspace rail (switcher, invites, team). Tokens: globals.css.
+   continue pill + stat strip, numbered destination cards
+   (Docs / Canvas / Board), then a two-column spread — recently
+   edited pages and open to-dos beside the workspace rail
+   (switcher, invites, team). First paint comes from a cached
+   snapshot (skeletons when cold). Tokens: globals.css.
    ============================================================ */
 
 .page {
@@ -38,13 +40,31 @@
   padding: clamp(36px, 6vh, 64px) 32px 110px;
 }
 
-/* full-height centered loading state */
-.loading {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  color: var(--ink-soft);
+/* ---------------- cold-start skeletons ----------------
+   Shown only when there's no cached snapshot for this workspace. */
+.skeleton {
+  display: block;
+  border-radius: var(--r-lg);
+  background: linear-gradient(
+    100deg,
+    var(--line-soft) 40%,
+    var(--surface) 50%,
+    var(--line-soft) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
 }
+@keyframes shimmer {
+  from { background-position: 120% 0; }
+  to   { background-position: -80% 0; }
+}
+.skelEyebrow { width: 140px; height: 14px; margin-bottom: 14px; }
+.skelTitle   { width: min(420px, 70%); height: 40px; }
+.skelSub     { width: min(300px, 55%); height: 16px; margin-top: 12px; }
+.skelStat    { width: 90px; height: 28px; }
+.skelCard    { height: 138px; border-radius: var(--r-2xl); }
+.skelList    { height: 280px; border-radius: var(--r-xl); }
+.skelRail    { height: 220px; border-radius: var(--r-xl); }
 
 /* ---------------- masthead / greeting ---------------- */
 .hero {
@@ -113,6 +133,45 @@
   font-weight: 600;
 }
 
+/* "Continue <page>" pill — jump back to your latest page */
+.continuePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 4px 12px 4px 11px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border: 1px solid var(--ember-tint2);
+  text-decoration: none;
+  transition: background var(--t-fast), border-color var(--t-fast),
+    transform var(--t-fast);
+}
+.continuePill strong {
+  font-weight: 700;
+  color: var(--ember-deep);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.continuePill:hover {
+  background: var(--ember-tint2);
+  border-color: var(--ember);
+  transform: translateY(-1px);
+}
+.continueArrow {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.continuePill:hover .continueArrow {
+  transform: translateX(2px);
+}
+
 /* stat strip — editorial figures under the greeting */
 .stats {
   display: flex;
@@ -145,6 +204,31 @@
   height: 22px;
   background: var(--line);
 }
+
+/* pages-by-status readout — one dotted line under the stat figures */
+.statusLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 16px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  animation: riseIn 0.5s var(--ease-rise) 0.16s both;
+}
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legendDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.segWip    { background: var(--ember); }
+.segReview { background: #ddb84a; }
+.segDone   { background: #4d9c72; }
 
 /* ---------------- destination cards ---------------- */
 .destinations {
@@ -182,24 +266,17 @@
   justify-content: space-between;
 }
 .destIcon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--r-lg);
   display: grid;
   place-items: center;
-  color: var(--ember-deep);
-  background: var(--ember-tint);
-  border: 1px solid var(--ember-tint2);
-  transition: background var(--t-slow), color var(--t-slow), box-shadow var(--t-slow);
+  color: var(--ink-soft);
+  transition: color var(--t-slow);
 }
 .destIcon svg {
-  width: 17px;
-  height: 17px;
+  width: 21px;
+  height: 21px;
 }
 .dest:hover .destIcon {
-  background: var(--ember);
-  color: #fff4e8;
-  box-shadow: 0 4px 12px rgba(191, 99, 43, 0.35);
+  color: var(--ember);
 }
 .destNo {
   display: inline-flex;
@@ -245,6 +322,14 @@
   margin-top: 44px;
 }
 
+/* left column stacks "Recently edited" over "Open to-dos" */
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
 .section {
   animation: riseIn 0.5s var(--ease-rise) 0.34s both;
 }
@@ -255,9 +340,58 @@
   margin-bottom: 12px;
 }
 .sectionTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+.sectionTools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* All / Mine segmented filter */
+.filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.filterBtn {
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.filterBtn:hover {
+  color: var(--ink);
+}
+.filterOn,
+.filterOn:hover {
+  background: var(--ember-tint);
+  color: var(--ember-deep);
+}
+.filterBadge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ember-deep);
+  background: var(--ember-tint2);
 }
 .sectionLink {
   font-size: var(--text-sm);
@@ -358,6 +492,41 @@
   text-align: right;
 }
 
+/* comment-activity chip (the "For you" view's stand-in for the status pill) */
+.commentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border: 1px solid var(--ember-tint2);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.commentBubble {
+  width: 11px;
+  height: 11px;
+}
+
+/* live presence — green dot pinned to an avatar's corner */
+.online {
+  position: relative;
+}
+.online::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3f9d6e;
+  border: 2px solid var(--surface);
+}
+
 /* empty state */
 .empty {
   padding: 36px 24px;
@@ -368,6 +537,104 @@
 .empty a {
   color: var(--ember);
   font-weight: 600;
+}
+
+/* ---------------- open to-dos ---------------- */
+.todoCount {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border: 1px solid var(--ember-tint2);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.todoList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.todoRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background var(--t-fast);
+}
+.todoRow:last-of-type {
+  border-bottom: none;
+}
+.todoRow:hover {
+  background: var(--ember-tint);
+}
+.todoCheck {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: transparent;
+  transition: border-color var(--t-fast), background var(--t-fast),
+    color var(--t-fast);
+}
+.todoCheck:hover:not(:disabled) {
+  border-color: var(--ember);
+  background: var(--ember-tint);
+  color: var(--ember);
+}
+.todoCheck:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.todoTick {
+  width: 11px;
+  height: 11px;
+}
+.todoText {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todoPage {
+  flex: none;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-faint);
+  background: var(--line-soft);
+  border: 1px solid var(--line);
+  padding: 2px 9px;
+  border-radius: 999px;
+  text-decoration: none;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--t-fast), border-color var(--t-fast),
+    background var(--t-fast);
+}
+.todoPage:hover {
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border-color: var(--ember-tint2);
+}
+.todoMore {
+  padding: 9px 18px;
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  border-top: 1px dashed var(--line);
 }
 
 /* ---------------- workspace rail ---------------- */
@@ -434,13 +701,31 @@
   text-align: left;
   cursor: pointer;
 }
+.wsNameLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
 .wsName {
   font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+}
+.wsCurrent {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ember-deep);
+  border: 1px solid var(--ember-tint2);
+  background: var(--surface);
+  padding: 1px 6px;
+  border-radius: 999px;
 }
 .wsActive .wsName {
   color: var(--ember-deep);
@@ -549,6 +834,78 @@
   color: var(--ink-soft);
 }
 
+/* ---------------- "Good to know" tips (in the rail) ---------------- */
+.tipsCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.tipsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tipsTitle {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.tipsClose {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+  border: none;
+  border-radius: var(--r-lg);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.tipsClose:hover {
+  color: var(--ink);
+  background: var(--line-soft);
+}
+.tipItem {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+}
+.tipIcon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-lg);
+  display: grid;
+  place-items: center;
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border: 1px solid var(--ember-tint2);
+}
+.tipIcon svg {
+  width: 14px;
+  height: 14px;
+}
+.tipName {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.tipBody {
+  margin-top: 1px;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
 /* ---------------- responsive ---------------- */
 @media (max-width: 880px) {
   .columns {
@@ -572,6 +929,14 @@
   .statNum {
     font-size: 22px;
   }
+  .continuePill {
+    display: flex;
+    width: fit-content;
+    margin: 10px 0 0;
+  }
+  .todoPage {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -579,12 +944,14 @@
   .greeting,
   .greetingSub,
   .stats,
+  .statusLegend,
   .dest,
   .section,
   .rail {
     animation: none;
   }
-  .spark {
+  .spark,
+  .skeleton {
     animation: none;
   }
 }
