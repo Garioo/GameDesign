@@ -13,7 +13,17 @@ export interface SessionInfo {
 }
 
 export const PALETTE = ["#5a83d6", "#3f9d6e", "#d4763a", "#b7553d", "#7b61c9", "#c2417a"];
+/** Display names for PALETTE entries, same order (swatch labels/tooltips). */
+export const PALETTE_NAMES = ["Blue", "Green", "Orange", "Rust", "Violet", "Magenta"];
 const NAMES = ["Ash", "Wren", "Juniper", "Soot", "Cinder", "Pike", "Bram", "Hazel", "Fen", "Marlow"];
+
+/** Suggest avatar initials from a display name ("Marius Qvarnström" → "MQ"). */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const second = words.length > 1 ? words[1][0] : (words[0][1] ?? "");
+  return (words[0][0] + second).toUpperCase();
+}
 
 function pick<T>(arr: T[], seed: string): T {
   let h = 0;

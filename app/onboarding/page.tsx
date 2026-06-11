@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ensureSession, setActiveWorkspace, PALETTE, type SessionInfo } from "@/lib/session";
+import {
+  ensureSession,
+  setActiveWorkspace,
+  initialsOf,
+  PALETTE,
+  PALETTE_NAMES,
+  type SessionInfo,
+} from "@/lib/session";
 import { updateProfile, completeOnboarding } from "@/lib/settingsRepo";
 import {
   listWorkspaces,
@@ -36,8 +43,6 @@ const Columns = ({ className }: IconProps) => (
 );
 
 const STEPS = ["Profile", "Workspace", "Invite", "Tour"] as const;
-
-const initialsOf = (name: string) => name.trim().slice(0, 2).toUpperCase();
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -129,7 +134,21 @@ export default function OnboardingPage() {
       if (!session) return;
       let id = chosenId;
       if (!id) {
-        id = await createWorkspace(session.userId, wsName.trim(), "", wsGenre.trim());
+        const trimmedName = wsName.trim();
+        const trimmedGenre = wsGenre.trim();
+        id = await createWorkspace(session.userId, trimmedName, "", trimmedGenre);
+        // Surface the new workspace as a selectable option so going Back and
+        // pressing Continue again reuses it instead of creating a duplicate.
+        setExisting((prev) => [
+          { id: id!, name: trimmedName, tagline: "", genre: trimmedGenre, role: "owner", memberCount: 1 },
+          ...prev,
+        ]);
+        setChosenId(id);
+      }
+      if (id !== workspaceId) {
+        // Invite links are per-workspace — don't carry one over after a switch.
+        setInviteLink(null);
+        setCopied(false);
       }
       setActiveWorkspace(id);
       setWorkspaceId(id);
@@ -157,17 +176,30 @@ export default function OnboardingPage() {
       router.replace("/home");
     });
 
+  // Pressing Enter in any field advances the current step (same as its
+  // primary button); the buttons themselves stay type="button".
+  const primaryAction =
+    step === 0 ? saveProfile : step === 1 ? saveWorkspace : step === 2 ? () => setStep(3) : finish;
+
   if (!ready) {
     return (
       <div className={styles.page}>
-        <div className={styles.loading}>{error ?? "One moment…"}</div>
+        <div className={error ? styles.loadError : styles.loading}>
+          {error ?? "Stoking the embers…"}
+        </div>
       </div>
     );
   }
 
   return (
     <div className={styles.page}>
-      <main className={styles.card}>
+      <form
+        className={styles.card}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy && stepValid) primaryAction();
+        }}
+      >
         <p className={styles.brand}>EMBERWICK</p>
 
         <ol className={styles.steps} aria-label="Onboarding progress">
@@ -188,7 +220,7 @@ export default function OnboardingPage() {
           <section className={styles.pane} key="profile">
             <h1 className={styles.title}>Who&apos;s designing?</h1>
             <p className={styles.sub}>
-              This is how teammates will see you on pages, comments and the board.
+              This is how teammates will see you across docs, canvases and the board.
             </p>
             <div className={styles.identityRow}>
               <span className={styles.bigAvatar} style={{ background: color }}>
@@ -224,12 +256,14 @@ export default function OnboardingPage() {
               </div>
             </div>
             <div className={styles.swatches} role="radiogroup" aria-label="Avatar color">
-              {PALETTE.map((c) => (
+              {PALETTE.map((c, i) => (
                 <button
                   key={c}
                   type="button"
                   role="radio"
                   aria-checked={c === color}
+                  aria-label={PALETTE_NAMES[i] ?? c}
+                  title={PALETTE_NAMES[i] ?? c}
                   className={`${styles.swatch} ${c === color ? styles.swatchOn : ""}`}
                   style={{ background: c }}
                   onClick={() => setColor(c)}
@@ -305,8 +339,8 @@ export default function OnboardingPage() {
           <section className={styles.pane} key="invite">
             <h1 className={styles.title}>Bring the team</h1>
             <p className={styles.sub}>
-              Anyone with this link can join your workspace. It stays valid for 14 days —
-              you can always make another from Home.
+              Anyone with this link can join your workspace. It&apos;s good for 14 days,
+              and you can mint a fresh one from Home whenever you need.
             </p>
             <button type="button" className={styles.primary} onClick={copyInvite} disabled={busy}>
               {copied ? "Link copied!" : inviteLink ? "Copy link again" : "Create invite link"}
@@ -381,7 +415,7 @@ export default function OnboardingPage() {
             </button>
           )}
         </footer>
-      </main>
+      </form>
     </div>
   );
 }

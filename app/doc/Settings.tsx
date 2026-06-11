@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { PALETTE, type SessionInfo } from "@/lib/session";
+import { initialsOf, PALETTE, PALETTE_NAMES, type SessionInfo } from "@/lib/session";
 import { getGithubToken, listRepos } from "@/lib/github";
 import type { WorkspaceInfo } from "@/lib/settingsRepo";
 import styles from "./Settings.module.css";
@@ -81,7 +81,7 @@ export default function Settings({
 
   const setNameAndSuggest = (v: string) => {
     setName(v);
-    if (!initialsTouched) setInitials(v.trim().slice(0, 2).toUpperCase());
+    if (!initialsTouched) setInitials(initialsOf(v));
   };
 
   const profileDirty =
@@ -93,6 +93,24 @@ export default function Settings({
       wsTagline.trim() !== workspace.tagline ||
       wsGenre.trim() !== workspace.genre ||
       wsRepo.trim() !== workspace.repo);
+
+  const dirty = profileDirty || wsDirty;
+  const valid = (!profileDirty || profileValid) && (!wsDirty || !!wsName.trim());
+
+  const saveAll = () => {
+    if (profileDirty && profileValid) {
+      onSaveProfile({ name: name.trim(), initials: initials.trim(), color });
+    }
+    if (wsDirty && wsName.trim()) {
+      onSaveWorkspace({
+        name: wsName.trim(),
+        tagline: wsTagline.trim(),
+        genre: wsGenre.trim(),
+        repo: wsRepo.trim(),
+      });
+    }
+    onClose();
+  };
 
   return (
     <div className={styles.backdrop} onMouseDown={onClose}>
@@ -110,192 +128,193 @@ export default function Settings({
             <h2 className={styles.title}>Settings</h2>
             <p className={styles.tagline}>Who you are around the fire — and the fire itself.</p>
           </div>
-          <button className={styles.close} title="Close" onClick={onClose}>
+          <button className={styles.close} title="Close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </header>
 
-        {/* ---------- identity ---------- */}
-        <section className={`${styles.section} ${styles.s1}`}>
-          <div className={styles.sectionHead}>
-            <h3 className={styles.sectionTitle}>Identity</h3>
-            <span className={styles.rule} />
-            {profileDirty && (
-              <button
-                className={styles.saveChip}
-                disabled={!profileValid}
-                onClick={() =>
-                  onSaveProfile({ name: name.trim(), initials: initials.trim(), color })
-                }
-              >
-                Save
-              </button>
-            )}
-          </div>
+        <div className={styles.body}>
+          {/* ---------- identity ---------- */}
+          <section className={`${styles.section} ${styles.s1}`}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Identity</h3>
+              <span className={styles.rule} />
+            </div>
 
-          <div className={styles.identity}>
-            <span className={styles.bigAvatar} style={{ background: color }}>
-              {initials || "?"}
-            </span>
-            <div className={styles.identityFields}>
-              <input
-                className={styles.nameInput}
-                value={name}
-                onChange={(e) => setNameAndSuggest(e.target.value)}
-                placeholder="Your name"
-                aria-label="Name"
-              />
-              <div className={styles.identityMeta}>
-                <label className={styles.miniKey} htmlFor="set-initials">
-                  Initials
+            <div className={styles.identity}>
+              <span className={styles.bigAvatar} style={{ background: color }}>
+                {initials || "?"}
+              </span>
+              <div className={styles.identityFields}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Name</span>
+                  <input
+                    className={styles.input}
+                    value={name}
+                    maxLength={40}
+                    onChange={(e) => setNameAndSuggest(e.target.value)}
+                    placeholder="Your name"
+                  />
                 </label>
-                <input
-                  id="set-initials"
-                  className={styles.initialsInput}
-                  value={initials}
-                  maxLength={2}
-                  onChange={(e) => {
-                    setInitialsTouched(true);
-                    setInitials(e.target.value.toUpperCase());
-                  }}
-                />
-                <span className={styles.metaDot}>·</span>
-                <span className={styles.swatches}>
-                  {PALETTE.map((c) => (
-                    <button
-                      key={c}
-                      className={
-                        c === color ? `${styles.swatch} ${styles.swatchActive}` : styles.swatch
-                      }
-                      style={{ background: c }}
-                      title={c}
-                      aria-label={`Avatar color ${c}`}
-                      onClick={() => setColor(c)}
+                <div className={styles.identityMeta}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Initials</span>
+                    <input
+                      className={`${styles.input} ${styles.inputInitials}`}
+                      value={initials}
+                      maxLength={2}
+                      onChange={(e) => {
+                        setInitialsTouched(true);
+                        setInitials(e.target.value.toUpperCase());
+                      }}
                     />
-                  ))}
-                </span>
+                  </label>
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel} id="settings-color-label">
+                      Color
+                    </span>
+                    <div
+                      className={styles.swatches}
+                      role="radiogroup"
+                      aria-labelledby="settings-color-label"
+                    >
+                      {PALETTE.map((c, i) => (
+                        <button
+                          key={c}
+                          type="button"
+                          role="radio"
+                          aria-checked={c === color}
+                          aria-label={PALETTE_NAMES[i] ?? c}
+                          title={PALETTE_NAMES[i] ?? c}
+                          className={
+                            c === color ? `${styles.swatch} ${styles.swatchActive}` : styles.swatch
+                          }
+                          style={{ background: c }}
+                          onClick={() => setColor(c)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* ---------- workspace ---------- */}
-        <section className={`${styles.section} ${styles.s2}`}>
-          <div className={styles.sectionHead}>
-            <h3 className={styles.sectionTitle}>Workspace</h3>
-            <span className={styles.rule} />
-            {wsDirty && (
-              <button
-                className={styles.saveChip}
-                disabled={!wsName.trim()}
-                onClick={() =>
-                  onSaveWorkspace({
-                    name: wsName.trim(),
-                    tagline: wsTagline.trim(),
-                    genre: wsGenre.trim(),
-                    repo: wsRepo.trim(),
-                  })
-                }
-              >
-                Save
-              </button>
+          {/* ---------- workspace ---------- */}
+          <section className={`${styles.section} ${styles.s2}`}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Workspace</h3>
+              <span className={styles.rule} />
+            </div>
+
+            {workspace ? (
+              <div className={styles.fieldGrid}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Name</span>
+                  <input
+                    className={styles.input}
+                    value={wsName}
+                    maxLength={60}
+                    onChange={(e) => setWsName(e.target.value)}
+                    placeholder="Workspace name"
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Genre</span>
+                  <input
+                    className={styles.input}
+                    value={wsGenre}
+                    maxLength={40}
+                    onChange={(e) => setWsGenre(e.target.value)}
+                    placeholder="e.g. Cozy survival"
+                  />
+                </label>
+                <label className={`${styles.field} ${styles.fieldWide}`}>
+                  <span className={styles.fieldLabel}>Tagline</span>
+                  <input
+                    className={styles.input}
+                    value={wsTagline}
+                    maxLength={120}
+                    onChange={(e) => setWsTagline(e.target.value)}
+                    placeholder="A one-line pitch…"
+                  />
+                </label>
+                <label className={`${styles.field} ${styles.fieldWide}`}>
+                  <span className={styles.fieldLabel}>Repository</span>
+                  <input
+                    className={styles.input}
+                    value={wsRepo}
+                    onChange={(e) => setWsRepo(e.target.value)}
+                    placeholder={
+                      repoOptions.length > 0
+                        ? "owner/repo — start typing to search"
+                        : "owner/repo (sign in with GitHub to browse)"
+                    }
+                    list="settings-repo-options"
+                    spellCheck={false}
+                  />
+                  <datalist id="settings-repo-options">
+                    {repoOptions.map((r) => (
+                      <option key={r} value={r} />
+                    ))}
+                  </datalist>
+                </label>
+              </div>
+            ) : (
+              <p className={styles.fine}>Workspace info unavailable.</p>
             )}
-          </div>
+          </section>
 
-          {workspace ? (
-            <div className={styles.rows}>
-              <div className={styles.row}>
-                <span className={styles.key}>Name</span>
-                <input
-                  className={styles.inline}
-                  value={wsName}
-                  onChange={(e) => setWsName(e.target.value)}
-                  placeholder="Workspace name"
-                  aria-label="Workspace name"
-                />
-              </div>
-              <div className={styles.row}>
-                <span className={styles.key}>Tagline</span>
-                <input
-                  className={styles.inline}
-                  value={wsTagline}
-                  onChange={(e) => setWsTagline(e.target.value)}
-                  placeholder="A one-line pitch…"
-                  aria-label="Workspace tagline"
-                />
-              </div>
-              <div className={styles.row}>
-                <span className={styles.key}>Genre</span>
-                <input
-                  className={styles.inline}
-                  value={wsGenre}
-                  onChange={(e) => setWsGenre(e.target.value)}
-                  placeholder="e.g. Cozy survival"
-                  aria-label="Workspace genre"
-                />
-              </div>
-              <div className={styles.row}>
-                <span className={styles.key}>Repository</span>
-                <input
-                  className={styles.inline}
-                  value={wsRepo}
-                  onChange={(e) => setWsRepo(e.target.value)}
-                  placeholder={
-                    repoOptions.length > 0
-                      ? "owner/repo — start typing to search"
-                      : "owner/repo (sign in with GitHub to browse)"
-                  }
-                  list="settings-repo-options"
-                  aria-label="GitHub repository"
-                  spellCheck={false}
-                />
-                <datalist id="settings-repo-options">
-                  {repoOptions.map((r) => (
-                    <option key={r} value={r} />
-                  ))}
-                </datalist>
-              </div>
+          {/* ---------- account ---------- */}
+          <section className={`${styles.section} ${styles.s3}`}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Account</h3>
+              <span className={styles.rule} />
             </div>
-          ) : (
-            <p className={styles.fine}>Workspace info unavailable.</p>
-          )}
-        </section>
 
-        {/* ---------- account ---------- */}
-        <section className={`${styles.section} ${styles.s3}`}>
-          <div className={styles.sectionHead}>
-            <h3 className={styles.sectionTitle}>Account</h3>
-            <span className={styles.rule} />
-          </div>
-
-          <div className={styles.account}>
-            <div className={styles.accountWho}>
-              <span className={styles.accountEmail}>{email ?? "—"}</span>
-              {provider && <span className={styles.providerChip}>via {provider}</span>}
+            <div className={styles.account}>
+              <div className={styles.accountWho}>
+                <span className={styles.accountEmail}>{email ?? "—"}</span>
+                {provider && <span className={styles.providerChip}>via {provider}</span>}
+              </div>
+              <button className={styles.signOut} onClick={onSignOut}>
+                Sign out
+              </button>
             </div>
-            <button className={styles.signOut} onClick={onSignOut}>
-              Sign out
+
+            <div className={styles.ash}>
+              {confirmLeave ? (
+                <span className={styles.ashConfirm}>
+                  Leave this workspace and lose access to its pages?
+                  <button className={styles.ashYes} onClick={onLeave}>
+                    Leave
+                  </button>
+                  <button className={styles.ashNo} onClick={() => setConfirmLeave(false)}>
+                    Stay
+                  </button>
+                </span>
+              ) : (
+                <button className={styles.ashLink} onClick={() => setConfirmLeave(true)}>
+                  Leave this workspace…
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <footer className={styles.footer}>
+          <span className={styles.footerHint} aria-live="polite">
+            {dirty ? (valid ? "Unsaved changes" : "Name and initials can't be empty") : ""}
+          </span>
+          <div className={styles.footerActions}>
+            <button className={styles.cancel} onClick={onClose}>
+              Cancel
+            </button>
+            <button className={styles.save} disabled={!dirty || !valid} onClick={saveAll}>
+              Save changes
             </button>
           </div>
-
-          <div className={styles.ash}>
-            {confirmLeave ? (
-              <span className={styles.ashConfirm}>
-                Leave this workspace and lose access to its pages?
-                <button className={styles.ashYes} onClick={onLeave}>
-                  Leave
-                </button>
-                <button className={styles.ashNo} onClick={() => setConfirmLeave(false)}>
-                  Stay
-                </button>
-              </span>
-            ) : (
-              <button className={styles.ashLink} onClick={() => setConfirmLeave(true)}>
-                Leave this workspace…
-              </button>
-            )}
-          </div>
-        </section>
+        </footer>
       </div>
     </div>
   );

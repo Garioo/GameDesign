@@ -23,6 +23,11 @@
   text-align: center;
   max-width: 420px;
 }
+.loadError {
+  color: var(--danger);
+  text-align: center;
+  max-width: 420px;
+}
 
 .card {
   width: 100%;
@@ -48,6 +53,7 @@
   display: flex;
   gap: var(--sp-2);
   list-style: none;
+  padding: 0;
   margin-bottom: 26px;
 }
 .stepDot {
@@ -119,6 +125,7 @@
 }
 .label {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -138,6 +145,8 @@
   font: inherit;
   font-size: var(--text-base);
   color: var(--ink);
+  width: 100%;
+  min-width: 0;
   padding: 9px 12px;
   border-radius: var(--r-lg);
   border: 1px solid var(--line);
@@ -173,6 +182,10 @@
 }
 .swatch:hover {
   transform: scale(1.12);
+}
+.swatch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4.5px var(--ink-soft);
 }
 .swatchOn {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4.5px var(--ember);
@@ -305,6 +318,12 @@
   cursor: default;
   box-shadow: none;
 }
+.primary:focus-visible,
+.ghost:focus-visible,
+.wsOption:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ember-tint), 0 0 0 1px var(--ember);
+}
 .ghost {
   font: inherit;
   font-size: var(--text-sm);
@@ -320,6 +339,29 @@
 .ghost:hover:not(:disabled) {
   color: var(--ink);
   background: var(--line-soft);
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 22px 18px 18px;
+  }
+  .steps {
+    gap: var(--sp-1);
+  }
+  .stepDot {
+    letter-spacing: 0;
+  }
+  .identityRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-4);
+  }
+  .fields {
+    width: 100%;
+  }
+  .pane {
+    min-height: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

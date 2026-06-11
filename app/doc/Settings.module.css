@@ -1,7 +1,7 @@
 /* Settings dialog — opened from the topbar gear / ⌘K palette.
-   Speaks the doc page's language: single-family sans headings, quiet
-   inline-editable fields (ring on hover, ember ring on focus), hairline
-   meta rows, and an ember glow rising off the header. */
+   Proper form chrome: labeled fields on parchment wells (same vocabulary
+   as onboarding), hairline section rules, an ember glow off the header,
+   and a pinned footer with one Save for everything. */
 
 .backdrop {
   position: fixed;
@@ -12,31 +12,40 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 10vh;
+  padding: 10vh 16px 16px;
 }
 
 .dialog {
-  width: min(540px, 92vw);
+  width: min(560px, 92vw);
   max-height: 82vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(440px 220px at 82% -60px, var(--ember-tint) 0%, transparent 68%),
     var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-2xl);
   box-shadow: var(--shadow-modal);
-  padding: 26px 30px 22px;
   animation: riseIn 0.22s var(--ease-rise) both;
+  overflow: hidden;
+}
+
+/* scrollable middle; header and footer stay pinned */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 30px 6px;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
 }
 
 /* ---------------- header ---------------- */
 .head {
+  flex: none;
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
-  padding-bottom: 18px;
+  padding: 24px 30px 16px;
 }
 .flame {
   flex: none;
@@ -88,7 +97,7 @@
 
 /* ---------------- sections ---------------- */
 .section {
-  padding: 14px 0 10px;
+  padding: 12px 0 16px;
   animation: riseIn 0.4s var(--ease-rise) both;
 }
 .s1 { animation-delay: 0.05s; }
@@ -99,7 +108,7 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 26px;
+  margin-bottom: 14px;
 }
 /* small-caps kicker, same vocabulary as the doc page's crumb */
 .sectionTitle {
@@ -114,41 +123,70 @@
   height: 1px;
   background: var(--line);
 }
-.saveChip {
-  font: inherit;
-  font-size: 12px;
+
+/* ---------------- fields (shared) ---------------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.fieldLabel {
+  font-size: 11px;
   font-weight: 600;
-  color: #fff;
-  background: var(--grad-ember);
-  border: none;
-  border-radius: 999px;
-  padding: 4px 14px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(191, 99, 43, 0.3);
-  animation: fadeIn 0.15s ease both;
-  transition: filter var(--t-fast), transform var(--t-fast);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
-.saveChip:hover:not(:disabled) {
-  filter: brightness(1.05);
-  transform: translateY(-1px);
+.input {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  width: 100%;
+  min-width: 0;
+  padding: 8px 11px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
-.saveChip:disabled {
-  opacity: 0.45;
-  cursor: default;
-  box-shadow: none;
+.input::placeholder {
+  color: var(--ink-faint);
+}
+.input:hover {
+  border-color: #d8cbb8;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--ember-tint2);
+  box-shadow: 0 0 0 3px var(--ember-tint);
+}
+.inputInitials {
+  width: 64px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.fieldWide {
+  grid-column: 1 / -1;
 }
 
 /* ---------------- identity ---------------- */
 .identity {
   display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: 14px 0 2px;
+  align-items: flex-start;
+  gap: var(--sp-5);
 }
 .bigAvatar {
   flex: none;
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
+  margin-top: 16px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -164,120 +202,47 @@
 .identityFields {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.nameInput {
-  display: block;
-  width: 100%;
-  font: inherit;
-  font-weight: 600;
-  font-size: 18px;
-  letter-spacing: -0.015em;
-  color: var(--ink);
-  background: none;
-  border: none;
-  outline: none;
-  padding: 2px 6px;
-  margin-left: -6px;
-  border-radius: var(--r-sm);
-  transition: box-shadow var(--t-fast);
-}
-.nameInput:hover { box-shadow: 0 0 0 2px var(--line-soft); }
-.nameInput:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
-.nameInput::placeholder { color: var(--ink-faint); }
-
 .identityMeta {
   display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-top: 6px;
-}
-.miniKey {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.initialsInput {
-  width: 36px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  color: var(--ink);
-  background: none;
-  border: none;
-  outline: none;
-  padding: 3px 0;
-  border-radius: var(--r-sm);
-  transition: box-shadow var(--t-fast);
-}
-.initialsInput:hover { box-shadow: 0 0 0 2px var(--line-soft); }
-.initialsInput:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
-
-.metaDot {
-  color: var(--ink-faint);
-  user-select: none;
+  align-items: flex-end;
+  gap: var(--sp-4);
 }
 
 .swatches {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  /* line the dots up with the initials input's text row */
+  min-height: 36px;
 }
 .swatch {
-  width: 19px;
-  height: 19px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
   padding: 0;
-  transition: transform var(--t-fast);
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
-.swatch:hover { transform: scale(1.18); }
+.swatch:hover {
+  transform: scale(1.15);
+}
+.swatch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink-soft);
+}
 .swatchActive {
   box-shadow:
     0 0 0 2px var(--surface),
     0 0 0 3.5px var(--ink);
 }
 
-/* ---------------- workspace rows (meta-card pattern) ---------------- */
-.rows {
-  margin-top: 2px;
-}
-.row {
-  display: flex;
-  align-items: center;
-  min-height: 42px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.row:last-child { border-bottom: none; }
-.key {
-  width: 96px;
-  flex-shrink: 0;
-  font-size: 13.5px;
-  color: var(--ink-soft);
-}
-.inline {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 14.5px;
-  color: var(--ink);
-  background: none;
-  border: none;
-  outline: none;
-  padding: 4px 6px;
-  margin-left: -6px;
-  border-radius: var(--r-sm);
-  transition: box-shadow var(--t-fast);
-}
-.inline:hover { box-shadow: 0 0 0 2px var(--line-soft); }
-.inline:focus { box-shadow: 0 0 0 2px var(--ember-tint2); }
-.inline::placeholder { color: var(--ink-faint); }
-
 .fine {
-  padding: 10px 0;
+  padding: 4px 0;
   font-size: 12.5px;
   color: var(--ink-faint);
 }
@@ -287,7 +252,7 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 42px;
+  min-height: 38px;
 }
 .accountWho {
   flex: 1;
@@ -380,3 +345,101 @@
   cursor: pointer;
 }
 .ashNo:hover { background: var(--line-soft); }
+
+/* ---------------- footer ---------------- */
+.footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 14px 30px 16px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+.footerHint {
+  font-size: 12px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.footerActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.cancel {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: var(--r-md);
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.cancel:hover {
+  color: var(--ink);
+  background: var(--line-soft);
+}
+.save {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--grad-ember);
+  border: none;
+  border-radius: var(--r-md);
+  padding: 7px 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(191, 99, 43, 0.3);
+  transition: filter var(--t-fast), transform var(--t-fast), opacity var(--t-fast);
+}
+.save:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.save:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+.cancel:focus-visible,
+.save:focus-visible,
+.signOut:focus-visible,
+.close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ember-tint), 0 0 0 1px var(--ember);
+}
+
+@media (max-width: 480px) {
+  .head,
+  .footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .body {
+    padding: 0 18px 6px;
+  }
+  .identity {
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .bigAvatar {
+    margin-top: 0;
+  }
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .section {
+    animation: none;
+  }
+}

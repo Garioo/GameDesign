@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -14,6 +14,12 @@ const hanken = Hanken_Grotesk({
 export const metadata: Metadata = {
   title: "Game Design System",
   description: "A collaborative game design system.",
+};
+
+// Tint browser chrome (Safari window band, mobile status bar) to the app's
+// parchment instead of letting the browser guess a color.
+export const viewport: Viewport = {
+  themeColor: "#f6f1e9",
 };
 
 export default function RootLayout({
