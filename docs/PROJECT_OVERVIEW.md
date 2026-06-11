@@ -108,8 +108,8 @@ trade-off between "feels instant" and "doesn't hammer the database."
 1. **Install:** `npm install`
 2. **Supabase project:** create one, then apply the schema in `supabase/schema.sql` to its
    database (SQL editor or `supabase db push`).
-3. **Auth providers:** enable Google and/or GitHub OAuth in Supabase Auth, with redirect URLs for
-   `http://localhost:3000/auth/callback` and `https://game-design-two.vercel.app/auth/callback`.
+3. **Auth providers:** enable Google and/or GitHub OAuth in Supabase Auth, with the production
+   redirect URL set to `https://game-design-two.vercel.app/auth/callback`.
 4. **Environment:** create `.env.local` in the repo root:
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co

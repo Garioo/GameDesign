@@ -22,8 +22,8 @@ npm run dev   # http://localhost:3000
 ```
 
 You also need a Supabase project with `supabase/schema.sql` applied and OAuth providers
-(Google / GitHub) enabled. Add redirect URLs for `http://localhost:3000/auth/callback`
-and `https://game-design-two.vercel.app/auth/callback`. See the full setup in
+(Google / GitHub) enabled. Add `https://game-design-two.vercel.app/auth/callback`
+as the production redirect URL. See the full setup in
 [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md#running-locally).
 
 ## Scripts

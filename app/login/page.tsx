@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { appUrl } from "@/lib/siteUrl";
 import "./auth.css";
 
 type Provider = "google" | "github";
+const AUTH_CALLBACK_URL = "https://game-design-two.vercel.app/auth/callback";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: appUrl("/auth/callback"),
+        redirectTo: AUTH_CALLBACK_URL,
         // repo scope lets script blocks read the user's private repositories
         ...(provider === "github" ? { scopes: "repo" } : {}),
       },
