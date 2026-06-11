@@ -26,7 +26,7 @@ type RecordsDiff = {
   removed: Record<string, TLRecord>;
 };
 
-/** Snapshot of the document scope, as produced by getSnapshot(store).document. */
+/** Snapshots of the document scope, as produced by getSnapshot(store).document. */
 type DocumentSnapshot = { store: Record<string, TLRecord>; schema: unknown };
 
 export type SaveState = "saved" | "saving" | "error";
