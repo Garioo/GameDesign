@@ -103,6 +103,7 @@
 .s1 { animation-delay: 0.05s; }
 .s2 { animation-delay: 0.12s; }
 .s3 { animation-delay: 0.19s; }
+.s4 { animation-delay: 0.26s; }
 
 .sectionHead {
   display: flex;
@@ -245,6 +246,96 @@
   padding: 4px 0;
   font-size: 12.5px;
   color: var(--ink-faint);
+}
+
+/* ---------------- members ---------------- */
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.memberRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 34px;
+  padding: 2px 0;
+}
+.memberAvatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+.memberName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memberYou {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+.roleChip {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--ink-soft);
+  background: var(--line-soft);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.roleSelect {
+  flex: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 3px 6px;
+  cursor: pointer;
+}
+.memberRemove {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.memberRemove:hover {
+  color: var(--danger);
+  background: var(--line-soft);
+}
+.inviteRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.memberError {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--danger);
 }
 
 /* ---------------- account ---------------- */

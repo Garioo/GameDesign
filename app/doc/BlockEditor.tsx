@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BLOCK_TONES, type Block, type BlockTone, type BlockType } from "./data";
+import { BLOCK_TONES, type Block, type BlockTone, type BlockType, type CurveData } from "./data";
+import CurveBlock, { DEFAULT_CURVE } from "./CurveBlock";
 import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
 import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
@@ -90,6 +91,12 @@ const IPage = () => (
     <path d="M14 3v5h5M9 13h6M9 17h4" />
   </svg>
 );
+const ICurve = () => (
+  <svg viewBox="0 0 24 24" {...sv}>
+    <path d="M4 4v15a1 1 0 0 0 1 1h15" />
+    <path d="M7 17c6 0 9-2.5 11-10" />
+  </svg>
+);
 const IGrid = () => (
   <svg viewBox="0 0 24 24" {...sv}>
     <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -112,6 +119,7 @@ const MENU: MenuItem[] = [
   { type: "image", label: "Image", hint: "Upload or embed a picture", Icon: IImage },
   { type: "script", label: "Script", hint: "Attach a file from the GitHub repo", Icon: ICode },
   { type: "table", label: "Table", hint: "Add a simple table", Icon: ITable },
+  { type: "curve", label: "Stat curve", hint: "Plot a formula or hand-drawn curve", Icon: ICurve },
   { type: "divider", label: "Divider", hint: "Visually separate blocks", Icon: IDivider },
 ];
 
@@ -128,11 +136,12 @@ const PLACEHOLDER: Record<BlockType, string> = {
   table: "",
   image: "",
   script: "",
+  curve: "",
 };
 
 // Blocks with no inline-editable text (rendered as standalone "chrome").
 const isChromeBlock = (t: BlockType) =>
-  t === "divider" || t === "table" || t === "image" || t === "script";
+  t === "divider" || t === "table" || t === "image" || t === "script" || t === "curve";
 
 // UUID so new blocks upsert directly into the `blocks` table (uuid PK).
 const newId = () =>
@@ -523,7 +532,7 @@ export default function BlockEditor({
       setFocusReq({ id, pos: "start" });
       return true;
     }
-    if (prev.type === "table" || prev.type === "image" || prev.type === "script") return false; // don't merge into these
+    if (prev.type === "table" || prev.type === "image" || prev.type === "script" || prev.type === "curve") return false; // don't merge into these
 
     const prevEl = refs.current.get(prev.id);
     const caretAt = prevEl ? prevEl.innerText.replace(/\n$/, "").length : prev.text.length;
@@ -558,7 +567,14 @@ export default function BlockEditor({
             ? { id: block.id, type: "image", text: "", src: "" }
             : type === "script"
               ? { id: block.id, type: "script", text: "" }
-              : { id: block.id, type: "divider", text: "" };
+              : type === "curve"
+                ? {
+                    id: block.id,
+                    type: "curve",
+                    text: "",
+                    curve: JSON.parse(JSON.stringify(DEFAULT_CURVE)) as CurveData,
+                  }
+                : { id: block.id, type: "divider", text: "" };
       const nb: Block = { id: newId(), type: "text", text: "" };
       next.splice(idx + 1, 0, nb);
       onChange(next);
@@ -615,6 +631,7 @@ export default function BlockEditor({
       ...orig,
       id: newId(),
       rows: orig.rows ? orig.rows.map((r) => [...r]) : undefined,
+      curve: orig.curve ? (JSON.parse(JSON.stringify(orig.curve)) as CurveData) : undefined,
     };
     const next = [...cur];
     next.splice(idx + 1, 0, copy);
@@ -866,6 +883,7 @@ export default function BlockEditor({
             onChange(readBlocks());
           }}
           onTableChange={(rows) => updateBlock(b.id, { rows })}
+          onCurveChange={(curve) => updateBlock(b.id, { curve })}
           onSetImage={(src) => updateBlock(b.id, { src })}
           onSetCaption={(text) => updateBlock(b.id, { text })}
           onSetTone={(tone) => updateBlock(b.id, { tone })}
@@ -916,6 +934,7 @@ function BlockRow({
   onFocus,
   onBlur,
   onTableChange,
+  onCurveChange,
   onSetImage,
   onSetCaption,
   onSetTone,
@@ -950,6 +969,7 @@ function BlockRow({
   onFocus: () => void;
   onBlur: () => void;
   onTableChange: (rows: string[][]) => void;
+  onCurveChange: (curve: CurveData) => void;
   onSetImage: (src: string) => void;
   onSetCaption: (text: string) => void;
   onSetTone: (tone: BlockTone) => void;
@@ -1039,6 +1059,12 @@ function BlockRow({
     main = (
       <div className="blk-main">
         <ScriptBlock repo={repo} path={block.path} code={block.code} onSet={onSetScript} />
+      </div>
+    );
+  } else if (block.type === "curve") {
+    main = (
+      <div className="blk-main">
+        <CurveBlock data={block.curve} onChange={onCurveChange} />
       </div>
     );
   } else if (block.type === "bullet") {

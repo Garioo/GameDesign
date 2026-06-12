@@ -269,7 +269,7 @@ function DocPageInner() {
           router.replace("/login");
           return;
         }
-        if (!s.onboarded) {
+        if (!s.onboarded || !s.workspaceId) {
           router.replace("/onboarding");
           return;
         }
@@ -1225,7 +1225,7 @@ function DocPageInner() {
             onDelete={(id) => deleteComment(id).catch(console.error)}
             onEdit={(id, body) => editComment(id, body).catch(console.error)}
             onResolve={(id, resolved) => {
-              if (session) setCommentResolved(id, resolved, session.userId).catch(console.error);
+              if (session) setCommentResolved(id, resolved).catch(console.error);
             }}
           />
 

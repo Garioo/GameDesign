@@ -1,10 +1,12 @@
 import { supabase } from "./supabase";
-import { captureGithubToken } from "./github";
+import { captureGithubToken, clearGithubToken } from "./github";
 
 export interface SessionInfo {
   userId: string;
   /** Empty string until the user has onboarded into (or been invited to) a workspace. */
   workspaceId: string;
+  /** The user's role in the active workspace ("viewer" until one resolves). */
+  role: "owner" | "editor" | "viewer";
   name: string;
   initials: string;
   color: string;
@@ -44,6 +46,21 @@ export function setActiveWorkspace(workspaceId: string): void {
 }
 
 /**
+ * Sign out and scrub per-user state from localStorage — most importantly the
+ * GitHub provider token (repo scope), which must not outlive the session on
+ * a shared machine. Every sign-out path should go through here.
+ */
+export async function signOutAndClear(): Promise<void> {
+  clearGithubToken();
+  try {
+    localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+  } catch {
+    /* storage unavailable — nothing stored */
+  }
+  await supabase.auth.signOut();
+}
+
+/**
  * The remembered workspace id, if any — a hint for rendering cached data
  * before ensureSession() resolves. Membership is NOT verified here.
  */
@@ -56,28 +73,31 @@ export function storedActiveWorkspace(): string | null {
 }
 
 /**
- * Resolve which workspace this session should open: the remembered one if the
- * user is still a member, otherwise their first membership. Users who haven't
- * onboarded yet get "" — the onboarding flow creates their first workspace.
- * (The shared bootstrap workspace remains only as a legacy fallback for
- * onboarded users with no memberships left.)
+ * Resolve which workspace this session should open (and the caller's role in
+ * it): the remembered one if the user is still a member, otherwise their
+ * first membership. Users with no memberships get "" — the onboarding flow
+ * creates their first workspace. (The legacy ensure_workspace() auto-join of
+ * the shared bootstrap workspace is gone: strangers signing in no longer
+ * gain edit access to anything.)
  */
-async function resolveWorkspace(userId: string, onboarded: boolean): Promise<string> {
+async function resolveWorkspace(
+  userId: string,
+): Promise<{ workspaceId: string; role: SessionInfo["role"] }> {
   const { data, error } = await supabase
     .from("project_members")
-    .select("project_id")
+    .select("project_id, role")
     .eq("user_id", userId);
   if (error) throw new Error(`resolveWorkspace failed: ${error.message}`);
 
-  const memberships = (data ?? []).map((r) => r.project_id as string);
+  const memberships = (data ?? []).map((r) => ({
+    workspaceId: r.project_id as string,
+    role: (r.role as SessionInfo["role"]) ?? "viewer",
+  }));
   const stored = storedActiveWorkspace();
-  if (stored && memberships.includes(stored)) return stored;
+  const remembered = stored && memberships.find((m) => m.workspaceId === stored);
+  if (remembered) return remembered;
   if (memberships.length > 0) return memberships[0];
-  if (!onboarded) return "";
-
-  const { data: workspaceId, error: rpcError } = await supabase.rpc("ensure_workspace");
-  if (rpcError) throw new Error(`ensure_workspace failed: ${rpcError.message}`);
-  return workspaceId as string;
+  return { workspaceId: "", role: "viewer" };
 }
 
 /**
@@ -113,12 +133,13 @@ export async function ensureSession(): Promise<SessionInfo | null> {
   }
 
   const onboarded = !!profile?.onboarded_at;
-  const workspaceId = await resolveWorkspace(userId, onboarded);
+  const { workspaceId, role } = await resolveWorkspace(userId);
   if (workspaceId) setActiveWorkspace(workspaceId);
 
   return {
     userId,
     workspaceId,
+    role,
     name: profile?.name ?? name,
     initials: profile?.initials ?? initials,
     color: profile?.color ?? color,

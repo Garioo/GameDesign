@@ -519,3 +519,222 @@
 .tok-type { color: #3f80c4; }
 .tok-fn   { color: #9c7a1d; }
 .tok-pun  { color: var(--ink-soft); }
+
+/* ============ stat curve block ============ */
+.curve {
+  width: 100%;
+  margin: var(--sp-2) 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+}
+.curve-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.curve-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.curve-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.curve-chip.is-active {
+  color: var(--ink);
+  border-color: var(--series, var(--ember));
+  background: var(--surface);
+}
+.curve-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--series, var(--ember));
+  display: inline-block;
+  flex: none;
+}
+.curve-add {
+  width: 22px;
+  height: 22px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-faint);
+  border: 1px dashed var(--line);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.curve-add:hover { color: var(--ember-deep); border-color: var(--ember-tint2); background: var(--ember-tint); }
+
+.curve-mode {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.curve-mode-btn {
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.curve-mode-btn.is-on { background: var(--ember-tint); color: var(--ember-deep); }
+
+.curve-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.curve-input {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  min-width: 0;
+}
+.curve-input:focus { outline: none; border-color: var(--ember-tint2); box-shadow: 0 0 0 3px var(--ember-tint); }
+.curve-input::placeholder { color: var(--ink-faint); }
+.curve-label-input { width: 110px; }
+.curve-formula {
+  flex: 1;
+  min-width: 160px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xs);
+}
+.curve-formula.is-error { border-color: var(--danger); }
+.curve-preset { width: 100px; color: var(--ink-soft); }
+.curve-hint { font-size: var(--text-xs); color: var(--ink-faint); }
+.curve-remove {
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.curve-remove:hover { color: var(--danger); }
+.curve-error {
+  margin-top: 6px;
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+.curve-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 10px;
+  touch-action: none;
+}
+.curve-plot.is-editable { cursor: crosshair; }
+.curve-grid { stroke: var(--line-soft); stroke-width: 1; }
+.curve-axis { stroke: var(--line); stroke-width: 1.2; }
+.curve-tick {
+  font-size: 9.5px;
+  fill: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.curve-axis-label { font-size: 10px; font-weight: 600; fill: var(--ink-faint); }
+.curve-line {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+.curve-line.is-active { stroke-width: 2.2; opacity: 1; }
+.curve-handle {
+  stroke: var(--surface);
+  stroke-width: 2;
+  cursor: grab;
+}
+.curve-handle:active { cursor: grabbing; }
+
+.curve-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.curve-foot-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+.curve-num { width: 64px; font-size: var(--text-xs); padding: 4px 7px; }
+.curve-axis-input { width: 76px; font-size: var(--text-xs); padding: 4px 7px; }
+
+.curve-table-wrap { margin-top: 10px; max-height: 240px; overflow-y: auto; position: relative; }
+.curve-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.curve-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+.curve-table th .curve-chip-dot { margin-right: 5px; }
+.curve-table td {
+  padding: 3px 10px 3px 0;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line-soft);
+}
+.curve-table tr:last-child td { border-bottom: none; }
+.curve-copy {
+  margin-top: 8px;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.curve-copy:hover { color: var(--ember-deep); border-color: var(--ember-tint2); background: var(--ember-tint); }

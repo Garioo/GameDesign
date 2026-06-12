@@ -49,6 +49,7 @@ interface BlockRow {
     checked?: boolean;
     path?: string;
     code?: string;
+    curve?: Block["curve"];
   };
   position: number;
 }
@@ -110,6 +111,7 @@ const blockContent = (b: Block): BlockRow["content"] => {
   if (b.checked !== undefined) c.checked = b.checked;
   if (b.path) c.path = b.path;
   if (b.code !== undefined) c.code = b.code;
+  if (b.curve) c.curve = b.curve;
   return c;
 };
 
@@ -131,6 +133,7 @@ const rowToBlock = (r: BlockRow): Block => ({
   ...(r.content?.checked !== undefined ? { checked: r.content.checked } : {}),
   ...(r.content?.path ? { path: r.content.path } : {}),
   ...(r.content?.code !== undefined ? { code: r.content.code } : {}),
+  ...(r.content?.curve ? { curve: r.content.curve } : {}),
 });
 
 /** Load the whole workspace into the in-memory DesignDoc[] the UI expects. */
