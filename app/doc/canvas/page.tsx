@@ -192,7 +192,7 @@ export default function CanvasPage() {
         const s = await ensureSession();
         if (cancelled) return;
         if (!s) { router.replace("/login"); return; }
-        if (!s.onboarded) { router.replace("/onboarding"); return; }
+        if (!s.onboarded || !s.workspaceId) { router.replace("/onboarding"); return; }
         setSession(s);
         wsRef.current = s.workspaceId;
         const list = await listCanvases(s.workspaceId);

@@ -323,7 +323,9 @@ export default function HomeDashboard() {
         router.replace("/login");
         return;
       }
-      if (!s.onboarded) {
+      // No workspace left (never onboarded, or left/removed from the last
+      // one) — onboarding is where a new workspace gets created.
+      if (!s.onboarded || !s.workspaceId) {
         router.replace("/onboarding");
         return;
       }
@@ -831,14 +833,17 @@ export default function HomeDashboard() {
                             {w.genre ? ` · ${w.genre}` : ""}
                           </span>
                         </button>
-                        <button
-                          type="button"
-                          className={styles.wsInvite}
-                          onClick={() => handleInvite(w.id)}
-                          title="Copy an invite link (valid 14 days)"
-                        >
-                          {copiedId === w.id ? "Copied!" : "Invite"}
-                        </button>
+                        {/* only the owner grants access (invites_insert RLS) */}
+                        {w.role === "owner" && (
+                          <button
+                            type="button"
+                            className={styles.wsInvite}
+                            onClick={() => handleInvite(w.id)}
+                            title="Copy an invite link (valid 14 days)"
+                          >
+                            {copiedId === w.id ? "Copied!" : "Invite"}
+                          </button>
+                        )}
                       </div>
                     );
                   })}

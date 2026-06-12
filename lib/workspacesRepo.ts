@@ -3,11 +3,16 @@ import { appUrl } from "./siteUrl";
 import { cleanText, LIMITS, ValidationError } from "./validate";
 
 /* ---------------------------------------------------------------------------
- * Workspaces (projects) the user belongs to, plus invite links.
- * RLS: projects_insert lets a user create a project they own (the
- * on_project_created trigger adds their membership), invites_insert lets any
- * member mint a link, and the redeem_invite() RPC joins the caller.
+ * Workspaces (projects) the user belongs to, membership management, and
+ * invite links. The owner grants access: RLS only lets the project owner
+ * mint invites, change member roles (editor/viewer), and remove members.
+ * Non-owners can remove themselves (leave). Ownership transfer is an UPDATE
+ * of projects.owner — DB triggers validate it and sync membership roles.
  * ------------------------------------------------------------------------- */
+
+export type MemberRole = "owner" | "editor" | "viewer";
+/** Roles an invite or a role change can grant (never "owner"). */
+export type GrantableRole = Exclude<MemberRole, "owner">;
 
 export interface WorkspaceSummary {
   id: string;
@@ -84,15 +89,95 @@ export async function createWorkspace(
   return data.id as string;
 }
 
-/** Mint an invite link for a workspace. Valid 14 days (DB default). */
-export async function createInviteLink(projectId: string, userId: string): Promise<string> {
+/** Mint an invite link for a workspace (owner only). Valid 14 days (DB default). */
+export async function createInviteLink(
+  projectId: string,
+  userId: string,
+  role: GrantableRole = "editor",
+): Promise<string> {
   const { data, error } = await supabase
     .from("workspace_invites")
-    .insert({ project_id: projectId, created_by: userId })
+    .insert({ project_id: projectId, created_by: userId, role })
     .select("token")
     .single();
   if (error) throw new Error(`createInviteLink failed: ${error.message}`);
   return appUrl(`/join?token=${data.token}`);
+}
+
+export interface WorkspaceMember {
+  id: string; // profiles.id
+  name: string;
+  initials: string;
+  color: string;
+  role: MemberRole;
+}
+
+/** Workspace members with their roles, owner first then by name. */
+export async function listWorkspaceMembers(projectId: string): Promise<WorkspaceMember[]> {
+  const { data, error } = await supabase
+    .from("project_members")
+    .select("role, profile:user_id (id, name, initials, color)")
+    .eq("project_id", projectId);
+  if (error) throw new Error(`listWorkspaceMembers failed: ${error.message}`);
+
+  interface ProfileRow {
+    id: string;
+    name: string | null;
+    initials: string | null;
+    color: string | null;
+  }
+  const out: WorkspaceMember[] = [];
+  for (const row of (data ?? []) as { role: string; profile: ProfileRow | ProfileRow[] | null }[]) {
+    const p = Array.isArray(row.profile) ? row.profile[0] : row.profile;
+    if (!p?.id) continue;
+    out.push({
+      id: p.id,
+      name: p.name || "Guest",
+      initials: p.initials || (p.name || "G").slice(0, 2).toUpperCase(),
+      color: p.color || "#a59a8c",
+      role: (row.role as MemberRole) ?? "editor",
+    });
+  }
+  out.sort((a, b) =>
+    a.role === "owner" ? -1 : b.role === "owner" ? 1 : a.name.localeCompare(b.name),
+  );
+  return out;
+}
+
+/** Change another member's role between editor and viewer (owner only). */
+export async function setMemberRole(
+  projectId: string,
+  userId: string,
+  role: GrantableRole,
+): Promise<void> {
+  const { error } = await supabase
+    .from("project_members")
+    .update({ role })
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+  if (error) throw new Error(`setMemberRole failed: ${error.message}`);
+}
+
+/** Remove a member from the workspace (owner only; never the owner's row). */
+export async function removeMember(projectId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+  if (error) throw new Error(`removeMember failed: ${error.message}`);
+}
+
+/**
+ * Transfer workspace ownership to another member (owner only — enforced by
+ * the protect_project_owner trigger). The caller becomes an editor.
+ */
+export async function transferOwnership(projectId: string, newOwnerId: string): Promise<void> {
+  const { error } = await supabase
+    .from("projects")
+    .update({ owner: newOwnerId })
+    .eq("id", projectId);
+  if (error) throw new Error(`transferOwnership failed: ${error.message}`);
 }
 
 /** Redeem an invite token; returns the joined workspace id. */

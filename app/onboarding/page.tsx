@@ -78,7 +78,10 @@ export default function OnboardingPage() {
         router.replace("/login");
         return;
       }
-      if (s.onboarded) {
+      // Onboarded users with a workspace don't belong here — but someone who
+      // left (or was removed from) their last workspace comes back through
+      // onboarding to create a new one.
+      if (s.onboarded && s.workspaceId) {
         router.replace("/home");
         return;
       }

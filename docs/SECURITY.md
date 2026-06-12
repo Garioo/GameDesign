@@ -102,12 +102,13 @@ Ordered by priority:
    no memberships lands in the shared workspace with edit rights. If the
    legacy fallback is no longer needed, drop the function or gate it on an
    allowlist.
-3. **Any member can edit or delete anyone's comments** — `comments_update` /
-   `comments_delete` RLS policies are member-wide (needed for
-   resolve/cleanup); only the UI restricts body edits to the author. Honest
-   members never notice; a hostile member can rewrite history. Fix by
-   splitting resolve (member-wide, column-restricted via a SECURITY DEFINER
-   function) from body edits (author-only policy).
+3. ~~**Any member can edit or delete anyone's comments**~~ — **fixed
+   2026-06-12**: `comments_update` is now author-only, deletes are
+   author-or-project-owner, and resolve/reopen goes through the
+   `set_comment_resolved()` SECURITY DEFINER function. The same change
+   introduced the full owner/editor/viewer role model (owner-managed
+   membership and invites, trigger-protected `projects.owner`, read-only
+   viewers) — see `docs/RISK_REVIEW.md` H1–H3/H5.
 4. **`canvas-assets` storage bucket is public-read with unrestricted
    upload** for any authenticated Supabase user (not just workspace
    members), no MIME or size policy. Configure in dashboard → Storage →
