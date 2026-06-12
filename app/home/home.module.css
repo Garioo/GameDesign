@@ -1,5 +1,5 @@
 /* ============================================================
-   EMBERWICK · home/home.module.css  (imported by app/home/page.tsx)
+   GDD · home/home.module.css  (imported by app/home/page.tsx)
    ------------------------------------------------------------
    The signed-in home dashboard: dated masthead greeting with a
    continue pill + stat strip, numbered destination cards
@@ -882,18 +882,15 @@
 }
 .tipIcon {
   flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-lg);
+  width: 20px;
   display: grid;
   place-items: center;
-  color: var(--ember-deep);
-  background: var(--ember-tint);
-  border: 1px solid var(--ember-tint2);
+  margin-top: 1px; /* optical alignment with the tip name's cap height */
+  color: var(--ink-soft);
 }
 .tipIcon svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 .tipName {
   font-size: var(--text-sm);

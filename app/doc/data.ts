@@ -96,7 +96,7 @@ export const seedDocs: DesignDoc[] = [
       {
         id: "ember-1",
         type: "callout",
-        text: "EMBERWICK begins with one rule: the ember must not go out. Everything the player does — moving, crafting, exploring, resting — is measured against the slow, inevitable cooling of the flame they carry.",
+        text: "LONGDUSK begins with one rule: the ember must not go out. Everything the player does — moving, crafting, exploring, resting — is measured against the slow, inevitable cooling of the flame they carry.",
       },
       {
         id: "ember-2",

@@ -12,8 +12,8 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Game Design System",
-  description: "A collaborative game design system.",
+  title: "Game Design Doc",
+  description: "Your team's living game design document.",
 };
 
 // Tint browser chrome (Safari window band, mobile status bar) to the app's
