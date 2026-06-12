@@ -133,6 +133,20 @@ create table if not exists public.canvases (
   updated_at timestamptz not null default now()
 );
 
+-- canvas_folders — sidebar grouping for canvases (e.g. the auto-created
+-- "Scrum board" folder that collects canvases spun off from board cards)
+create table if not exists public.canvas_folders (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null,
+  position   int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- added later: canvases can live in a folder (idempotent for existing databases);
+-- deleting a folder keeps its canvases, they just become unfiled
+alter table public.canvases add column if not exists folder_id uuid references public.canvas_folders(id) on delete set null;
+
 -- comments — threaded discussion on a page (parent_id = reply target)
 create table if not exists public.comments (
   id         uuid primary key default gen_random_uuid(),
@@ -191,6 +205,8 @@ create index if not exists idx_pages_section       on public.pages(section_id, p
 create index if not exists idx_pages_parent        on public.pages(parent_id);
 create index if not exists idx_blocks_page         on public.blocks(page_id, position);
 create index if not exists idx_canvases_project     on public.canvases(project_id, position);
+create index if not exists idx_canvases_folder      on public.canvases(folder_id);
+create index if not exists idx_canvas_folders_project on public.canvas_folders(project_id, position);
 create index if not exists idx_comments_page       on public.comments(page_id);
 create index if not exists idx_milestones_project  on public.milestones(project_id, position);
 create index if not exists idx_activity_project    on public.activity(project_id, created_at desc);
@@ -368,6 +384,7 @@ alter table public.sections        enable row level security;
 alter table public.pages           enable row level security;
 alter table public.blocks          enable row level security;
 alter table public.canvases        enable row level security;
+alter table public.canvas_folders  enable row level security;
 alter table public.comments        enable row level security;
 alter table public.milestones      enable row level security;
 alter table public.activity        enable row level security;
@@ -443,6 +460,13 @@ create policy blocks_all on public.blocks
 -- canvases ----------------------------------------------------------------
 drop policy if exists canvases_all on public.canvases;
 create policy canvases_all on public.canvases
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+-- canvas_folders ------------------------------------------------------------
+drop policy if exists canvas_folders_all on public.canvas_folders;
+create policy canvas_folders_all on public.canvas_folders
   for all to authenticated
   using (public.can_access_project(project_id))
   with check (public.can_access_project(project_id));

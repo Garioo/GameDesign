@@ -58,6 +58,12 @@ alter table public.canvases add constraint canvases_limits check (
   pg_column_size(data) <= 4000000
 ) not valid;
 
+-- canvas_folders ---------------------------------------------------------------
+alter table public.canvas_folders drop constraint if exists canvas_folders_limits;
+alter table public.canvas_folders add constraint canvas_folders_limits check (
+  char_length(name) <= 120
+) not valid;
+
 -- comments -------------------------------------------------------------------
 alter table public.comments drop constraint if exists comments_limits;
 alter table public.comments add constraint comments_limits check (

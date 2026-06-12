@@ -6,7 +6,7 @@ import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { ensureSession } from "@/lib/session";
-import { createCanvas } from "@/lib/canvasRepo";
+import { createCanvas, ensureCanvasFolder } from "@/lib/canvasRepo";
 
 /* ── CSS injected into the component (mirrors globals.css tokens) ─────────── */
 const css = `
@@ -796,13 +796,15 @@ export default function BoardPage() {
     ));
   }
 
-  /** Spin a to-do off into its own canvas: create it named after the card,
-      then open it with the card's content spawning as a sticky note (?note=). */
+  /** Spin a to-do off into its own canvas: create it named after the card
+      inside the "Scrum board" folder (created on first use), then open it
+      with the card's content spawning as a sticky note (?note=). */
   async function handleMakeCanvas(card: CardData) {
     try {
       const s = await ensureSession();
       if (!s) { router.push("/login"); return; }
-      const canvas = await createCanvas(s.workspaceId, card.title);
+      const folder = await ensureCanvasFolder(s.workspaceId, "Scrum board");
+      const canvas = await createCanvas(s.workspaceId, card.title, folder.id);
       const lines = [card.title];
       if (card.sub) lines.push("", card.sub);
       const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map((t) => "#" + t).join("  ");

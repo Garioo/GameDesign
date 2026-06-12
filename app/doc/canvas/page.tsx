@@ -12,9 +12,15 @@ import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import {
   createCanvas,
+  createCanvasFolder,
   deleteCanvas,
+  deleteCanvasFolder,
   listCanvases,
+  listCanvasFolders,
+  moveCanvasToFolder,
   renameCanvas,
+  renameCanvasFolder,
+  type CanvasFolderInfo,
   type CanvasInfo,
 } from "@/lib/canvasRepo";
 import "../doc.css";
@@ -171,6 +177,7 @@ const SHAPES: { id: GeoShape; label: string; Icon: ComponentType<IconProps> }[] 
 export default function CanvasPage() {
   const router = useRouter();
   const [canvases, setCanvases] = useState<CanvasInfo[]>([]);
+  const [folders, setFolders] = useState<CanvasFolderInfo[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,9 +202,13 @@ export default function CanvasPage() {
         if (!s.onboarded) { router.replace("/onboarding"); return; }
         setSession(s);
         wsRef.current = s.workspaceId;
-        const list = await listCanvases(s.workspaceId);
+        const [list, folderList] = await Promise.all([
+          listCanvases(s.workspaceId),
+          listCanvasFolders(s.workspaceId),
+        ]);
         if (cancelled) return;
         setCanvases(list);
+        setFolders(folderList);
         // Deep link: honour ?c=<id> when it points at a real canvas.
         const wanted = new URLSearchParams(window.location.search).get("c");
         setActiveId(
@@ -230,7 +241,7 @@ export default function CanvasPage() {
             if (oldId) setCanvases((prev) => prev.filter((c) => c.id !== oldId));
             return;
           }
-          const row = payload.new as { id?: string; name?: string; position?: number; updated_at?: string };
+          const row = payload.new as { id?: string; name?: string; position?: number; updated_at?: string; folder_id?: string | null };
           if (!row?.id) return;
           setCanvases((prev) => {
             const info: CanvasInfo = {
@@ -238,9 +249,36 @@ export default function CanvasPage() {
               name: row.name ?? "Untitled canvas",
               position: row.position ?? prev.length,
               updatedAt: row.updated_at ?? new Date().toISOString(),
+              folderId: row.folder_id ?? null,
             };
             return prev.some((c) => c.id === row.id)
               ? prev.map((c) => (c.id === row.id ? { ...c, ...info } : c))
+              : [...prev, info];
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "canvas_folders", filter: `project_id=eq.${wsId}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: string })?.id;
+            if (oldId) {
+              setFolders((prev) => prev.filter((f) => f.id !== oldId));
+              setCanvases((prev) => prev.map((c) => (c.folderId === oldId ? { ...c, folderId: null } : c)));
+            }
+            return;
+          }
+          const row = payload.new as { id?: string; name?: string; position?: number };
+          if (!row?.id) return;
+          setFolders((prev) => {
+            const info: CanvasFolderInfo = {
+              id: row.id!,
+              name: row.name ?? "Untitled folder",
+              position: row.position ?? prev.length,
+            };
+            return prev.some((f) => f.id === row.id)
+              ? prev.map((f) => (f.id === row.id ? { ...f, ...info } : f))
               : [...prev, info];
           });
         },
@@ -269,12 +307,12 @@ export default function CanvasPage() {
 
   const active = canvases.find((c) => c.id === activeId) ?? canvases[0] ?? null;
 
-  const handleNew = async () => {
+  const handleNew = async (folderId: string | null = null) => {
     const wsId = wsRef.current;
     if (!wsId) return;
     try {
-      const c = await createCanvas(wsId);
-      setCanvases((prev) => [...prev, c]);
+      const c = await createCanvas(wsId, undefined, folderId);
+      setCanvases((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]));
       setActiveId(c.id);
     } catch (e) {
       console.error(e);
@@ -290,6 +328,33 @@ export default function CanvasPage() {
     setCanvases((prev) => prev.filter((c) => c.id !== id));
     setActiveId((cur) => (cur === id ? null : cur));
     deleteCanvas(id).catch(console.error);
+  };
+
+  const handleNewFolder = async (name: string) => {
+    const wsId = wsRef.current;
+    if (!wsId) return;
+    try {
+      const f = await createCanvasFolder(wsId, name);
+      setFolders((prev) => (prev.some((x) => x.id === f.id) ? prev : [...prev, f]));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRenameFolder = (id: string, name: string) => {
+    setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
+    renameCanvasFolder(id, name).catch(console.error);
+  };
+
+  const handleDeleteFolder = (id: string) => {
+    setFolders((prev) => prev.filter((f) => f.id !== id));
+    setCanvases((prev) => prev.map((c) => (c.folderId === id ? { ...c, folderId: null } : c)));
+    deleteCanvasFolder(id).catch(console.error);
+  };
+
+  const handleMoveToFolder = (canvasId: string, folderId: string | null) => {
+    setCanvases((prev) => prev.map((c) => (c.id === canvasId ? { ...c, folderId } : c)));
+    moveCanvasToFolder(canvasId, folderId).catch(console.error);
   };
 
   // Drop the editor reference when there is no board mounted.
@@ -421,11 +486,16 @@ export default function CanvasPage() {
         {/* canvas sidebar */}
         <CanvasSidebar
           canvases={canvases}
+          folders={folders}
           activeId={active?.id ?? null}
           onSelect={setActiveId}
           onNew={handleNew}
           onRename={handleRename}
           onDelete={handleDelete}
+          onNewFolder={handleNewFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolder={handleDeleteFolder}
+          onMoveToFolder={handleMoveToFolder}
         />
 
         {/* canvas area */}
@@ -454,7 +524,7 @@ export default function CanvasPage() {
             >
               <Grid className="dock-icon" style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
               <p style={{ fontSize: 15 }}>No canvas selected</p>
-              <button className="new-page" style={{ marginTop: 12 }} onClick={handleNew}>
+              <button className="new-page" style={{ marginTop: 12 }} onClick={() => handleNew()}>
                 <Plus className="new-page-icon" />
                 New canvas
               </button>
@@ -466,7 +536,7 @@ export default function CanvasPage() {
       {/* dock (global chrome) — tldraw tools by default; hovering the strip
           underneath swaps in the app nav until the mouse leaves the bar */}
       <Dock
-        onNew={handleNew}
+        onNew={() => handleNew()}
         tools={
           <div className="dock-tools">
             {TOOLS.map((t) => (
