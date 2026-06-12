@@ -501,6 +501,94 @@ create policy invites_delete on public.workspace_invites
   for delete to authenticated using (public.can_access_project(project_id));
 
 -- ============================================================================
+-- Boards (kanban) — boards › board_columns › board_cards.
+-- project_id is denormalised onto columns/cards so RLS and realtime filters
+-- stay one-hop (same approach as can_access_project everywhere else).
+-- ============================================================================
+create table if not exists public.boards (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null default 'Untitled board',
+  color      text not null default '#cf6a2c',
+  position   int  not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.board_columns (
+  id         uuid primary key default gen_random_uuid(),
+  board_id   uuid not null references public.boards(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null default 'Untitled column',
+  color      text not null default '#a59a8c',
+  position   int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.board_cards (
+  id         uuid primary key default gen_random_uuid(),
+  column_id  uuid not null references public.board_columns(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  title      text not null default '',
+  sub        text not null default '',
+  kind       text not null default '',
+  tags       text[] not null default '{}',
+  priority   text,
+  owner      uuid references public.profiles(id) on delete set null,
+  deadline   date,
+  position   int  not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_boards_project       on public.boards(project_id, position);
+create index if not exists idx_board_cols_board     on public.board_columns(board_id, position);
+create index if not exists idx_board_cols_project   on public.board_columns(project_id);
+create index if not exists idx_board_cards_column   on public.board_cards(column_id, position);
+create index if not exists idx_board_cards_project  on public.board_cards(project_id);
+
+drop trigger if exists set_boards_updated on public.boards;
+create trigger set_boards_updated before update on public.boards
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists set_board_cards_updated on public.board_cards;
+create trigger set_board_cards_updated before update on public.board_cards
+  for each row execute function public.set_updated_at();
+
+alter table public.boards        enable row level security;
+alter table public.board_columns enable row level security;
+alter table public.board_cards   enable row level security;
+
+drop policy if exists boards_all on public.boards;
+create policy boards_all on public.boards
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+drop policy if exists board_columns_all on public.board_columns;
+create policy board_columns_all on public.board_columns
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+drop policy if exists board_cards_all on public.board_cards;
+create policy board_cards_all on public.board_cards
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+-- realtime: board tables stream postgres_changes to subscribed clients
+do $$ begin
+  alter publication supabase_realtime add table public.boards;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.board_columns;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.board_cards;
+exception when duplicate_object then null; end $$;
+
+-- ============================================================================
 -- Storage: canvas-assets bucket (images dropped/inserted on canvases).
 -- Public-read so asset URLs render without signing; writes need auth.
 -- ============================================================================

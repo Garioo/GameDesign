@@ -1,12 +1,26 @@
 "use client";
 
-import { useState, useRef, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
-import { ensureSession } from "@/lib/session";
+import { supabase } from "@/lib/supabase";
+import { ensureSession, type SessionInfo } from "@/lib/session";
 import { createCanvas } from "@/lib/canvasRepo";
+import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
+import {
+  createBoard,
+  createCard,
+  createColumn,
+  loadBoards,
+  moveCard,
+  seedBoardsIfEmpty,
+  updateCard,
+  type Board as BoardData,
+  type BoardCard as CardData,
+  type BoardColumn as ColData,
+} from "@/lib/boardRepo";
 
 /* ── CSS injected into the component (mirrors globals.css tokens) ─────────── */
 const css = `
@@ -424,130 +438,19 @@ const Flag = ({ className, style }: IconProps) => (
 );
 
 /* ── data model ──────────────────────────────────────────────────────────── */
-interface Person {
-  id: string;
-  name: string;
-  initials: string;
-  color: string;
-}
-interface CardData {
-  id: string;
-  title: string;
-  sub: string;
-  kind: string;
-  tags: string[];
-  priority: string | null;
-  ownerId: string | null;
-  deadline?: string | null;
-  dragging?: boolean;
-}
-interface ColData {
-  id: string;
-  name: string;
-  color: string;
-  cards: CardData[];
-}
-interface BoardData {
-  id: string;
-  name: string;
-  color: string;
-  cols: ColData[];
-}
+/* Board / column / card shapes come from lib/boardRepo (aliased to the local
+   names BoardData / ColData / CardData). People are real workspace members. */
+type Person = ProfileInfo;
+
 interface DragInfo {
   overCol: string | null;
   overCard: string | null;
   position: "above" | "below" | null;
 }
 
-/* ── seed data ───────────────────────────────────────────────────────────── */
-const PEOPLE: Person[] = [
-  { id: "1", name: "Reva S.", initials: "RS", color: "#cf6a2c" },
-  { id: "2", name: "Mads L.", initials: "ML", color: "#3f7ebc" },
-  { id: "3", name: "Priya K.", initials: "PK", color: "#4caf7d" },
-  { id: "4", name: "Owen T.", initials: "OT", color: "#8a54b5" },
-];
-
-function mkId() { return Math.random().toString(36).slice(2, 9); }
-
-function defaultCols(): ColData[] {
-  return [
-    { id: mkId(), name: "To Do", color: "#a59a8c", cards: [] },
-    { id: mkId(), name: "In Progress", color: "#cf6a2c", cards: [] },
-    { id: mkId(), name: "Review", color: "#d9a441", cards: [] },
-    { id: mkId(), name: "Done", color: "#4caf7d", cards: [] },
-  ];
-}
-
-const INIT_BOARDS: BoardData[] = [
-  {
-    id: "board-core", name: "Core Gameplay", color: "#cf6a2c",
-    cols: [
-      {
-        id: "col-todo", name: "To Do", color: "#a59a8c",
-        cards: [
-          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1", deadline: "2026-06-12" },
-          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2", deadline: "2026-06-19" },
-          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null, deadline: "2026-06-08" },
-        ],
-      },
-      {
-        id: "col-wip", name: "In Progress", color: "#cf6a2c",
-        cards: [
-          { id: mkId(), title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", ownerId: "3" },
-          { id: mkId(), title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", ownerId: "1" },
-        ],
-      },
-      {
-        id: "col-review", name: "Review", color: "#d9a441",
-        cards: [
-          { id: mkId(), title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, ownerId: "4" },
-          { id: mkId(), title: "Audio ambience zones", sub: "Per-biome audio blending using distance cues.", kind: "mechanic", tags: ["audio"], priority: "medium", ownerId: "2" },
-        ],
-      },
-      {
-        id: "col-done", name: "Done", color: "#4caf7d",
-        cards: [
-          { id: mkId(), title: "Player stats dashboard", sub: "In-game HUD displaying health, stamina, gold.", kind: "mechanic", tags: ["ui", "done"], priority: null, ownerId: "3" },
-          { id: mkId(), title: "Tutorial flow v1", sub: "Guided onboarding across first 10 minutes of play.", kind: "vision", tags: ["ux", "done"], priority: null, ownerId: "1" },
-          { id: mkId(), title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, ownerId: "4" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "board-economy", name: "Economy & Items", color: "#4caf7d",
-    cols: [
-      {
-        id: "col-econ-todo", name: "To Do", color: "#a59a8c",
-        cards: [
-          { id: mkId(), title: "Crafting material sinks", sub: "Add high-tier recipes to drain late-game material surplus.", kind: "economy", tags: ["crafting"], priority: "medium", ownerId: "1" },
-          { id: mkId(), title: "Currency exchange rates", sub: "Define conversion between region-specific currencies.", kind: "economy", tags: ["world"], priority: null, ownerId: null },
-        ],
-      },
-      { id: "col-econ-wip", name: "In Progress", color: "#cf6a2c", cards: [
-          { id: mkId(), title: "Vendor restock logic", sub: "Tune restock intervals per vendor tier.", kind: "economy", tags: ["vendors"], priority: "high", ownerId: "3" },
-        ],
-      },
-      { id: "col-econ-review", name: "Review", color: "#d9a441", cards: [] },
-      { id: "col-econ-done", name: "Done", color: "#4caf7d", cards: [
-          { id: mkId(), title: "Starting gold balance", sub: "Set baseline gold for new characters per difficulty.", kind: "economy", tags: ["balance", "done"], priority: null, ownerId: "4" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "board-narrative", name: "World & Narrative", color: "#8a54b5",
-    cols: defaultCols().map((c, i) => i === 0 ? {
-      ...c, cards: [
-        { id: mkId(), title: "Faction reputation arcs", sub: "Outline reputation thresholds and unlocks for the three major factions.", kind: "lore", tags: ["factions"], priority: "medium", ownerId: "4" },
-      ],
-    } : c),
-  },
-];
-
 /* ── helpers ─────────────────────────────────────────────────────────────── */
-function ownerById(id: string | null | undefined): Person | null {
-  return PEOPLE.find((p) => p.id === id) ?? null;
+function ownerById(people: Person[], id: string | null | undefined): Person | null {
+  return people.find((p) => p.id === id) ?? null;
 }
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
@@ -565,14 +468,15 @@ function formatDeadline(key: string) {
 }
 
 /* ── Card component ──────────────────────────────────────────────────────── */
-function Card({ card, onDragStart, onDragEnd, dropState, onClick }: {
+function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
   card: CardData;
+  people: Person[];
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
   onDragEnd: () => void;
   dropState: "above" | "below" | null;
   onClick: (card: CardData) => void;
 }) {
-  const owner = ownerById(card.ownerId);
+  const owner = ownerById(people, card.ownerId);
   return (
     <div
       className={`card${card.dragging ? " dragging" : ""}${dropState === "above" ? " drop-above" : ""}${dropState === "below" ? " drop-below" : ""}`}
@@ -616,8 +520,9 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }: {
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
+  people: Person[];
   onAddCard: (colId: string, title: string) => void;
   onCardClick: (card: CardData) => void;
   dragState: DragInfo | null;
@@ -661,6 +566,7 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
             >
               <Card
                 card={card}
+                people={people}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 dropState={dropState}
@@ -697,8 +603,9 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, onClose, onSave, onMakeCanvas }: {
+function CardModal({ card, people, onClose, onSave, onMakeCanvas }: {
   card: CardData;
+  people: Person[];
   onClose: () => void;
   onSave: (card: CardData) => void;
   onMakeCanvas: (card: CardData) => void;
@@ -747,7 +654,7 @@ function CardModal({ card, onClose, onSave, onMakeCanvas }: {
             <label className="modal-label">Owner</label>
             <select className="modal-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
               <option value="">Unassigned</option>
-              {PEOPLE.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div className="modal-field">
@@ -775,8 +682,13 @@ function CardModal({ card, onClose, onSave, onMakeCanvas }: {
 /* ── Main BoardPage component ─────────────────────────────────────────────── */
 export default function BoardPage() {
   const router = useRouter();
-  const [boards, setBoards] = useState<BoardData[]>(INIT_BOARDS);
-  const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState<{ key: string; name: string; initials: string; color: string }[]>([]);
+  const [boards, setBoards] = useState<BoardData[]>([]);
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [calMonth, setCalMonth] = useState(() => {
@@ -786,13 +698,100 @@ export default function BoardPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
+  const wsRef = useRef<string | null>(null);
+
+  // ---- initial load: session -> seed -> boards + members ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await ensureSession();
+        if (cancelled) return;
+        if (!s) { router.replace("/login"); return; }
+        if (!s.onboarded) { router.replace("/onboarding"); return; }
+        setSession(s);
+        wsRef.current = s.workspaceId;
+        await seedBoardsIfEmpty(s.workspaceId);
+        const [loaded, members] = await Promise.all([
+          loadBoards(s.workspaceId),
+          listMembers(s.workspaceId),
+        ]);
+        if (cancelled) return;
+        setBoards(loaded);
+        setActiveBoardId(loaded[0]?.id ?? null);
+        setPeople(members);
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
+  // ---- realtime: refetch on any board change from a teammate + presence ----
+  useEffect(() => {
+    const wsId = wsRef.current;
+    if (loading || !wsId || !session) return;
+
+    let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefetch = () => {
+      if (refetchTimer) clearTimeout(refetchTimer);
+      refetchTimer = setTimeout(async () => {
+        refetchTimer = null;
+        try {
+          const fresh = await loadBoards(wsId);
+          setBoards(fresh);
+          setActiveBoardId((cur) => (cur && fresh.some((b) => b.id === cur) ? cur : (fresh[0]?.id ?? null)));
+        } catch (e) {
+          console.error("board refetch failed", e);
+        }
+      }, 500);
+    };
+
+    const tables = ["boards", "board_columns", "board_cards"];
+    let channel = supabase.channel(`board:${wsId}`, { config: { broadcast: { self: false } } });
+    for (const table of tables) {
+      channel = channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `project_id=eq.${wsId}` },
+        scheduleRefetch,
+      );
+    }
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ key: string; name: string; initials: string; color: string }>();
+        const seen = new Map<string, { key: string; name: string; initials: string; color: string }>();
+        for (const metas of Object.values(state)) {
+          for (const m of metas) seen.set(m.key, m);
+        }
+        setOnline(Array.from(seen.values()));
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            key: session.userId,
+            name: session.name,
+            initials: session.initials,
+            color: session.color,
+          });
+        }
+      });
+
+    return () => {
+      if (refetchTimer) clearTimeout(refetchTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [loading, session]);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
-  const cols = activeBoard.cols;
+  const cols = activeBoard?.cols ?? [];
 
   function setCols(updater: ColData[] | ((cols: ColData[]) => ColData[])) {
     setBoards((prev) => prev.map((b) =>
-      b.id !== activeBoardId ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
+      b.id !== (activeBoardId ?? prev[0]?.id) ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
     ));
   }
 
@@ -813,12 +812,16 @@ export default function BoardPage() {
     }
   }
 
-  function handleAddBoard() {
+  async function handleAddBoard() {
     const name = window.prompt("New board name");
-    if (!name?.trim()) return;
-    const id = mkId();
-    setBoards((prev) => [...prev, { id, name: name.trim(), color: "#cf6a2c", cols: defaultCols() }]);
-    setActiveBoardId(id);
+    if (!name?.trim() || !wsRef.current) return;
+    try {
+      const board = await createBoard(wsRef.current, name.trim());
+      setBoards((prev) => prev.some((b) => b.id === board.id) ? prev : [...prev, board]);
+      setActiveBoardId(board.id);
+    } catch (e) {
+      console.error("create board failed", e);
+    }
   }
 
   /* drag handlers */
@@ -850,39 +853,47 @@ export default function BoardPage() {
     e.preventDefault();
     const { cardId } = drag.current;
     if (!cardId) return;
-    setCols((prev) => {
-      let card: CardData | undefined;
-      const without = prev.map((c) => {
-        const found = c.cards.find((k) => k.id === cardId);
-        if (found) card = found;
-        return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
-      });
-      if (!card) return prev;
-      const moved = card;
-      return without.map((c) => {
-        if (c.id !== colId) return c;
-        if (!targetCardId) return { ...c, cards: [...c.cards, moved] };
-        const idx = c.cards.findIndex((k) => k.id === targetCardId);
-        const pos = dragState?.position === "above" ? idx : idx + 1;
-        const next = [...c.cards];
-        next.splice(pos, 0, moved);
-        return { ...c, cards: next };
-      });
+
+    // compute the move synchronously so we can persist the resulting order
+    let card: CardData | undefined;
+    const without = cols.map((c) => {
+      const found = c.cards.find((k) => k.id === cardId);
+      if (found) card = found;
+      return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
     });
+    if (!card) return;
+    const moved = { ...card, dragging: false };
+    const next = without.map((c) => {
+      if (c.id !== colId) return c;
+      if (!targetCardId) return { ...c, cards: [...c.cards, moved] };
+      const idx = c.cards.findIndex((k) => k.id === targetCardId);
+      const pos = dragState?.position === "above" ? idx : idx + 1;
+      const cards = [...c.cards];
+      cards.splice(pos, 0, moved);
+      return { ...c, cards };
+    });
+    setCols(next);
     setDragState(null);
+
+    const destCol = next.find((c) => c.id === colId);
+    if (destCol) {
+      moveCard(cardId, colId, destCol.cards.map((k) => k.id))
+        .catch((err) => console.error("move card failed", err));
+    }
   }
   function handleDragLeave() { /* keep state for cross-card sub-regions */ }
 
   /* add card */
-  function handleAddCard(colId: string, title: string) {
-    setCols((prev) => prev.map((c) =>
-      c.id !== colId ? c : {
-        ...c,
-        cards: [...c.cards, {
-          id: mkId(), title, sub: "", kind: "", tags: [], priority: null, ownerId: null, deadline: selectedDate ?? null
-        }]
-      }
-    ));
+  async function handleAddCard(colId: string, title: string) {
+    if (!wsRef.current) return;
+    try {
+      const card = await createCard(wsRef.current, colId, title, selectedDate ?? null);
+      setCols((prev) => prev.map((c) =>
+        c.id !== colId ? c : c.cards.some((k) => k.id === card.id) ? c : { ...c, cards: [...c.cards, card] }
+      ));
+    } catch (e) {
+      console.error("create card failed", e);
+    }
   }
 
   /* save card from modal */
@@ -890,13 +901,19 @@ export default function BoardPage() {
     setCols((prev) => prev.map((c) => ({
       ...c, cards: c.cards.map((k) => k.id === updated.id ? updated : k)
     })));
+    updateCard(updated).catch((e) => console.error("save card failed", e));
   }
 
   /* add new column */
-  function handleAddCol() {
+  async function handleAddCol() {
     const name = window.prompt("New column name");
-    if (!name?.trim()) return;
-    setCols((prev) => [...prev, { id: mkId(), name: name.trim(), color: "#a59a8c", cards: [] }]);
+    if (!name?.trim() || !wsRef.current || !activeBoard) return;
+    try {
+      const col = await createColumn(wsRef.current, activeBoard.id, name.trim());
+      setCols((prev) => prev.some((c) => c.id === col.id) ? prev : [...prev, col]);
+    } catch (e) {
+      console.error("create column failed", e);
+    }
   }
 
   const kinds = ["mechanic", "vision", "economy", "lore"];
@@ -955,6 +972,19 @@ export default function BoardPage() {
   const today = todayKey();
   const selectedDue = selectedDate ? (dueMap[selectedDate] ?? []) : [];
 
+  if (loading || error) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="board-app" style={{ alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: error ? "#b9421f" : "var(--ink-soft)", fontSize: 14 }}>
+            {error ? `Couldn't load boards: ${error}` : "Loading boards…"}
+          </span>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <style>{css}</style>
@@ -963,8 +993,8 @@ export default function BoardPage() {
         {/* topbar (global chrome) */}
         <TopBar
           crumbs={["Design", "Board"]}
-          online={PEOPLE.slice(0, 3).map((p) => ({
-            key: p.id,
+          online={online.map((p) => ({
+            key: p.key,
             name: p.name,
             initials: p.initials,
             color: p.color,
@@ -1053,7 +1083,7 @@ export default function BoardPage() {
             <div className="board-toolbar">
               <div>
                 <div className="board-label">Design Workspace · Board</div>
-                <div className="board-heading">{activeBoard.name}</div>
+                <div className="board-heading">{activeBoard?.name ?? "No boards yet"}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <div className="filter-row">
@@ -1086,6 +1116,7 @@ export default function BoardPage() {
                   <Column
                     key={col.id}
                     col={col}
+                    people={people}
                     onAddCard={handleAddCard}
                     onCardClick={setEditingCard}
                     dragState={dragState}
@@ -1112,6 +1143,7 @@ export default function BoardPage() {
         {editingCard && (
           <CardModal
             card={editingCard}
+            people={people}
             onClose={() => setEditingCard(null)}
             onSave={(updated) => { handleSaveCard(updated); setEditingCard(null); }}
             onMakeCanvas={handleMakeCanvas}
