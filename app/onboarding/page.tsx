@@ -200,7 +200,7 @@ export default function OnboardingPage() {
           if (!busy && stepValid) primaryAction();
         }}
       >
-        <p className={styles.brand}>EMBERWICK</p>
+        <p className={styles.brand}>GAME DESIGN DOC</p>
 
         <ol className={styles.steps} aria-label="Onboarding progress">
           {STEPS.map((label, i) => (
@@ -317,7 +317,7 @@ export default function OnboardingPage() {
                     autoFocus={existing.length === 0}
                     maxLength={60}
                     onChange={(e) => setWsName(e.target.value)}
-                    placeholder="e.g. Emberwick"
+                    placeholder="e.g. Longdusk"
                   />
                 </label>
                 <label className={styles.label}>

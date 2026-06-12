@@ -8,12 +8,22 @@
  * token, public repos still work (60 req/h unauthenticated limit).
  * ------------------------------------------------------------------------- */
 
-const TOKEN_KEY = "emberwick.github-token";
+const TOKEN_KEY = "gdd.github-token";
+const LEGACY_TOKEN_KEY = "emberwick.github-token"; // pre-rename installs
 
 export function getGithubToken(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(TOKEN_KEY);
+    const token = window.localStorage.getItem(TOKEN_KEY);
+    if (token) return token;
+    // Migrate a token stashed under the old brand's key — it can't be
+    // re-fetched without a fresh GitHub sign-in, so don't strand it.
+    const legacy = window.localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (legacy) {
+      window.localStorage.setItem(TOKEN_KEY, legacy);
+      window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+    }
+    return legacy;
   } catch {
     return null;
   }

@@ -1,5 +1,5 @@
 -- ============================================================================
--- EMBERWICK — security hardening: server-side input limits
+-- GDD — security hardening: server-side input limits
 --
 -- The web client validates input in lib/validate.ts, but any project member
 -- can talk to PostgREST directly with their JWT, so the database must enforce

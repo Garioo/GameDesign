@@ -1,5 +1,5 @@
 /* ============================================================
-   EMBERWICK · onboarding/onboarding.module.css
+   GDD · onboarding/onboarding.module.css
    (imported by app/onboarding/page.tsx)
    ------------------------------------------------------------
    First-run flow: Profile → Workspace → Invite → Tour. One
@@ -257,14 +257,11 @@
 }
 .tourIcon {
   flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-lg);
+  width: 22px;
   display: grid;
   place-items: center;
-  color: var(--ember-deep);
-  background: var(--ember-tint);
-  border: 1px solid var(--ember-tint2);
+  margin-top: 1px; /* optical alignment with the tour name's cap height */
+  color: var(--ink-soft);
 }
 .tourIcon svg {
   width: 17px;

@@ -1,5 +1,5 @@
 -- ============================================================================
--- EMBERWICK · Game Design System — Supabase schema
+-- GDD · Game Design System — Supabase schema
 -- Full GDD domain: profiles, projects, members, sections, pages, blocks,
 -- comments, milestones, activity. Row-Level Security on every table.
 --
@@ -292,7 +292,7 @@ begin
   insert into public.projects (id, name, tagline, genre, owner)
   values (
     workspace_id,
-    'EMBERWICK',
+    'LONGDUSK',
     'Collaborative game design workspace',
     'Action RPG',
     caller

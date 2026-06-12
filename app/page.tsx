@@ -86,7 +86,7 @@ export default function HomePage() {
           <span className={styles.logo}>
             <Flame className={styles.logoIcon} />
           </span>
-          <span className={styles.brandName}>EMBERWICK</span>
+          <span className={styles.brandName}>GAME DESIGN DOC</span>
         </div>
         <Link href="/login" className={styles.signIn}>
           Sign in
@@ -100,9 +100,8 @@ export default function HomePage() {
             Where your game <span className={styles.titleAccent}>takes shape</span>.
           </h1>
           <p className={styles.lede}>
-            Emberwick is your team&apos;s living game design document — docs,
-            canvases and boards that stay in step with each other, and with
-            the build.
+            Your team&apos;s living game design document — docs, canvases and
+            boards that stay in step with each other, and with the build.
           </p>
           <div className={styles.ctaRow}>
             <Link href="/login" className={styles.ctaPrimary}>
@@ -180,7 +179,7 @@ export default function HomePage() {
       </section>
 
       <footer className={styles.footer}>
-        <span className={styles.footerBrand}>EMBERWICK</span>
+        <span className={styles.footerBrand}>GAME DESIGN DOC</span>
         <span>The team&apos;s living game design documents.</span>
       </footer>
     </div>
