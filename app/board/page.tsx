@@ -12,16 +12,22 @@ import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
 import {
   createBoard,
   createCard,
+  createCategory,
   createColumn,
   deleteBoard,
   deleteCard,
+  deleteCategory,
   deleteColumn,
+  listCategories,
   loadBoards,
   moveCard,
+  renameCategory,
+  reorderColumns,
   seedBoardsIfEmpty,
   updateCard,
   type Board as BoardData,
   type BoardCard as CardData,
+  type BoardCategory,
   type BoardColumn as ColData,
 } from "@/lib/boardRepo";
 
@@ -201,6 +207,15 @@ const css = `
   }
   .filter-chip:hover { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ink); }
   .filter-chip.active { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ember-deep); font-weight: 600; }
+  .chip-del {
+    display: none; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%; margin-left: 2px;
+    font-size: 12px; line-height: 1; color: var(--ink-faint); cursor: pointer;
+  }
+  .filter-chip:hover .chip-del { display: inline-flex; }
+  .chip-del:hover { background: #fbe2dc; color: #b9421f; }
+  .filter-chip-add { color: var(--ink-faint); border-style: dashed; }
+  .filter-chip-add:hover { color: var(--ember); }
   .filter-chip-icon { width: 13px; height: 13px; }
   .add-col-btn {
     display: flex; align-items: center; gap: 6px;
@@ -239,6 +254,9 @@ const css = `
     border: 1px solid var(--line); border-bottom: none;
     position: relative;
   }
+  .col-head { cursor: grab; }
+  .col-head:active { cursor: grabbing; }
+  .col.col-drag-target { outline: 2px dashed var(--ember); outline-offset: 3px; border-radius: 12px; }
   .col-head::after {
     content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 1px;
     background: var(--line-soft);
@@ -263,6 +281,8 @@ const css = `
     transition: background .12s, color .12s;
   }
   .col-menu-btn:hover { background: var(--line-soft); color: var(--ink); }
+  .col-menu-btn:disabled { opacity: 0.3; cursor: default; }
+  .col-menu-btn:disabled:hover { background: none; color: var(--ink-faint); }
   .col-menu-btn svg { width: 15px; height: 15px; }
 
   .col-body {
@@ -307,11 +327,14 @@ const css = `
 
   .card-foot { display: flex; align-items: center; justify-content: space-between; }
   .card-owner { display: flex; align-items: center; gap: 6px; }
+  .card-avatar-group { display: flex; }
   .card-avatar {
     width: 20px; height: 20px; border-radius: 50%;
     display: grid; place-items: center;
     font-size: 9px; font-weight: 600; color: #fff;
+    border: 2px solid var(--surface); margin-left: -6px;
   }
+  .card-avatar:first-child { margin-left: 0; }
   .card-owner-name { font-size: 11.5px; color: var(--ink-faint); }
   .card-priority {
     font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
@@ -319,6 +342,7 @@ const css = `
   }
   .card-priority.high { background: #fbe9d6; color: #8f4017; }
   .card-priority.medium { background: #f7ecd2; color: #7a5614; }
+  .card-priority.low { background: #e6f1e8; color: #285c38; }
 
   /* ── add card button ── */
   .add-card-btn {
@@ -399,6 +423,21 @@ const css = `
     transition: border-color .12s, box-shadow .12s;
   }
   .modal-textarea { resize: vertical; min-height: 72px; }
+  .owner-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .owner-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 12.5px; color: var(--ink-soft);
+    padding: 5px 10px 5px 6px; border-radius: 999px;
+    background: var(--bg); border: 1px solid var(--line);
+    cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+  }
+  .owner-chip:hover { border-color: var(--ember-tint2); }
+  .owner-chip.active { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ember-deep); font-weight: 600; }
+  .owner-chip-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 8.5px; font-weight: 600; color: #fff; flex-shrink: 0;
+  }
   .modal-input:focus, .modal-textarea:focus, .modal-select:focus { border-color: var(--ember-tint2); box-shadow: 0 0 0 2px var(--ember-tint2); }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
   .modal-save { font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; padding: 8px 20px; border-radius: 9px; border: none; cursor: pointer; background: linear-gradient(150deg, #e98a45, #c0531c); box-shadow: 0 2px 8px rgba(191,99,43,0.35); transition: filter .1s; }
@@ -471,6 +510,11 @@ interface DragInfo {
 function ownerById(people: Person[], id: string | null | undefined): Person | null {
   return people.find((p) => p.id === id) ?? null;
 }
+function ownersByIds(people: Person[], ids: string[] | undefined): Person[] {
+  return (ids ?? [])
+    .map((id) => ownerById(people, id))
+    .filter((p): p is Person => p !== null);
+}
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -495,7 +539,7 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
   dropState: "above" | "below" | null;
   onClick: (card: CardData) => void;
 }) {
-  const owner = ownerById(people, card.ownerId);
+  const owners = ownersByIds(people, card.ownerIds);
   return (
     <div
       className={`card${card.dragging ? " dragging" : ""}${dropState === "above" ? " drop-above" : ""}${dropState === "below" ? " drop-below" : ""}`}
@@ -514,10 +558,16 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
       {card.sub && <div className="card-sub">{card.sub}</div>}
       <div className="card-foot">
         <div className="card-owner">
-          {owner ? (
+          {owners.length > 0 ? (
             <>
-              <span className="card-avatar" style={{ background: owner.color }}>{owner.initials}</span>
-              <span className="card-owner-name">{owner.name}</span>
+              <span className="card-avatar-group">
+                {owners.map((o) => (
+                  <span key={o.id} className="card-avatar" style={{ background: o.color }} title={o.name}>{o.initials}</span>
+                ))}
+              </span>
+              <span className="card-owner-name">
+                {owners.length === 1 ? owners[0].name : `${owners[0].name} +${owners.length - 1}`}
+              </span>
             </>
           ) : (
             <span className="card-owner-name" style={{ color: "var(--ink-faint)" }}>Unassigned</span>
@@ -539,9 +589,17 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, people, onAddCard, onDeleteCol, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, canMoveLeft, canMoveRight, isColDragOver, onMoveCol, onColDragStart, onColDragOver, onColDrop, onColDragEnd, onAddCard, onDeleteCol, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
   people: Person[];
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  isColDragOver: boolean;
+  onMoveCol: (colId: string, dir: -1 | 1) => void;
+  onColDragStart: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onColDragOver: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onColDrop: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onColDragEnd: () => void;
   onAddCard: (colId: string, title: string) => void;
   onDeleteCol: (colId: string) => void;
   onCardClick: (card: CardData) => void;
@@ -561,11 +619,23 @@ function Column({ col, people, onAddCard, onDeleteCol, onCardClick, dragState, o
   }
 
   return (
-    <div className="col">
-      <div className="col-head">
+    <div
+      className={`col${isColDragOver ? " col-drag-target" : ""}`}
+      onDragOver={(e) => onColDragOver(e, col.id)}
+      onDrop={(e) => onColDrop(e, col.id)}
+    >
+      <div
+        className="col-head"
+        draggable
+        title="Drag to reorder columns"
+        onDragStart={(e) => onColDragStart(e, col.id)}
+        onDragEnd={onColDragEnd}
+      >
         <span className="col-dot" style={{ background: col.color }} />
         <span className="col-name">{col.name}</span>
         <span className="col-count">{col.cards.length}</span>
+        <button className="col-menu-btn" title="Move column left" disabled={!canMoveLeft} onClick={() => onMoveCol(col.id, -1)}><ChevronLeft className="" style={{ width: 13, height: 13 }} /></button>
+        <button className="col-menu-btn" title="Move column right" disabled={!canMoveRight} onClick={() => onMoveCol(col.id, 1)}><ChevronRight className="" style={{ width: 13, height: 13 }} /></button>
         <button className="col-menu-btn col-del-btn" title="Delete column" onClick={() => onDeleteCol(col.id)}><Trash className="" style={{ width: 14, height: 14 }} /></button>
       </div>
 
@@ -623,9 +693,10 @@ function Column({ col, people, onAddCard, onDeleteCol, onCardClick, dragState, o
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, people, onClose, onSave, onDelete, onMakeCanvas }: {
+function CardModal({ card, people, categories, onClose, onSave, onDelete, onMakeCanvas }: {
   card: CardData;
   people: Person[];
+  categories: BoardCategory[];
   onClose: () => void;
   onSave: (card: CardData) => void;
   onDelete: (card: CardData) => void;
@@ -635,8 +706,12 @@ function CardModal({ card, people, onClose, onSave, onDelete, onMakeCanvas }: {
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
   const [priority, setPriority] = useState(card.priority ?? "");
-  const [ownerId, setOwnerId] = useState(card.ownerId ?? "");
+  const [ownerIds, setOwnerIds] = useState<string[]>(card.ownerIds ?? []);
   const [deadline, setDeadline] = useState(card.deadline ?? "");
+
+  function toggleOwner(id: string) {
+    setOwnerIds((prev) => prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]);
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -652,13 +727,12 @@ function CardModal({ card, people, onClose, onSave, onDelete, onMakeCanvas }: {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="modal-field">
-            <label className="modal-label">Kind</label>
+            <label className="modal-label">Category</label>
             <select className="modal-select" value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="">—</option>
-              <option value="mechanic">Mechanic</option>
-              <option value="vision">Vision</option>
-              <option value="economy">Economy</option>
-              <option value="lore">Lore</option>
+              {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+              {/* a card may carry a category that was since deleted/renamed */}
+              {kind && !categories.some((c) => c.name === kind) && <option value={kind}>{kind}</option>}
             </select>
           </div>
           <div className="modal-field">
@@ -667,21 +741,30 @@ function CardModal({ card, people, onClose, onSave, onDelete, onMakeCanvas }: {
               <option value="">—</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
+              <option value="low">Low</option>
             </select>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div className="modal-field">
-            <label className="modal-label">Owner</label>
-            <select className="modal-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+        <div className="modal-field">
+          <label className="modal-label">Assignees</label>
+          <div className="owner-chips">
+            {people.length === 0 && <span className="cal-due-empty">No workspace members to assign yet.</span>}
+            {people.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`owner-chip${ownerIds.includes(p.id) ? " active" : ""}`}
+                onClick={() => toggleOwner(p.id)}
+              >
+                <span className="owner-chip-avatar" style={{ background: p.color }}>{p.initials}</span>
+                {p.name}
+              </button>
+            ))}
           </div>
-          <div className="modal-field">
-            <label className="modal-label">Deadline</label>
-            <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </div>
+        </div>
+        <div className="modal-field">
+          <label className="modal-label">Deadline</label>
+          <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </div>
         <div className="modal-actions">
           <button
@@ -695,12 +778,12 @@ function CardModal({ card, people, onClose, onSave, onDelete, onMakeCanvas }: {
             className="modal-cancel"
             style={{ marginRight: "auto" }}
             title="Create a canvas named after this card, with the to-do as a sticky note"
-            onClick={() => onMakeCanvas({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null })}
+            onClick={() => onMakeCanvas({ ...card, title, sub, kind, priority: priority || null, ownerIds, deadline: deadline || null })}
           >
             ✦ Open as canvas
           </button>
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null }); onClose(); }}>Save</button>
+          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, deadline: deadline || null }); onClose(); }}>Save</button>
         </div>
       </div>
     </div>
@@ -716,6 +799,7 @@ export default function BoardPage() {
   const [error, setError] = useState<string | null>(null);
   const [online, setOnline] = useState<{ key: string; name: string; initials: string; color: string }[]>([]);
   const [boards, setBoards] = useState<BoardData[]>([]);
+  const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
@@ -726,6 +810,8 @@ export default function BoardPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
+  const dragCol = useRef<string | null>(null);
+  const [colDragOver, setColDragOver] = useState<string | null>(null);
   const wsRef = useRef<string | null>(null);
 
   // ---- initial load: session -> seed -> boards + members ----
@@ -740,14 +826,16 @@ export default function BoardPage() {
         setSession(s);
         wsRef.current = s.workspaceId;
         await seedBoardsIfEmpty(s.workspaceId);
-        const [loaded, members] = await Promise.all([
+        const [loaded, members, cats] = await Promise.all([
           loadBoards(s.workspaceId),
           listMembers(s.workspaceId),
+          listCategories(s.workspaceId),
         ]);
         if (cancelled) return;
         setBoards(loaded);
         setActiveBoardId(loaded[0]?.id ?? null);
         setPeople(members);
+        setCategories(cats);
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -770,8 +858,9 @@ export default function BoardPage() {
       refetchTimer = setTimeout(async () => {
         refetchTimer = null;
         try {
-          const fresh = await loadBoards(wsId);
+          const [fresh, cats] = await Promise.all([loadBoards(wsId), listCategories(wsId)]);
           setBoards(fresh);
+          setCategories(cats);
           setActiveBoardId((cur) => (cur && fresh.some((b) => b.id === cur) ? cur : (fresh[0]?.id ?? null)));
         } catch (e) {
           console.error("board refetch failed", e);
@@ -779,7 +868,7 @@ export default function BoardPage() {
       }, 500);
     };
 
-    const tables = ["boards", "board_columns", "board_cards"];
+    const tables = ["boards", "board_columns", "board_cards", "board_categories"];
     let channel = supabase.channel(`board:${wsId}`, { config: { broadcast: { self: false } } });
     for (const table of tables) {
       channel = channel.on(
@@ -867,6 +956,7 @@ export default function BoardPage() {
     setDragState(null);
   }
   function handleDragOver(e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) {
+    if (!drag.current.cardId) return; // a column (not a card) is being dragged
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const position = ((): "above" | "below" | null => {
@@ -972,7 +1062,92 @@ export default function BoardPage() {
     }
   }
 
-  const kinds = ["mechanic", "vision", "economy", "lore"];
+  /* ── categories ── */
+  async function handleAddCategory() {
+    const name = window.prompt("New category name");
+    if (!name?.trim() || !wsRef.current) return;
+    try {
+      const cat = await createCategory(wsRef.current, name.trim());
+      setCategories((prev) => prev.some((c) => c.id === cat.id) ? prev : [...prev, cat]);
+    } catch (e) {
+      console.error("create category failed", e);
+    }
+  }
+
+  function handleRenameCategory(cat: BoardCategory) {
+    const name = window.prompt(`Rename category "${cat.name}"`, cat.name);
+    if (!name?.trim() || name.trim() === cat.name || !wsRef.current) return;
+    const clean = name.trim();
+    setCategories((prev) => prev.map((c) => (c.id === cat.id ? { ...c, name: clean } : c)));
+    setBoards((prev) => prev.map((b) => ({
+      ...b,
+      cols: b.cols.map((c) => ({
+        ...c, cards: c.cards.map((k) => (k.kind === cat.name ? { ...k, kind: clean } : k)),
+      })),
+    })));
+    setFilterKind((cur) => (cur === cat.name ? clean : cur));
+    renameCategory(wsRef.current, cat.id, cat.name, clean)
+      .catch((e) => console.error("rename category failed", e));
+  }
+
+  function handleDeleteCategory(cat: BoardCategory) {
+    if (!wsRef.current) return;
+    if (!window.confirm(`Delete category "${cat.name}"? Cards keep their other details but lose this label.`)) return;
+    setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+    setBoards((prev) => prev.map((b) => ({
+      ...b,
+      cols: b.cols.map((c) => ({
+        ...c, cards: c.cards.map((k) => (k.kind === cat.name ? { ...k, kind: "" } : k)),
+      })),
+    })));
+    setFilterKind((cur) => (cur === cat.name ? null : cur));
+    deleteCategory(wsRef.current, cat.id, cat.name)
+      .catch((e) => console.error("delete category failed", e));
+  }
+
+  /* ── move a column left/right within the board ── */
+  function handleMoveCol(colId: string, dir: -1 | 1) {
+    const idx = cols.findIndex((c) => c.id === colId);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= cols.length) return;
+    const next = [...cols];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setCols(next);
+    reorderColumns(next.map((c) => c.id))
+      .catch((e) => console.error("reorder columns failed", e));
+  }
+
+  /* ── drag a column header to reorder ── */
+  function handleColDragStart(e: DragEvent<HTMLDivElement>, colId: string) {
+    dragCol.current = colId;
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function handleColDragOver(e: DragEvent<HTMLDivElement>, colId: string) {
+    if (!dragCol.current || dragCol.current === colId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setColDragOver(colId);
+  }
+  function handleColDrop(e: DragEvent<HTMLDivElement>, colId: string) {
+    const from = dragCol.current;
+    dragCol.current = null;
+    setColDragOver(null);
+    if (!from || from === colId) return;
+    e.preventDefault();
+    const fromIdx = cols.findIndex((c) => c.id === from);
+    const toIdx = cols.findIndex((c) => c.id === colId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...cols];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setCols(next);
+    reorderColumns(next.map((c) => c.id))
+      .catch((err) => console.error("reorder columns failed", err));
+  }
+  function handleColDragEnd() {
+    dragCol.current = null;
+    setColDragOver(null);
+  }
 
   const displayCols = cols.map((c) => ({
     ...c,
@@ -1157,15 +1332,28 @@ export default function BoardPage() {
                   >
                     <Filter style={{ width: 13, height: 13 }} /> All
                   </button>
-                  {kinds.map((k) => (
+                  {categories.map((cat) => (
                     <button
-                      key={k}
-                      className={`filter-chip${filterKind === k ? " active" : ""}`}
-                      onClick={() => setFilterKind(filterKind === k ? null : k)}
+                      key={cat.id}
+                      className={`filter-chip${filterKind === cat.name ? " active" : ""}`}
+                      onClick={() => setFilterKind(filterKind === cat.name ? null : cat.name)}
+                      onDoubleClick={() => handleRenameCategory(cat)}
+                      title="Click to filter · double-click to rename"
                     >
-                      {k}
+                      {cat.name}
+                      <span
+                        className="chip-del"
+                        role="button"
+                        title={`Delete category "${cat.name}"`}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
+                      >
+                        ×
+                      </span>
                     </button>
                   ))}
+                  <button className="filter-chip filter-chip-add" onClick={handleAddCategory} title="Add category">
+                    <Plus style={{ width: 12, height: 12 }} /> Category
+                  </button>
                 </div>
                 <button className="add-col-btn" onClick={handleAddCol}>
                   <Plus style={{ width: 15, height: 15 }} /> Column
@@ -1176,11 +1364,19 @@ export default function BoardPage() {
             {/* kanban board */}
             <div className="board-scroll">
               <div className="board-cols">
-                {displayCols.map((col) => (
+                {displayCols.map((col, i) => (
                   <Column
                     key={col.id}
                     col={col}
                     people={people}
+                    canMoveLeft={i > 0}
+                    canMoveRight={i < displayCols.length - 1}
+                    isColDragOver={colDragOver === col.id}
+                    onMoveCol={handleMoveCol}
+                    onColDragStart={handleColDragStart}
+                    onColDragOver={handleColDragOver}
+                    onColDrop={handleColDrop}
+                    onColDragEnd={handleColDragEnd}
                     onAddCard={handleAddCard}
                     onDeleteCol={handleDeleteCol}
                     onCardClick={setEditingCard}
@@ -1209,6 +1405,7 @@ export default function BoardPage() {
           <CardModal
             card={editingCard}
             people={people}
+            categories={categories}
             onClose={() => setEditingCard(null)}
             onSave={(updated) => { handleSaveCard(updated); setEditingCard(null); }}
             onDelete={handleDeleteCard}

@@ -15,7 +15,7 @@ export interface BoardCard {
   kind: string;
   tags: string[];
   priority: string | null;
-  ownerId: string | null;
+  ownerIds: string[];
   deadline?: string | null;
   dragging?: boolean;
 }
@@ -42,7 +42,7 @@ interface CardRow {
   kind: string;
   tags: string[] | null;
   priority: string | null;
-  owner: string | null;
+  owners: string[] | null;
   deadline: string | null;
   position: number;
 }
@@ -69,7 +69,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       .order("position", { ascending: true }),
     supabase
       .from("board_cards")
-      .select("id, column_id, title, sub, kind, tags, priority, owner, deadline, position")
+      .select("id, column_id, title, sub, kind, tags, priority, owners, deadline, position")
       .eq("project_id", workspaceId)
       .order("position", { ascending: true }),
   ]);
@@ -83,7 +83,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       kind: r.kind,
       tags: r.tags ?? [],
       priority: r.priority,
-      ownerId: r.owner,
+      ownerIds: r.owners ?? [],
       deadline: r.deadline,
     };
     (cardsByCol.get(r.column_id) ?? cardsByCol.set(r.column_id, []).get(r.column_id)!).push(card);
@@ -194,7 +194,7 @@ export async function createCard(
   const { data, error } = await supabase
     .from("board_cards")
     .insert({ column_id: columnId, project_id: workspaceId, title: clean, deadline, position })
-    .select("id, title, sub, kind, tags, priority, owner, deadline")
+    .select("id, title, sub, kind, tags, priority, owners, deadline")
     .single();
   if (error || !data) throw new Error(`createCard failed: ${error?.message}`);
   return {
@@ -204,7 +204,7 @@ export async function createCard(
     kind: data.kind,
     tags: data.tags ?? [],
     priority: data.priority,
-    ownerId: data.owner,
+    ownerIds: data.owners ?? [],
     deadline: data.deadline,
   };
 }
@@ -219,7 +219,7 @@ export async function updateCard(card: BoardCard): Promise<void> {
       kind: card.kind ?? "",
       tags: card.tags ?? [],
       priority: card.priority,
-      owner: card.ownerId,
+      owners: card.ownerIds ?? [],
       deadline: card.deadline || null,
     })
     .eq("id", card.id);
@@ -248,6 +248,96 @@ export async function moveCard(
   );
 }
 
+/** Persist a board's column order. */
+export async function reorderColumns(orderedColumnIds: string[]): Promise<void> {
+  await Promise.all(
+    orderedColumnIds.map((id, i) =>
+      supabase.from("board_columns").update({ position: i }).eq("id", id),
+    ),
+  );
+}
+
+/* ── categories (the editable card "kind" list) ──────────────────────────── */
+
+export interface BoardCategory {
+  id: string;
+  name: string;
+}
+
+const DEFAULT_CATEGORIES = ["mechanic", "vision", "economy", "lore"];
+
+/** List the workspace's categories, seeding the defaults on first visit. */
+export async function listCategories(workspaceId: string): Promise<BoardCategory[]> {
+  const { data } = await supabase
+    .from("board_categories")
+    .select("id, name")
+    .eq("project_id", workspaceId)
+    .order("position", { ascending: true });
+  if (data && data.length > 0) return data as BoardCategory[];
+
+  const { data: seeded, error } = await supabase
+    .from("board_categories")
+    .insert(DEFAULT_CATEGORIES.map((name, i) => ({ project_id: workspaceId, name, position: i })))
+    .select("id, name");
+  if (error) throw new Error(`seed categories failed: ${error.message}`);
+  return (seeded ?? []) as BoardCategory[];
+}
+
+/** Add a category. */
+export async function createCategory(workspaceId: string, name: string): Promise<BoardCategory> {
+  const clean = cleanText(name, LIMITS.tag, "Category name");
+  if (!clean) throw new Error("Category name is empty");
+  const { data: maxRow } = await supabase
+    .from("board_categories")
+    .select("position")
+    .eq("project_id", workspaceId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const position = ((maxRow?.position as number | undefined) ?? -1) + 1;
+
+  const { data, error } = await supabase
+    .from("board_categories")
+    .insert({ project_id: workspaceId, name: clean, position })
+    .select("id, name")
+    .single();
+  if (error || !data) throw new Error(`createCategory failed: ${error?.message}`);
+  return data as BoardCategory;
+}
+
+/** Rename a category and re-label every card that uses it. */
+export async function renameCategory(
+  workspaceId: string,
+  id: string,
+  oldName: string,
+  newName: string,
+): Promise<void> {
+  const clean = cleanText(newName, LIMITS.tag, "Category name");
+  if (!clean) return;
+  const { error } = await supabase.from("board_categories").update({ name: clean }).eq("id", id);
+  if (error) throw new Error(`renameCategory failed: ${error.message}`);
+  await supabase
+    .from("board_cards")
+    .update({ kind: clean })
+    .eq("project_id", workspaceId)
+    .eq("kind", oldName);
+}
+
+/** Delete a category; cards that used it become uncategorised. */
+export async function deleteCategory(
+  workspaceId: string,
+  id: string,
+  name: string,
+): Promise<void> {
+  const { error } = await supabase.from("board_categories").delete().eq("id", id);
+  if (error) throw new Error(`deleteCategory failed: ${error.message}`);
+  await supabase
+    .from("board_cards")
+    .update({ kind: "" })
+    .eq("project_id", workspaceId)
+    .eq("kind", name);
+}
+
 /** Delete a card. */
 export async function deleteCard(id: string): Promise<void> {
   const { error } = await supabase.from("board_cards").delete().eq("id", id);
@@ -268,7 +358,7 @@ export async function deleteBoard(id: string): Promise<void> {
 
 /* ── seeding ──────────────────────────────────────────────────────────────── */
 
-const SEED_BOARDS: { name: string; color: string; cards: Record<string, Omit<BoardCard, "id" | "ownerId">[]> }[] = [
+const SEED_BOARDS: { name: string; color: string; cards: Record<string, Omit<BoardCard, "id" | "ownerIds">[]> }[] = [
   {
     name: "Core Gameplay", color: "#cf6a2c",
     cards: {
