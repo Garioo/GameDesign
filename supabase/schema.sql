@@ -541,6 +541,11 @@ create table if not exists public.board_cards (
   updated_at timestamptz not null default now()
 );
 
+-- added later: multiple assignees per card (migrates the old single owner)
+alter table public.board_cards add column if not exists owners uuid[] not null default '{}';
+update public.board_cards set owners = array[owner]
+  where owner is not null and owners = '{}';
+
 create index if not exists idx_boards_project       on public.boards(project_id, position);
 create index if not exists idx_board_cols_board     on public.board_columns(board_id, position);
 create index if not exists idx_board_cols_project   on public.board_columns(project_id);
@@ -577,9 +582,31 @@ create policy board_cards_all on public.board_cards
   using (public.can_access_project(project_id))
   with check (public.can_access_project(project_id));
 
+-- board_categories — workspace-level card categories (the editable "kind" list)
+create table if not exists public.board_categories (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null,
+  position   int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_board_cats_project on public.board_categories(project_id, position);
+
+alter table public.board_categories enable row level security;
+
+drop policy if exists board_categories_all on public.board_categories;
+create policy board_categories_all on public.board_categories
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
 -- realtime: board tables stream postgres_changes to subscribed clients
 do $$ begin
   alter publication supabase_realtime add table public.boards;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.board_categories;
 exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.board_columns;
