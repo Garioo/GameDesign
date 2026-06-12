@@ -31,17 +31,24 @@ export async function removeAssetUrls(srcs: string[]): Promise<void> {
   if (error) console.error(`asset cleanup failed: ${error.message}`);
 }
 
-export const canvasAssetStore: TLAssetStore = {
-  async upload(_asset, file) {
-    const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-    const path = `${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-      contentType: file.type || undefined,
-      cacheControl: "31536000",
-      upsert: false,
-    });
-    if (error) throw new Error(`Image upload failed: ${error.message}`);
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return { src: data.publicUrl };
-  },
-};
+/**
+ * Asset store scoped to one workspace: files live under
+ * `<workspaceId>/<uuid>.<ext>` so the Storage RLS policies can restrict
+ * upload/delete to that workspace's editors (first path segment = project id).
+ */
+export function makeCanvasAssetStore(workspaceId: string): TLAssetStore {
+  return {
+    async upload(_asset, file) {
+      const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+      const path = `${workspaceId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+        contentType: file.type || undefined,
+        cacheControl: "31536000",
+        upsert: false,
+      });
+      if (error) throw new Error(`Image upload failed: ${error.message}`);
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      return { src: data.publicUrl };
+    },
+  };
+}

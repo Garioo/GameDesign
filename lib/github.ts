@@ -29,6 +29,17 @@ export function getGithubToken(): string | null {
   }
 }
 
+/** Forget the stashed token (sign-out — don't leave repo access behind). */
+export function clearGithubToken(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    /* storage unavailable — nothing was stored either */
+  }
+}
+
 /** Stash the provider token if this session carries one. Safe to call often. */
 export function captureGithubToken(
   session: { provider_token?: string | null } | null | undefined,

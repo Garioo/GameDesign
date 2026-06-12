@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { ensureSession, type SessionInfo } from "@/lib/session";
+import { ensureSession, signOutAndClear, type SessionInfo } from "@/lib/session";
 import {
   getWorkspaceInfo,
   leaveWorkspace,
@@ -86,7 +86,7 @@ export default function SettingsButton({ session: sessionProp, onSessionChange }
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutAndClear();
     router.replace("/login");
   };
 
@@ -96,7 +96,7 @@ export default function SettingsButton({ session: sessionProp, onSessionChange }
     } catch (e) {
       console.error(e);
     }
-    await supabase.auth.signOut();
+    await signOutAndClear();
     router.replace("/login");
   };
 

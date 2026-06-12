@@ -1,12 +1,35 @@
 "use client";
 
-import { useState, useRef, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
-import { ensureSession } from "@/lib/session";
-import { createCanvas, ensureCanvasFolder } from "@/lib/canvasRepo";
+import { supabase } from "@/lib/supabase";
+import { ensureSession, type SessionInfo } from "@/lib/session";
+import { createCanvas } from "@/lib/canvasRepo";
+import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
+import {
+  createBoard,
+  createCard,
+  createCategory,
+  createColumn,
+  deleteBoard,
+  deleteCard,
+  deleteCategory,
+  deleteColumn,
+  listCategories,
+  loadBoards,
+  moveCard,
+  renameCategory,
+  reorderColumns,
+  seedBoardsIfEmpty,
+  updateCard,
+  type Board as BoardData,
+  type BoardCard as CardData,
+  type BoardCategory,
+  type BoardColumn as ColData,
+} from "@/lib/boardRepo";
 
 /* ── CSS injected into the component (mirrors globals.css tokens) ─────────── */
 const css = `
@@ -66,6 +89,17 @@ const css = `
   .sidebar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
   .sidebar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sidebar-divider { height: 1px; background: var(--line-soft); margin: 8px 4px; }
+  .sidebar-del {
+    display: none; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+    color: var(--ink-faint); cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .sidebar-item:hover .sidebar-del { display: flex; }
+  .sidebar-del:hover { background: #fbe2dc; color: #b9421f; }
+  .col-del-btn:hover { background: #fbe2dc; color: #b9421f; }
+  .modal-delete { display: inline-flex; align-items: center; gap: 6px; }
+  .modal-delete:hover { background: #fbe2dc; color: #b9421f; border-color: #f3cabe; }
   .sidebar-new { color: var(--ink-faint); }
   .sidebar-new:hover { color: var(--ember); background: var(--ember-tint); }
   .sidebar-new svg { width: 13px; height: 13px; }
@@ -173,6 +207,15 @@ const css = `
   }
   .filter-chip:hover { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ink); }
   .filter-chip.active { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ember-deep); font-weight: 600; }
+  .chip-del {
+    display: none; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%; margin-left: 2px;
+    font-size: 12px; line-height: 1; color: var(--ink-faint); cursor: pointer;
+  }
+  .filter-chip:hover .chip-del { display: inline-flex; }
+  .chip-del:hover { background: #fbe2dc; color: #b9421f; }
+  .filter-chip-add { color: var(--ink-faint); border-style: dashed; }
+  .filter-chip-add:hover { color: var(--ember); }
   .filter-chip-icon { width: 13px; height: 13px; }
   .add-col-btn {
     display: flex; align-items: center; gap: 6px;
@@ -211,6 +254,9 @@ const css = `
     border: 1px solid var(--line); border-bottom: none;
     position: relative;
   }
+  .col-head { cursor: grab; }
+  .col-head:active { cursor: grabbing; }
+  .col.col-drag-target { outline: 2px dashed var(--ember); outline-offset: 3px; border-radius: 12px; }
   .col-head::after {
     content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 1px;
     background: var(--line-soft);
@@ -235,6 +281,8 @@ const css = `
     transition: background .12s, color .12s;
   }
   .col-menu-btn:hover { background: var(--line-soft); color: var(--ink); }
+  .col-menu-btn:disabled { opacity: 0.3; cursor: default; }
+  .col-menu-btn:disabled:hover { background: none; color: var(--ink-faint); }
   .col-menu-btn svg { width: 15px; height: 15px; }
 
   .col-body {
@@ -279,11 +327,14 @@ const css = `
 
   .card-foot { display: flex; align-items: center; justify-content: space-between; }
   .card-owner { display: flex; align-items: center; gap: 6px; }
+  .card-avatar-group { display: flex; }
   .card-avatar {
     width: 20px; height: 20px; border-radius: 50%;
     display: grid; place-items: center;
     font-size: 9px; font-weight: 600; color: #fff;
+    border: 2px solid var(--surface); margin-left: -6px;
   }
+  .card-avatar:first-child { margin-left: 0; }
   .card-owner-name { font-size: 11.5px; color: var(--ink-faint); }
   .card-priority {
     font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
@@ -291,6 +342,7 @@ const css = `
   }
   .card-priority.high { background: #fbe9d6; color: #8f4017; }
   .card-priority.medium { background: #f7ecd2; color: #7a5614; }
+  .card-priority.low { background: #e6f1e8; color: #285c38; }
 
   /* ── add card button ── */
   .add-card-btn {
@@ -371,6 +423,21 @@ const css = `
     transition: border-color .12s, box-shadow .12s;
   }
   .modal-textarea { resize: vertical; min-height: 72px; }
+  .owner-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .owner-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 12.5px; color: var(--ink-soft);
+    padding: 5px 10px 5px 6px; border-radius: 999px;
+    background: var(--bg); border: 1px solid var(--line);
+    cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+  }
+  .owner-chip:hover { border-color: var(--ember-tint2); }
+  .owner-chip.active { background: var(--ember-tint); border-color: var(--ember-tint2); color: var(--ember-deep); font-weight: 600; }
+  .owner-chip-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 8.5px; font-weight: 600; color: #fff; flex-shrink: 0;
+  }
   .modal-input:focus, .modal-textarea:focus, .modal-select:focus { border-color: var(--ember-tint2); box-shadow: 0 0 0 2px var(--ember-tint2); }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
   .modal-save { font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; padding: 8px 20px; border-radius: 9px; border: none; cursor: pointer; background: linear-gradient(150deg, #e98a45, #c0531c); box-shadow: 0 2px 8px rgba(191,99,43,0.35); transition: filter .1s; }
@@ -417,6 +484,11 @@ const ChevronRight = ({ className, style }: IconProps) => (
     <path d="m9 18 6-6-6-6" />
   </svg>
 );
+const Trash = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M10 11v6M14 11v6" />
+  </svg>
+);
 const Flag = ({ className, style }: IconProps) => (
   <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 22V4a1 1 0 0 1 1-1h11.5a.5.5 0 0 1 .4.8L13 9l3.9 5.2a.5.5 0 0 1-.4.8H5" />
@@ -424,130 +496,24 @@ const Flag = ({ className, style }: IconProps) => (
 );
 
 /* ── data model ──────────────────────────────────────────────────────────── */
-interface Person {
-  id: string;
-  name: string;
-  initials: string;
-  color: string;
-}
-interface CardData {
-  id: string;
-  title: string;
-  sub: string;
-  kind: string;
-  tags: string[];
-  priority: string | null;
-  ownerId: string | null;
-  deadline?: string | null;
-  dragging?: boolean;
-}
-interface ColData {
-  id: string;
-  name: string;
-  color: string;
-  cards: CardData[];
-}
-interface BoardData {
-  id: string;
-  name: string;
-  color: string;
-  cols: ColData[];
-}
+/* Board / column / card shapes come from lib/boardRepo (aliased to the local
+   names BoardData / ColData / CardData). People are real workspace members. */
+type Person = ProfileInfo;
+
 interface DragInfo {
   overCol: string | null;
   overCard: string | null;
   position: "above" | "below" | null;
 }
 
-/* ── seed data ───────────────────────────────────────────────────────────── */
-const PEOPLE: Person[] = [
-  { id: "1", name: "Reva S.", initials: "RS", color: "#cf6a2c" },
-  { id: "2", name: "Mads L.", initials: "ML", color: "#3f7ebc" },
-  { id: "3", name: "Priya K.", initials: "PK", color: "#4caf7d" },
-  { id: "4", name: "Owen T.", initials: "OT", color: "#8a54b5" },
-];
-
-function mkId() { return Math.random().toString(36).slice(2, 9); }
-
-function defaultCols(): ColData[] {
-  return [
-    { id: mkId(), name: "To Do", color: "#a59a8c", cards: [] },
-    { id: mkId(), name: "In Progress", color: "#cf6a2c", cards: [] },
-    { id: mkId(), name: "Review", color: "#d9a441", cards: [] },
-    { id: mkId(), name: "Done", color: "#4caf7d", cards: [] },
-  ];
-}
-
-const INIT_BOARDS: BoardData[] = [
-  {
-    id: "board-core", name: "Core Gameplay", color: "#cf6a2c",
-    cols: [
-      {
-        id: "col-todo", name: "To Do", color: "#a59a8c",
-        cards: [
-          { id: mkId(), title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", ownerId: "1", deadline: "2026-06-12" },
-          { id: mkId(), title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", ownerId: "2", deadline: "2026-06-19" },
-          { id: mkId(), title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, ownerId: null, deadline: "2026-06-08" },
-        ],
-      },
-      {
-        id: "col-wip", name: "In Progress", color: "#cf6a2c",
-        cards: [
-          { id: mkId(), title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", ownerId: "3" },
-          { id: mkId(), title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", ownerId: "1" },
-        ],
-      },
-      {
-        id: "col-review", name: "Review", color: "#d9a441",
-        cards: [
-          { id: mkId(), title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, ownerId: "4" },
-          { id: mkId(), title: "Audio ambience zones", sub: "Per-biome audio blending using distance cues.", kind: "mechanic", tags: ["audio"], priority: "medium", ownerId: "2" },
-        ],
-      },
-      {
-        id: "col-done", name: "Done", color: "#4caf7d",
-        cards: [
-          { id: mkId(), title: "Player stats dashboard", sub: "In-game HUD displaying health, stamina, gold.", kind: "mechanic", tags: ["ui", "done"], priority: null, ownerId: "3" },
-          { id: mkId(), title: "Tutorial flow v1", sub: "Guided onboarding across first 10 minutes of play.", kind: "vision", tags: ["ux", "done"], priority: null, ownerId: "1" },
-          { id: mkId(), title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, ownerId: "4" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "board-economy", name: "Economy & Items", color: "#4caf7d",
-    cols: [
-      {
-        id: "col-econ-todo", name: "To Do", color: "#a59a8c",
-        cards: [
-          { id: mkId(), title: "Crafting material sinks", sub: "Add high-tier recipes to drain late-game material surplus.", kind: "economy", tags: ["crafting"], priority: "medium", ownerId: "1" },
-          { id: mkId(), title: "Currency exchange rates", sub: "Define conversion between region-specific currencies.", kind: "economy", tags: ["world"], priority: null, ownerId: null },
-        ],
-      },
-      { id: "col-econ-wip", name: "In Progress", color: "#cf6a2c", cards: [
-          { id: mkId(), title: "Vendor restock logic", sub: "Tune restock intervals per vendor tier.", kind: "economy", tags: ["vendors"], priority: "high", ownerId: "3" },
-        ],
-      },
-      { id: "col-econ-review", name: "Review", color: "#d9a441", cards: [] },
-      { id: "col-econ-done", name: "Done", color: "#4caf7d", cards: [
-          { id: mkId(), title: "Starting gold balance", sub: "Set baseline gold for new characters per difficulty.", kind: "economy", tags: ["balance", "done"], priority: null, ownerId: "4" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "board-narrative", name: "World & Narrative", color: "#8a54b5",
-    cols: defaultCols().map((c, i) => i === 0 ? {
-      ...c, cards: [
-        { id: mkId(), title: "Faction reputation arcs", sub: "Outline reputation thresholds and unlocks for the three major factions.", kind: "lore", tags: ["factions"], priority: "medium", ownerId: "4" },
-      ],
-    } : c),
-  },
-];
-
 /* ── helpers ─────────────────────────────────────────────────────────────── */
-function ownerById(id: string | null | undefined): Person | null {
-  return PEOPLE.find((p) => p.id === id) ?? null;
+function ownerById(people: Person[], id: string | null | undefined): Person | null {
+  return people.find((p) => p.id === id) ?? null;
+}
+function ownersByIds(people: Person[], ids: string[] | undefined): Person[] {
+  return (ids ?? [])
+    .map((id) => ownerById(people, id))
+    .filter((p): p is Person => p !== null);
 }
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
@@ -565,14 +531,15 @@ function formatDeadline(key: string) {
 }
 
 /* ── Card component ──────────────────────────────────────────────────────── */
-function Card({ card, onDragStart, onDragEnd, dropState, onClick }: {
+function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
   card: CardData;
+  people: Person[];
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
   onDragEnd: () => void;
   dropState: "above" | "below" | null;
   onClick: (card: CardData) => void;
 }) {
-  const owner = ownerById(card.ownerId);
+  const owners = ownersByIds(people, card.ownerIds);
   return (
     <div
       className={`card${card.dragging ? " dragging" : ""}${dropState === "above" ? " drop-above" : ""}${dropState === "below" ? " drop-below" : ""}`}
@@ -591,10 +558,16 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }: {
       {card.sub && <div className="card-sub">{card.sub}</div>}
       <div className="card-foot">
         <div className="card-owner">
-          {owner ? (
+          {owners.length > 0 ? (
             <>
-              <span className="card-avatar" style={{ background: owner.color }}>{owner.initials}</span>
-              <span className="card-owner-name">{owner.name}</span>
+              <span className="card-avatar-group">
+                {owners.map((o) => (
+                  <span key={o.id} className="card-avatar" style={{ background: o.color }} title={o.name}>{o.initials}</span>
+                ))}
+              </span>
+              <span className="card-owner-name">
+                {owners.length === 1 ? owners[0].name : `${owners[0].name} +${owners.length - 1}`}
+              </span>
             </>
           ) : (
             <span className="card-owner-name" style={{ color: "var(--ink-faint)" }}>Unassigned</span>
@@ -616,9 +589,19 @@ function Card({ card, onDragStart, onDragEnd, dropState, onClick }: {
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, canMoveLeft, canMoveRight, isColDragOver, onMoveCol, onColDragStart, onColDragOver, onColDrop, onColDragEnd, onAddCard, onDeleteCol, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
+  people: Person[];
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  isColDragOver: boolean;
+  onMoveCol: (colId: string, dir: -1 | 1) => void;
+  onColDragStart: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onColDragOver: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onColDrop: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onColDragEnd: () => void;
   onAddCard: (colId: string, title: string) => void;
+  onDeleteCol: (colId: string) => void;
   onCardClick: (card: CardData) => void;
   dragState: DragInfo | null;
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
@@ -636,12 +619,24 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
   }
 
   return (
-    <div className="col">
-      <div className="col-head">
+    <div
+      className={`col${isColDragOver ? " col-drag-target" : ""}`}
+      onDragOver={(e) => onColDragOver(e, col.id)}
+      onDrop={(e) => onColDrop(e, col.id)}
+    >
+      <div
+        className="col-head"
+        draggable
+        title="Drag to reorder columns"
+        onDragStart={(e) => onColDragStart(e, col.id)}
+        onDragEnd={onColDragEnd}
+      >
         <span className="col-dot" style={{ background: col.color }} />
         <span className="col-name">{col.name}</span>
         <span className="col-count">{col.cards.length}</span>
-        <button className="col-menu-btn" title="Column options"><Dots className="" style={{ width: 15, height: 15 }} /></button>
+        <button className="col-menu-btn" title="Move column left" disabled={!canMoveLeft} onClick={() => onMoveCol(col.id, -1)}><ChevronLeft className="" style={{ width: 13, height: 13 }} /></button>
+        <button className="col-menu-btn" title="Move column right" disabled={!canMoveRight} onClick={() => onMoveCol(col.id, 1)}><ChevronRight className="" style={{ width: 13, height: 13 }} /></button>
+        <button className="col-menu-btn col-del-btn" title="Delete column" onClick={() => onDeleteCol(col.id)}><Trash className="" style={{ width: 14, height: 14 }} /></button>
       </div>
 
       <div
@@ -661,6 +656,7 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
             >
               <Card
                 card={card}
+                people={people}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 dropState={dropState}
@@ -697,18 +693,25 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, onClose, onSave, onMakeCanvas }: {
+function CardModal({ card, people, categories, onClose, onSave, onDelete, onMakeCanvas }: {
   card: CardData;
+  people: Person[];
+  categories: BoardCategory[];
   onClose: () => void;
   onSave: (card: CardData) => void;
+  onDelete: (card: CardData) => void;
   onMakeCanvas: (card: CardData) => void;
 }) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
   const [priority, setPriority] = useState(card.priority ?? "");
-  const [ownerId, setOwnerId] = useState(card.ownerId ?? "");
+  const [ownerIds, setOwnerIds] = useState<string[]>(card.ownerIds ?? []);
   const [deadline, setDeadline] = useState(card.deadline ?? "");
+
+  function toggleOwner(id: string) {
+    setOwnerIds((prev) => prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]);
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -724,13 +727,12 @@ function CardModal({ card, onClose, onSave, onMakeCanvas }: {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="modal-field">
-            <label className="modal-label">Kind</label>
+            <label className="modal-label">Category</label>
             <select className="modal-select" value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="">—</option>
-              <option value="mechanic">Mechanic</option>
-              <option value="vision">Vision</option>
-              <option value="economy">Economy</option>
-              <option value="lore">Lore</option>
+              {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+              {/* a card may carry a category that was since deleted/renamed */}
+              {kind && !categories.some((c) => c.name === kind) && <option value={kind}>{kind}</option>}
             </select>
           </div>
           <div className="modal-field">
@@ -739,33 +741,49 @@ function CardModal({ card, onClose, onSave, onMakeCanvas }: {
               <option value="">—</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
+              <option value="low">Low</option>
             </select>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div className="modal-field">
-            <label className="modal-label">Owner</label>
-            <select className="modal-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {PEOPLE.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+        <div className="modal-field">
+          <label className="modal-label">Assignees</label>
+          <div className="owner-chips">
+            {people.length === 0 && <span className="cal-due-empty">No workspace members to assign yet.</span>}
+            {people.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`owner-chip${ownerIds.includes(p.id) ? " active" : ""}`}
+                onClick={() => toggleOwner(p.id)}
+              >
+                <span className="owner-chip-avatar" style={{ background: p.color }}>{p.initials}</span>
+                {p.name}
+              </button>
+            ))}
           </div>
-          <div className="modal-field">
-            <label className="modal-label">Deadline</label>
-            <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </div>
+        </div>
+        <div className="modal-field">
+          <label className="modal-label">Deadline</label>
+          <input type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </div>
         <div className="modal-actions">
+          <button
+            className="modal-cancel modal-delete"
+            title="Delete this card"
+            onClick={() => { onDelete(card); onClose(); }}
+          >
+            <Trash style={{ width: 13, height: 13 }} /> Delete
+          </button>
           <button
             className="modal-cancel"
             style={{ marginRight: "auto" }}
             title="Create a canvas named after this card, with the to-do as a sticky note"
-            onClick={() => onMakeCanvas({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null })}
+            onClick={() => onMakeCanvas({ ...card, title, sub, kind, priority: priority || null, ownerIds, deadline: deadline || null })}
           >
             ✦ Open as canvas
           </button>
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null }); onClose(); }}>Save</button>
+          <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, deadline: deadline || null }); onClose(); }}>Save</button>
         </div>
       </div>
     </div>
@@ -775,8 +793,14 @@ function CardModal({ card, onClose, onSave, onMakeCanvas }: {
 /* ── Main BoardPage component ─────────────────────────────────────────────── */
 export default function BoardPage() {
   const router = useRouter();
-  const [boards, setBoards] = useState<BoardData[]>(INIT_BOARDS);
-  const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState<{ key: string; name: string; initials: string; color: string }[]>([]);
+  const [boards, setBoards] = useState<BoardData[]>([]);
+  const [categories, setCategories] = useState<BoardCategory[]>([]);
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [calMonth, setCalMonth] = useState(() => {
@@ -786,25 +810,115 @@ export default function BoardPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
+  const dragCol = useRef<string | null>(null);
+  const [colDragOver, setColDragOver] = useState<string | null>(null);
+  const wsRef = useRef<string | null>(null);
+
+  // ---- initial load: session -> seed -> boards + members ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await ensureSession();
+        if (cancelled) return;
+        if (!s) { router.replace("/login"); return; }
+        if (!s.onboarded) { router.replace("/onboarding"); return; }
+        setSession(s);
+        wsRef.current = s.workspaceId;
+        await seedBoardsIfEmpty(s.workspaceId);
+        const [loaded, members, cats] = await Promise.all([
+          loadBoards(s.workspaceId),
+          listMembers(s.workspaceId),
+          listCategories(s.workspaceId),
+        ]);
+        if (cancelled) return;
+        setBoards(loaded);
+        setActiveBoardId(loaded[0]?.id ?? null);
+        setPeople(members);
+        setCategories(cats);
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
+  // ---- realtime: refetch on any board change from a teammate + presence ----
+  useEffect(() => {
+    const wsId = wsRef.current;
+    if (loading || !wsId || !session) return;
+
+    let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefetch = () => {
+      if (refetchTimer) clearTimeout(refetchTimer);
+      refetchTimer = setTimeout(async () => {
+        refetchTimer = null;
+        try {
+          const [fresh, cats] = await Promise.all([loadBoards(wsId), listCategories(wsId)]);
+          setBoards(fresh);
+          setCategories(cats);
+          setActiveBoardId((cur) => (cur && fresh.some((b) => b.id === cur) ? cur : (fresh[0]?.id ?? null)));
+        } catch (e) {
+          console.error("board refetch failed", e);
+        }
+      }, 500);
+    };
+
+    const tables = ["boards", "board_columns", "board_cards", "board_categories"];
+    let channel = supabase.channel(`board:${wsId}`, { config: { broadcast: { self: false } } });
+    for (const table of tables) {
+      channel = channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `project_id=eq.${wsId}` },
+        scheduleRefetch,
+      );
+    }
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ key: string; name: string; initials: string; color: string }>();
+        const seen = new Map<string, { key: string; name: string; initials: string; color: string }>();
+        for (const metas of Object.values(state)) {
+          for (const m of metas) seen.set(m.key, m);
+        }
+        setOnline(Array.from(seen.values()));
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            key: session.userId,
+            name: session.name,
+            initials: session.initials,
+            color: session.color,
+          });
+        }
+      });
+
+    return () => {
+      if (refetchTimer) clearTimeout(refetchTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [loading, session]);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
-  const cols = activeBoard.cols;
+  const cols = activeBoard?.cols ?? [];
 
   function setCols(updater: ColData[] | ((cols: ColData[]) => ColData[])) {
     setBoards((prev) => prev.map((b) =>
-      b.id !== activeBoardId ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
+      b.id !== (activeBoardId ?? prev[0]?.id) ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
     ));
   }
 
-  /** Spin a to-do off into its own canvas: create it named after the card
-      inside the "Scrum board" folder (created on first use), then open it
-      with the card's content spawning as a sticky note (?note=). */
+  /** Spin a to-do off into its own canvas: create it named after the card,
+      then open it with the card's content spawning as a sticky note (?note=). */
   async function handleMakeCanvas(card: CardData) {
     try {
       const s = await ensureSession();
       if (!s) { router.push("/login"); return; }
-      const folder = await ensureCanvasFolder(s.workspaceId, "Scrum board");
-      const canvas = await createCanvas(s.workspaceId, card.title, folder.id);
+      const canvas = await createCanvas(s.workspaceId, card.title);
       const lines = [card.title];
       if (card.sub) lines.push("", card.sub);
       const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map((t) => "#" + t).join("  ");
@@ -815,12 +929,16 @@ export default function BoardPage() {
     }
   }
 
-  function handleAddBoard() {
+  async function handleAddBoard() {
     const name = window.prompt("New board name");
-    if (!name?.trim()) return;
-    const id = mkId();
-    setBoards((prev) => [...prev, { id, name: name.trim(), color: "#cf6a2c", cols: defaultCols() }]);
-    setActiveBoardId(id);
+    if (!name?.trim() || !wsRef.current) return;
+    try {
+      const board = await createBoard(wsRef.current, name.trim());
+      setBoards((prev) => prev.some((b) => b.id === board.id) ? prev : [...prev, board]);
+      setActiveBoardId(board.id);
+    } catch (e) {
+      console.error("create board failed", e);
+    }
   }
 
   /* drag handlers */
@@ -838,6 +956,7 @@ export default function BoardPage() {
     setDragState(null);
   }
   function handleDragOver(e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) {
+    if (!drag.current.cardId) return; // a column (not a card) is being dragged
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const position = ((): "above" | "below" | null => {
@@ -852,39 +971,47 @@ export default function BoardPage() {
     e.preventDefault();
     const { cardId } = drag.current;
     if (!cardId) return;
-    setCols((prev) => {
-      let card: CardData | undefined;
-      const without = prev.map((c) => {
-        const found = c.cards.find((k) => k.id === cardId);
-        if (found) card = found;
-        return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
-      });
-      if (!card) return prev;
-      const moved = card;
-      return without.map((c) => {
-        if (c.id !== colId) return c;
-        if (!targetCardId) return { ...c, cards: [...c.cards, moved] };
-        const idx = c.cards.findIndex((k) => k.id === targetCardId);
-        const pos = dragState?.position === "above" ? idx : idx + 1;
-        const next = [...c.cards];
-        next.splice(pos, 0, moved);
-        return { ...c, cards: next };
-      });
+
+    // compute the move synchronously so we can persist the resulting order
+    let card: CardData | undefined;
+    const without = cols.map((c) => {
+      const found = c.cards.find((k) => k.id === cardId);
+      if (found) card = found;
+      return { ...c, cards: c.cards.filter((k) => k.id !== cardId) };
     });
+    if (!card) return;
+    const moved = { ...card, dragging: false };
+    const next = without.map((c) => {
+      if (c.id !== colId) return c;
+      if (!targetCardId) return { ...c, cards: [...c.cards, moved] };
+      const idx = c.cards.findIndex((k) => k.id === targetCardId);
+      const pos = dragState?.position === "above" ? idx : idx + 1;
+      const cards = [...c.cards];
+      cards.splice(pos, 0, moved);
+      return { ...c, cards };
+    });
+    setCols(next);
     setDragState(null);
+
+    const destCol = next.find((c) => c.id === colId);
+    if (destCol) {
+      moveCard(cardId, colId, destCol.cards.map((k) => k.id))
+        .catch((err) => console.error("move card failed", err));
+    }
   }
   function handleDragLeave() { /* keep state for cross-card sub-regions */ }
 
   /* add card */
-  function handleAddCard(colId: string, title: string) {
-    setCols((prev) => prev.map((c) =>
-      c.id !== colId ? c : {
-        ...c,
-        cards: [...c.cards, {
-          id: mkId(), title, sub: "", kind: "", tags: [], priority: null, ownerId: null, deadline: selectedDate ?? null
-        }]
-      }
-    ));
+  async function handleAddCard(colId: string, title: string) {
+    if (!wsRef.current) return;
+    try {
+      const card = await createCard(wsRef.current, colId, title, selectedDate ?? null);
+      setCols((prev) => prev.map((c) =>
+        c.id !== colId ? c : c.cards.some((k) => k.id === card.id) ? c : { ...c, cards: [...c.cards, card] }
+      ));
+    } catch (e) {
+      console.error("create card failed", e);
+    }
   }
 
   /* save card from modal */
@@ -892,16 +1019,135 @@ export default function BoardPage() {
     setCols((prev) => prev.map((c) => ({
       ...c, cards: c.cards.map((k) => k.id === updated.id ? updated : k)
     })));
+    updateCard(updated).catch((e) => console.error("save card failed", e));
+  }
+
+  /* delete card */
+  function handleDeleteCard(card: CardData) {
+    if (!window.confirm(`Delete card "${card.title}"?`)) return;
+    setCols((prev) => prev.map((c) => ({ ...c, cards: c.cards.filter((k) => k.id !== card.id) })));
+    deleteCard(card.id).catch((e) => console.error("delete card failed", e));
+  }
+
+  /* delete column (and its cards) */
+  function handleDeleteCol(colId: string) {
+    const col = cols.find((c) => c.id === colId);
+    if (!col) return;
+    const suffix = col.cards.length > 0 ? ` and its ${col.cards.length} card${col.cards.length === 1 ? "" : "s"}` : "";
+    if (!window.confirm(`Delete column "${col.name}"${suffix}?`)) return;
+    setCols((prev) => prev.filter((c) => c.id !== colId));
+    deleteColumn(colId).catch((e) => console.error("delete column failed", e));
+  }
+
+  /* delete board (and everything on it) */
+  function handleDeleteBoard(board: BoardData) {
+    if (!window.confirm(`Delete board "${board.name}" and everything on it? This can't be undone.`)) return;
+    setBoards((prev) => {
+      const next = prev.filter((b) => b.id !== board.id);
+      setActiveBoardId((cur) => (cur === board.id ? (next[0]?.id ?? null) : cur));
+      return next;
+    });
+    deleteBoard(board.id).catch((e) => console.error("delete board failed", e));
   }
 
   /* add new column */
-  function handleAddCol() {
+  async function handleAddCol() {
     const name = window.prompt("New column name");
-    if (!name?.trim()) return;
-    setCols((prev) => [...prev, { id: mkId(), name: name.trim(), color: "#a59a8c", cards: [] }]);
+    if (!name?.trim() || !wsRef.current || !activeBoard) return;
+    try {
+      const col = await createColumn(wsRef.current, activeBoard.id, name.trim());
+      setCols((prev) => prev.some((c) => c.id === col.id) ? prev : [...prev, col]);
+    } catch (e) {
+      console.error("create column failed", e);
+    }
   }
 
-  const kinds = ["mechanic", "vision", "economy", "lore"];
+  /* ── categories ── */
+  async function handleAddCategory() {
+    const name = window.prompt("New category name");
+    if (!name?.trim() || !wsRef.current) return;
+    try {
+      const cat = await createCategory(wsRef.current, name.trim());
+      setCategories((prev) => prev.some((c) => c.id === cat.id) ? prev : [...prev, cat]);
+    } catch (e) {
+      console.error("create category failed", e);
+    }
+  }
+
+  function handleRenameCategory(cat: BoardCategory) {
+    const name = window.prompt(`Rename category "${cat.name}"`, cat.name);
+    if (!name?.trim() || name.trim() === cat.name || !wsRef.current) return;
+    const clean = name.trim();
+    setCategories((prev) => prev.map((c) => (c.id === cat.id ? { ...c, name: clean } : c)));
+    setBoards((prev) => prev.map((b) => ({
+      ...b,
+      cols: b.cols.map((c) => ({
+        ...c, cards: c.cards.map((k) => (k.kind === cat.name ? { ...k, kind: clean } : k)),
+      })),
+    })));
+    setFilterKind((cur) => (cur === cat.name ? clean : cur));
+    renameCategory(wsRef.current, cat.id, cat.name, clean)
+      .catch((e) => console.error("rename category failed", e));
+  }
+
+  function handleDeleteCategory(cat: BoardCategory) {
+    if (!wsRef.current) return;
+    if (!window.confirm(`Delete category "${cat.name}"? Cards keep their other details but lose this label.`)) return;
+    setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+    setBoards((prev) => prev.map((b) => ({
+      ...b,
+      cols: b.cols.map((c) => ({
+        ...c, cards: c.cards.map((k) => (k.kind === cat.name ? { ...k, kind: "" } : k)),
+      })),
+    })));
+    setFilterKind((cur) => (cur === cat.name ? null : cur));
+    deleteCategory(wsRef.current, cat.id, cat.name)
+      .catch((e) => console.error("delete category failed", e));
+  }
+
+  /* ── move a column left/right within the board ── */
+  function handleMoveCol(colId: string, dir: -1 | 1) {
+    const idx = cols.findIndex((c) => c.id === colId);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= cols.length) return;
+    const next = [...cols];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setCols(next);
+    reorderColumns(next.map((c) => c.id))
+      .catch((e) => console.error("reorder columns failed", e));
+  }
+
+  /* ── drag a column header to reorder ── */
+  function handleColDragStart(e: DragEvent<HTMLDivElement>, colId: string) {
+    dragCol.current = colId;
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function handleColDragOver(e: DragEvent<HTMLDivElement>, colId: string) {
+    if (!dragCol.current || dragCol.current === colId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setColDragOver(colId);
+  }
+  function handleColDrop(e: DragEvent<HTMLDivElement>, colId: string) {
+    const from = dragCol.current;
+    dragCol.current = null;
+    setColDragOver(null);
+    if (!from || from === colId) return;
+    e.preventDefault();
+    const fromIdx = cols.findIndex((c) => c.id === from);
+    const toIdx = cols.findIndex((c) => c.id === colId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...cols];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setCols(next);
+    reorderColumns(next.map((c) => c.id))
+      .catch((err) => console.error("reorder columns failed", err));
+  }
+  function handleColDragEnd() {
+    dragCol.current = null;
+    setColDragOver(null);
+  }
 
   const displayCols = cols.map((c) => ({
     ...c,
@@ -957,6 +1203,19 @@ export default function BoardPage() {
   const today = todayKey();
   const selectedDue = selectedDate ? (dueMap[selectedDate] ?? []) : [];
 
+  if (loading || error) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="board-app" style={{ alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: error ? "#b9421f" : "var(--ink-soft)", fontSize: 14 }}>
+            {error ? `Couldn't load boards: ${error}` : "Loading boards…"}
+          </span>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <style>{css}</style>
@@ -965,8 +1224,8 @@ export default function BoardPage() {
         {/* topbar (global chrome) */}
         <TopBar
           crumbs={["Design", "Board"]}
-          online={PEOPLE.slice(0, 3).map((p) => ({
-            key: p.id,
+          online={online.map((p) => ({
+            key: p.key,
             name: p.name,
             initials: p.initials,
             color: p.color,
@@ -989,6 +1248,14 @@ export default function BoardPage() {
               >
                 <span className="sidebar-dot" style={{ background: b.color }} />
                 <span className="sidebar-name">{b.name}</span>
+                <span
+                  className="sidebar-del"
+                  role="button"
+                  title={`Delete board "${b.name}"`}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteBoard(b); }}
+                >
+                  <Trash style={{ width: 12, height: 12 }} />
+                </span>
               </button>
             ))}
             <div className="sidebar-divider" />
@@ -1055,7 +1322,7 @@ export default function BoardPage() {
             <div className="board-toolbar">
               <div>
                 <div className="board-label">Design Workspace · Board</div>
-                <div className="board-heading">{activeBoard.name}</div>
+                <div className="board-heading">{activeBoard?.name ?? "No boards yet"}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <div className="filter-row">
@@ -1065,15 +1332,28 @@ export default function BoardPage() {
                   >
                     <Filter style={{ width: 13, height: 13 }} /> All
                   </button>
-                  {kinds.map((k) => (
+                  {categories.map((cat) => (
                     <button
-                      key={k}
-                      className={`filter-chip${filterKind === k ? " active" : ""}`}
-                      onClick={() => setFilterKind(filterKind === k ? null : k)}
+                      key={cat.id}
+                      className={`filter-chip${filterKind === cat.name ? " active" : ""}`}
+                      onClick={() => setFilterKind(filterKind === cat.name ? null : cat.name)}
+                      onDoubleClick={() => handleRenameCategory(cat)}
+                      title="Click to filter · double-click to rename"
                     >
-                      {k}
+                      {cat.name}
+                      <span
+                        className="chip-del"
+                        role="button"
+                        title={`Delete category "${cat.name}"`}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
+                      >
+                        ×
+                      </span>
                     </button>
                   ))}
+                  <button className="filter-chip filter-chip-add" onClick={handleAddCategory} title="Add category">
+                    <Plus style={{ width: 12, height: 12 }} /> Category
+                  </button>
                 </div>
                 <button className="add-col-btn" onClick={handleAddCol}>
                   <Plus style={{ width: 15, height: 15 }} /> Column
@@ -1084,11 +1364,21 @@ export default function BoardPage() {
             {/* kanban board */}
             <div className="board-scroll">
               <div className="board-cols">
-                {displayCols.map((col) => (
+                {displayCols.map((col, i) => (
                   <Column
                     key={col.id}
                     col={col}
+                    people={people}
+                    canMoveLeft={i > 0}
+                    canMoveRight={i < displayCols.length - 1}
+                    isColDragOver={colDragOver === col.id}
+                    onMoveCol={handleMoveCol}
+                    onColDragStart={handleColDragStart}
+                    onColDragOver={handleColDragOver}
+                    onColDrop={handleColDrop}
+                    onColDragEnd={handleColDragEnd}
                     onAddCard={handleAddCard}
+                    onDeleteCol={handleDeleteCol}
                     onCardClick={setEditingCard}
                     dragState={dragState}
                     onDragStart={handleDragStart}
@@ -1114,8 +1404,11 @@ export default function BoardPage() {
         {editingCard && (
           <CardModal
             card={editingCard}
+            people={people}
+            categories={categories}
             onClose={() => setEditingCard(null)}
             onSave={(updated) => { handleSaveCard(updated); setEditingCard(null); }}
+            onDelete={handleDeleteCard}
             onMakeCanvas={handleMakeCanvas}
           />
         )}

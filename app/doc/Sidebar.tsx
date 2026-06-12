@@ -61,6 +61,8 @@ interface SidebarProps {
   onDeleteSection: (id: string) => void;
   onMovePage: (movedId: string, sectionId: string | null, parentId: string | null, orderedIds: string[]) => void;
   onMoveSection: (orderedIds: string[]) => void;
+  /** False for viewers: navigation only, no create/rename/delete/drag. */
+  canEdit?: boolean;
 }
 
 const byPos = (a: DesignDoc, b: DesignDoc) => (a.position ?? 0) - (b.position ?? 0);
@@ -78,6 +80,7 @@ export default function Sidebar({
   onDeleteSection,
   onMovePage,
   onMoveSection,
+  canEdit = true,
 }: SidebarProps) {
   const [dragPage, setDragPage] = useState<string | null>(null);
   const [dragSection, setDragSection] = useState<string | null>(null);
@@ -194,7 +197,7 @@ export default function Sidebar({
             (dropHere ? ` drop-${dropHere}` : "")
           }
           style={{ paddingLeft: 9 + depth * 16 }}
-          draggable
+          draggable={canEdit}
           onClick={() => onSelect(doc.id)}
           onDragStart={(e) => {
             setDragSection(null);
@@ -241,16 +244,18 @@ export default function Sidebar({
           ) : (
             <span className="nav-title">{doc.title}</span>
           )}
-          <button
-            className="row-dots"
-            title="Page options"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenu((m) => (m?.kind === "page" && m.id === doc.id ? null : { kind: "page", id: doc.id }));
-            }}
-          >
-            <Dots className="row-dots-icon" />
-          </button>
+          {canEdit && (
+            <button
+              className="row-dots"
+              title="Page options"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenu((m) => (m?.kind === "page" && m.id === doc.id ? null : { kind: "page", id: doc.id }));
+              }}
+            >
+              <Dots className="row-dots-icon" />
+            </button>
+          )}
           <span className={"nav-status status-" + doc.status} />
           {menu?.kind === "page" && menu.id === doc.id && (
             <div className="row-menu" onClick={(e) => e.stopPropagation()}>
@@ -289,7 +294,7 @@ export default function Sidebar({
 
       <div className="nav-label-row">
         <span className="nav-label">Workspace</span>
-        <span className="drag-hint">drag to reorder / nest</span>
+        {canEdit && <span className="drag-hint">drag to reorder / nest</span>}
       </div>
 
       <nav className="nav">
@@ -317,7 +322,7 @@ export default function Sidebar({
             >
               <div
                 className="nav-group-label"
-                draggable
+                draggable={canEdit}
                 onDragStart={(e) => {
                   setDragPage(null);
                   setDragSection(sec.id);
@@ -350,6 +355,7 @@ export default function Sidebar({
                 ) : (
                   <span>{sec.name}</span>
                 )}
+                {canEdit && (
                 <span className="nav-group-actions">
                   <button
                     className="nav-add"
@@ -371,6 +377,7 @@ export default function Sidebar({
                     <Dots className="row-dots-icon" />
                   </button>
                 </span>
+                )}
                 {menu?.kind === "section" && menu.id === sec.id && (
                   <div className="row-menu" onClick={(e) => e.stopPropagation()}>
                     <button onMouseDown={(e) => { e.preventDefault(); startRename("section", sec.id, sec.name); }}>
@@ -399,12 +406,14 @@ export default function Sidebar({
         })}
       </nav>
 
+      {canEdit && (
       <button className="new-page" onClick={() => onNewPage(active.sectionId ?? null, active.group)}>
         <Plus className="new-page-icon" />
         New page
       </button>
+      )}
 
-      {newSectionOpen ? (
+      {!canEdit ? null : newSectionOpen ? (
         <input
           className="new-section-input"
           autoFocus

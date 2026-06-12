@@ -81,24 +81,21 @@ export async function editComment(id: string, body: string): Promise<void> {
   if (error) throw new Error(`editComment failed: ${error.message}`);
 }
 
-/** Resolve / reopen a thread (any member may; root comments only). */
-export async function setCommentResolved(
-  id: string,
-  resolved: boolean,
-  userId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("comments")
-    .update(
-      resolved
-        ? { resolved_at: new Date().toISOString(), resolved_by: userId }
-        : { resolved_at: null, resolved_by: null },
-    )
-    .eq("id", id);
+/**
+ * Resolve / reopen a thread (root comments only). Any member may resolve —
+ * comment UPDATE is author-only under RLS, so this goes through the
+ * set_comment_resolved() SECURITY DEFINER function instead.
+ */
+export async function setCommentResolved(id: string, resolved: boolean): Promise<void> {
+  const { error } = await supabase.rpc("set_comment_resolved", {
+    p_comment: id,
+    p_resolved: resolved,
+  });
   if (error) throw new Error(`setCommentResolved failed: ${error.message}`);
 }
 
-/** Delete a comment (RLS allows the author; replies cascade via FK). */
+/** Delete a comment (RLS: the author, or the project owner; replies cascade via FK). */
 export async function deleteComment(id: string): Promise<void> {
-  await supabase.from("comments").delete().eq("id", id);
+  const { error } = await supabase.from("comments").delete().eq("id", id);
+  if (error) throw new Error(`deleteComment failed: ${error.message}`);
 }

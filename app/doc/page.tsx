@@ -7,7 +7,7 @@ import Sidebar from "./Sidebar";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import { supabase } from "@/lib/supabase";
-import { ensureSession, type SessionInfo } from "@/lib/session";
+import { ensureSession, signOutAndClear, type SessionInfo } from "@/lib/session";
 import {
   createPage,
   createSection,
@@ -269,7 +269,7 @@ function DocPageInner() {
           router.replace("/login");
           return;
         }
-        if (!s.onboarded) {
+        if (!s.onboarded || !s.workspaceId) {
           router.replace("/onboarding");
           return;
         }
@@ -665,8 +665,12 @@ function DocPageInner() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Viewers navigate and comment; everything that writes is hidden/disabled.
+  const canEdit = session?.role !== "viewer";
+
   // ---- debounced persistence ----
   const scheduleSaveBlocks = (pageId: string, blocks: Block[]) => {
+    if (!canEdit) return;
     clearTimeout(saveTimers.current[`b:${pageId}`]);
     setSaveState("saving");
     saveTimers.current[`b:${pageId}`] = setTimeout(() => {
@@ -675,6 +679,7 @@ function DocPageInner() {
     }, 600);
   };
   const scheduleSavePage = (doc: DesignDoc) => {
+    if (!canEdit) return;
     clearTimeout(saveTimers.current[`p:${doc.id}`]);
     setSaveState("saving");
     saveTimers.current[`p:${doc.id}`] = setTimeout(() => {
@@ -714,7 +719,7 @@ function DocPageInner() {
   // ---- create pages / sections ----
   const handleNewPage = async (sectionId: string | null, sectionName: string) => {
     const wsId = wsRef.current;
-    if (!wsId) return;
+    if (!wsId || !canEdit) return;
     try {
       const doc = await createPage(wsId, sectionId, sectionName);
       suppress.current[doc.id] = Date.now() + 2500; // ignore our own INSERT echo
@@ -729,7 +734,7 @@ function DocPageInner() {
 
   const handleNewSection = async (name: string) => {
     const wsId = wsRef.current;
-    if (!wsId || !name) return;
+    if (!wsId || !name || !canEdit) return;
     try {
       const sec = await createSection(wsId, name);
       setSections((prev) => [...prev, sec]);
@@ -741,6 +746,7 @@ function DocPageInner() {
 
   const handleSetOwner = (p: ProfileInfo | null) => {
     setOwnerMenuOpen(false);
+    if (!canEdit) return;
     const patch: Partial<DesignDoc> = p
       ? { ownerId: p.id, owner: p.initials, ownerName: p.name, ownerColor: p.color }
       : { ownerId: undefined, owner: "—", ownerName: "Unassigned", ownerColor: "#a59a8c" };
@@ -799,7 +805,7 @@ function DocPageInner() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutAndClear();
     router.replace("/login");
   };
 
@@ -811,7 +817,7 @@ function DocPageInner() {
     } catch (e) {
       console.error(e);
     }
-    await supabase.auth.signOut();
+    await signOutAndClear();
     router.replace("/login");
   };
 
@@ -908,15 +914,19 @@ function DocPageInner() {
         <div className="screen">
           <h1>{workspace?.name ?? "This workspace"} is empty</h1>
           <p style={{ color: "var(--ink-soft)" }}>
-            Start the design doc with its first page.
+            {canEdit
+              ? "Start the design doc with its first page."
+              : "Nothing here yet — an editor needs to create the first page."}
           </p>
-          <button
-            type="button"
-            className="share-btn"
-            onClick={() => handleNewPage(null, "General")}
-          >
-            Create your first page
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              className="share-btn"
+              onClick={() => handleNewPage(null, "General")}
+            >
+              Create your first page
+            </button>
+          )}
         </div>
       </div>
     );
@@ -987,6 +997,7 @@ function DocPageInner() {
           onDeleteSection={handleDeleteSection}
           onMovePage={handleMovePage}
           onMoveSection={handleMoveSection}
+          canEdit={canEdit}
         />
 
         {/* ---------------- main document ---------------- */}
@@ -1000,6 +1011,7 @@ function DocPageInner() {
               tag="h1"
               className="doc-title"
               value={active.title}
+              disabled={!canEdit}
               onSave={(v) => update(active.id, { title: v })}
             />
 
@@ -1007,7 +1019,8 @@ function DocPageInner() {
               tag="p"
               className="doc-subtitle"
               value={active.subtitle}
-              placeholder="Add a one-line summary…"
+              placeholder={canEdit ? "Add a one-line summary…" : undefined}
+              disabled={!canEdit}
               onSave={(v) => update(active.id, { subtitle: v })}
             />
 
@@ -1020,6 +1033,7 @@ function DocPageInner() {
                   <select
                     className="status-select"
                     value={active.status}
+                    disabled={!canEdit}
                     onChange={(e) =>
                       update(active.id, { status: e.target.value as Status })
                     }
@@ -1036,7 +1050,11 @@ function DocPageInner() {
               <div className="meta-row">
                 <span className="meta-key">Owner</span>
                 <span className="owner-wrap" ref={ownerWrapRef}>
-                  <button className="owner owner-btn" onClick={() => setOwnerMenuOpen((o) => !o)}>
+                  <button
+                    className="owner owner-btn"
+                    disabled={!canEdit}
+                    onClick={() => canEdit && setOwnerMenuOpen((o) => !o)}
+                  >
                     <span className="owner-avatar" style={{ background: active.ownerColor }}>
                       {active.owner}
                     </span>
@@ -1070,12 +1088,14 @@ function DocPageInner() {
                 <span className="meta-key">Tags</span>
                 <span className="tags">
                   {active.tags.map((t) => (
-                    <span key={t} className="tag tag-editable">
+                    <span key={t} className={"tag" + (canEdit ? " tag-editable" : "")}>
                       # {t}
-                      <button className="tag-remove" title="Remove tag" onClick={() => removeTag(t)}>×</button>
+                      {canEdit && (
+                        <button className="tag-remove" title="Remove tag" onClick={() => removeTag(t)}>×</button>
+                      )}
                     </span>
                   ))}
-                  {tagEditing ? (
+                  {!canEdit ? null : tagEditing ? (
                     <input
                       className="tag-input"
                       autoFocus
@@ -1103,32 +1123,37 @@ function DocPageInner() {
                       const board = canvases.find((c) => "canvas:" + c.id === id);
                       if (!board) return null;
                       return (
-                        <span key={id} className="link-chip link-editable">
+                        <span key={id} className={"link-chip" + (canEdit ? " link-editable" : "")}>
                           <button
                             className="link-go"
                             onClick={() => router.push(`/doc/canvas?c=${board.id}`)}
                           >
                             <Grid className="link-icon" /> {board.name}
                           </button>
-                          <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
-                            ×
-                          </button>
+                          {canEdit && (
+                            <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
+                              ×
+                            </button>
+                          )}
                         </span>
                       );
                     }
                     const target = docs.find((d) => d.id === id);
                     if (!target) return null;
                     return (
-                      <span key={id} className="link-chip link-editable">
+                      <span key={id} className={"link-chip" + (canEdit ? " link-editable" : "")}>
                         <button className="link-go" onClick={() => openPage(target.id)}>
                           <LinkIcon className="link-icon" /> {target.title}
                         </button>
-                        <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
-                          ×
-                        </button>
+                        {canEdit && (
+                          <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
+                            ×
+                          </button>
+                        )}
                       </span>
                     );
                   })}
+                  {canEdit && (
                   <span className="link-add-wrap" ref={linkWrapRef}>
                     <button className="tag-add" onClick={() => setLinkMenuOpen((o) => !o)}>
                       + Link
@@ -1166,6 +1191,7 @@ function DocPageInner() {
                       </div>
                     )}
                   </span>
+                  )}
                 </span>
               </div>
             </div>
@@ -1175,6 +1201,7 @@ function DocPageInner() {
               key={active.id}
               repo={workspace?.repo || null}
               blocks={active.blocks}
+              readOnly={!canEdit}
               mentionTargets={mentionTargets}
               validRefs={validRefs}
               onNavigate={handleMentionNavigate}
@@ -1225,7 +1252,7 @@ function DocPageInner() {
             onDelete={(id) => deleteComment(id).catch(console.error)}
             onEdit={(id, body) => editComment(id, body).catch(console.error)}
             onResolve={(id, resolved) => {
-              if (session) setCommentResolved(id, resolved, session.userId).catch(console.error);
+              if (session) setCommentResolved(id, resolved).catch(console.error);
             }}
           />
 
@@ -1256,7 +1283,7 @@ function DocPageInner() {
             <kbd className="kbd">⌘K</kbd>
           </button>
         }
-        onNew={() => handleNewPage(activeSectionId, active.group)}
+        onNew={canEdit ? () => handleNewPage(activeSectionId, active.group) : undefined}
       />
 
       <CommandPalette
@@ -1266,6 +1293,7 @@ function DocPageInner() {
         activeSectionId={activeSectionId}
         activeGroup={active.group}
         onJump={openPage}
+        canCreate={canEdit}
         onNewPage={handleNewPage}
         onNewSection={() => {
           const name = window.prompt("New section name");
@@ -1297,21 +1325,24 @@ function Editable({
   onSave,
   className,
   placeholder,
+  disabled = false,
 }: {
   tag: "h1" | "h2" | "p";
   value: string;
   onSave: (value: string) => void;
   className?: string;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const multiline = Tag === "p";
   return (
     <Tag
-      className={(className ?? "") + " editable"}
-      contentEditable
+      className={(className ?? "") + (disabled ? "" : " editable")}
+      contentEditable={!disabled}
       suppressContentEditableWarning
       data-placeholder={placeholder}
       onBlur={(e) => {
+        if (disabled) return;
         const text = e.currentTarget.innerText.trim();
         if (text !== value) onSave(text);
       }}

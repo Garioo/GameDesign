@@ -73,6 +73,12 @@ create table if not exists public.project_members (
   primary key (project_id, user_id)
 );
 
+-- Roles are a closed set. 'owner' rows are managed exclusively by the
+-- ownership triggers below — RLS never lets a client write that value.
+alter table public.project_members drop constraint if exists project_members_role_check;
+alter table public.project_members add constraint project_members_role_check
+  check (role in ('owner', 'editor', 'viewer')) not valid;
+
 -- sections — top-level groupings inside a project
 create table if not exists public.sections (
   id         uuid primary key default gen_random_uuid(),
@@ -184,6 +190,11 @@ create table if not exists public.workspace_invites (
   expires_at timestamptz not null default now() + interval '14 days'
 );
 
+-- Invites can only grant editor or viewer — ownership is never invite-able.
+alter table public.workspace_invites drop constraint if exists workspace_invites_role_check;
+alter table public.workspace_invites add constraint workspace_invites_role_check
+  check (role in ('editor', 'viewer')) not valid;
+
 -- activity — feed of who did what
 create table if not exists public.activity (
   id         uuid primary key default gen_random_uuid(),
@@ -284,56 +295,99 @@ returns boolean language sql security definer stable set search_path = public as
   );
 $$;
 
--- Shared single-workspace bootstrap used by the web client on every /doc load.
--- If the workspace already exists, this restores the caller's membership even
--- when the project owner was changed manually in Supabase.
-create or replace function public.ensure_workspace()
-returns uuid language plpgsql security definer set search_path = public as $$
-declare
-  workspace_id uuid := '11111111-1111-1111-1111-111111111111';
-  caller uuid := auth.uid();
+-- The caller owns the project (projects.owner is the source of truth).
+create or replace function public.is_project_owner(p_project uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from public.projects p
+    where p.id = p_project and p.owner = auth.uid()
+  );
+$$;
+
+-- The caller may write project content (owner or editor; viewers read only).
+create or replace function public.can_edit_project(p_project uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from public.project_members m
+    where m.project_id = p_project and m.user_id = auth.uid()
+      and m.role in ('owner', 'editor')
+  );
+$$;
+
+create or replace function public.can_edit_page(p_page uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1
+    from public.pages pg
+    join public.project_members m on m.project_id = pg.project_id
+    where pg.id = p_page and m.user_id = auth.uid()
+      and m.role in ('owner', 'editor')
+  );
+$$;
+
+-- The caller owns the project a page belongs to (comment moderation).
+create or replace function public.can_moderate_page(p_page uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1
+    from public.pages pg
+    join public.projects p on p.id = pg.project_id
+    where pg.id = p_page and p.owner = auth.uid()
+  );
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Ownership protection (fixes: any member could UPDATE projects.owner and
+-- seize + delete the workspace). Only the current owner may transfer, and only
+-- to an existing member. auth.uid() is null for service-role / SQL-editor
+-- sessions, which bypass RLS anyway — those pass through untouched.
+-- ----------------------------------------------------------------------------
+create or replace function public.protect_project_owner()
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if caller is null then
-    raise exception 'ensure_workspace requires an authenticated user';
+  if new.owner is distinct from old.owner and auth.uid() is not null then
+    if auth.uid() is distinct from old.owner then
+      raise exception 'Only the workspace owner can transfer ownership';
+    end if;
+    if not exists (
+      select 1 from public.project_members m
+      where m.project_id = old.id and m.user_id = new.owner
+    ) then
+      raise exception 'New owner must already be a member of the workspace';
+    end if;
   end if;
-
-  insert into public.profiles (id, email, name)
-  values (
-    caller,
-    auth.jwt() ->> 'email',
-    split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1)
-  )
-  on conflict (id) do nothing;
-
-  insert into public.projects (id, name, tagline, genre, owner)
-  values (
-    workspace_id,
-    'LONGDUSK',
-    'Collaborative game design workspace',
-    'Action RPG',
-    caller
-  )
-  on conflict (id) do nothing;
-
-  insert into public.project_members (project_id, user_id, role)
-  values (
-    workspace_id,
-    caller,
-    case
-      when exists (
-        select 1 from public.projects p
-        where p.id = workspace_id and p.owner = caller
-      )
-      then 'owner'
-      else 'editor'
-    end
-  )
-  on conflict (project_id, user_id) do nothing;
-
-  return workspace_id;
+  return new;
 end$$;
 
-grant execute on function public.ensure_workspace() to authenticated;
+drop trigger if exists protect_project_owner on public.projects;
+create trigger protect_project_owner before update on public.projects
+  for each row execute function public.protect_project_owner();
+
+-- After a transfer, keep membership roles in step with projects.owner:
+-- the new owner's row becomes 'owner', the previous owner becomes 'editor'.
+create or replace function public.sync_owner_membership()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.owner is distinct from old.owner then
+    update public.project_members set role = 'editor'
+      where project_id = new.id and user_id = old.owner and role = 'owner';
+    insert into public.project_members (project_id, user_id, role)
+      values (new.id, new.owner, 'owner')
+      on conflict (project_id, user_id) do update set role = 'owner';
+  end if;
+  return new;
+end$$;
+
+drop trigger if exists sync_owner_membership on public.projects;
+create trigger sync_owner_membership after update on public.projects
+  for each row execute function public.sync_owner_membership();
+
+-- ensure_workspace() — REMOVED. It auto-joined any authenticated user as an
+-- editor of the shared bootstrap workspace; with open OAuth sign-up that
+-- meant strangers gained edit access. Onboarding/invites are the only ways
+-- into a workspace now. The drop is kept here so re-running this file
+-- removes the function from existing databases.
+drop function if exists public.ensure_workspace();
 
 -- Redeem an invite link: a non-member holding a valid token joins the project.
 -- SECURITY DEFINER because members_insert RLS only allows existing members to
@@ -365,14 +419,46 @@ begin
   )
   on conflict (id) do nothing;
 
+  -- clamp the granted role: invites may only confer editor or viewer
   insert into public.project_members (project_id, user_id, role)
-  values (invite.project_id, caller, invite.role)
+  values (
+    invite.project_id,
+    caller,
+    case when invite.role in ('editor', 'viewer') then invite.role else 'editor' end
+  )
   on conflict (project_id, user_id) do nothing;
 
   return invite.project_id;
 end$$;
 
 grant execute on function public.redeem_invite(uuid) to authenticated;
+
+-- Resolve / reopen a comment thread. Any member may resolve (that's the
+-- collaborative workflow), but body/author edits stay author-only via RLS —
+-- this SECURITY DEFINER function is the only path that touches the resolved
+-- columns for other people's comments.
+create or replace function public.set_comment_resolved(p_comment uuid, p_resolved boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  caller uuid := auth.uid();
+  v_page uuid;
+begin
+  if caller is null then
+    raise exception 'set_comment_resolved requires an authenticated user';
+  end if;
+
+  select page_id into v_page from public.comments where id = p_comment;
+  if not found or not public.can_access_page(v_page) then
+    raise exception 'Comment not found';
+  end if;
+
+  update public.comments
+  set resolved_at = case when p_resolved then now() else null end,
+      resolved_by = case when p_resolved then caller else null end
+  where id = p_comment;
+end$$;
+
+grant execute on function public.set_comment_resolved(uuid, boolean) to authenticated;
 
 -- ============================================================================
 -- Row-Level Security
@@ -415,9 +501,11 @@ drop policy if exists projects_insert on public.projects;
 create policy projects_insert on public.projects
   for insert to authenticated with check (owner = auth.uid());
 
+-- Owners and editors may edit project info; the owner column itself is
+-- guarded by the protect_project_owner trigger (transfer = owner only).
 drop policy if exists projects_update on public.projects;
 create policy projects_update on public.projects
-  for update to authenticated using (public.can_access_project(id)) with check (public.can_access_project(id));
+  for update to authenticated using (public.can_edit_project(id)) with check (public.can_edit_project(id));
 
 drop policy if exists projects_delete on public.projects;
 create policy projects_delete on public.projects
@@ -428,41 +516,113 @@ drop policy if exists members_select on public.project_members;
 create policy members_select on public.project_members
   for select to authenticated using (user_id = auth.uid() or public.can_access_project(project_id));
 
+-- Membership is managed by the owner. The two system paths that add rows
+-- (handle_new_project trigger, redeem_invite RPC) are SECURITY DEFINER and
+-- bypass RLS, so these policies only govern direct client writes.
 drop policy if exists members_insert on public.project_members;
 create policy members_insert on public.project_members
-  for insert to authenticated with check (public.can_access_project(project_id));
+  for insert to authenticated
+  with check (public.is_project_owner(project_id) and role in ('editor', 'viewer'));
 
+-- Owner changes other members between editor/viewer. Never their own row,
+-- and never to 'owner' — ownership transfer goes through projects.owner.
+drop policy if exists members_update on public.project_members;
+create policy members_update on public.project_members
+  for update to authenticated
+  using (public.is_project_owner(project_id) and user_id <> auth.uid())
+  with check (
+    public.is_project_owner(project_id)  -- row can't be moved to another project
+    and user_id <> auth.uid()
+    and role in ('editor', 'viewer')
+  );
+
+-- Non-owners may remove themselves (leave); the owner may remove anyone
+-- else. The owner cannot leave without transferring ownership first.
 drop policy if exists members_delete on public.project_members;
 create policy members_delete on public.project_members
-  for delete to authenticated using (public.can_access_project(project_id));
+  for delete to authenticated using (
+    (user_id = auth.uid() and not public.is_project_owner(project_id))
+    or (public.is_project_owner(project_id) and user_id <> auth.uid())
+  );
+
+-- Content tables: every member reads, owners + editors write (viewers are
+-- read-only — that's what makes the 'viewer' role mean something).
 
 -- sections ----------------------------------------------------------------
 drop policy if exists sections_all on public.sections;
-create policy sections_all on public.sections
-  for all to authenticated
-  using (public.can_access_project(project_id))
-  with check (public.can_access_project(project_id));
+drop policy if exists sections_select on public.sections;
+create policy sections_select on public.sections
+  for select to authenticated using (public.can_access_project(project_id));
+
+drop policy if exists sections_insert on public.sections;
+create policy sections_insert on public.sections
+  for insert to authenticated with check (public.can_edit_project(project_id));
+
+drop policy if exists sections_update on public.sections;
+create policy sections_update on public.sections
+  for update to authenticated
+  using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));
+
+drop policy if exists sections_delete on public.sections;
+create policy sections_delete on public.sections
+  for delete to authenticated using (public.can_edit_project(project_id));
 
 -- pages -------------------------------------------------------------------
 drop policy if exists pages_all on public.pages;
-create policy pages_all on public.pages
-  for all to authenticated
-  using (public.can_access_project(project_id))
-  with check (public.can_access_project(project_id));
+drop policy if exists pages_select on public.pages;
+create policy pages_select on public.pages
+  for select to authenticated using (public.can_access_project(project_id));
+
+drop policy if exists pages_insert on public.pages;
+create policy pages_insert on public.pages
+  for insert to authenticated with check (public.can_edit_project(project_id));
+
+drop policy if exists pages_update on public.pages;
+create policy pages_update on public.pages
+  for update to authenticated
+  using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));
+
+drop policy if exists pages_delete on public.pages;
+create policy pages_delete on public.pages
+  for delete to authenticated using (public.can_edit_project(project_id));
 
 -- blocks ------------------------------------------------------------------
 drop policy if exists blocks_all on public.blocks;
-create policy blocks_all on public.blocks
-  for all to authenticated
-  using (public.can_access_page(page_id))
-  with check (public.can_access_page(page_id));
+drop policy if exists blocks_select on public.blocks;
+create policy blocks_select on public.blocks
+  for select to authenticated using (public.can_access_page(page_id));
+
+drop policy if exists blocks_insert on public.blocks;
+create policy blocks_insert on public.blocks
+  for insert to authenticated with check (public.can_edit_page(page_id));
+
+drop policy if exists blocks_update on public.blocks;
+create policy blocks_update on public.blocks
+  for update to authenticated
+  using (public.can_edit_page(page_id)) with check (public.can_edit_page(page_id));
+
+drop policy if exists blocks_delete on public.blocks;
+create policy blocks_delete on public.blocks
+  for delete to authenticated using (public.can_edit_page(page_id));
 
 -- canvases ----------------------------------------------------------------
 drop policy if exists canvases_all on public.canvases;
-create policy canvases_all on public.canvases
-  for all to authenticated
-  using (public.can_access_project(project_id))
-  with check (public.can_access_project(project_id));
+drop policy if exists canvases_select on public.canvases;
+create policy canvases_select on public.canvases
+  for select to authenticated using (public.can_access_project(project_id));
+
+drop policy if exists canvases_insert on public.canvases;
+create policy canvases_insert on public.canvases
+  for insert to authenticated with check (public.can_edit_project(project_id));
+
+drop policy if exists canvases_update on public.canvases;
+create policy canvases_update on public.canvases
+  for update to authenticated
+  using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));
+
+drop policy if exists canvases_delete on public.canvases;
+create policy canvases_delete on public.canvases
+  for delete to authenticated using (public.can_edit_project(project_id));
 
 -- canvas_folders ------------------------------------------------------------
 drop policy if exists canvas_folders_all on public.canvas_folders;
@@ -480,24 +640,38 @@ drop policy if exists comments_insert on public.comments;
 create policy comments_insert on public.comments
   for insert to authenticated with check (public.can_access_page(page_id) and author = auth.uid());
 
--- any member may update (needed so anyone can resolve a thread); the UI
--- restricts body edits to the author. Mirrors the delete policy below.
+-- Authors edit their own comments only (and can't reattribute them) —
+-- resolve/reopen for other people's threads goes through the
+-- set_comment_resolved() SECURITY DEFINER function instead.
 drop policy if exists comments_update on public.comments;
 create policy comments_update on public.comments
   for update to authenticated
-  using (public.can_access_page(page_id))
-  with check (public.can_access_page(page_id));
+  using (author = auth.uid())
+  with check (author = auth.uid() and public.can_access_page(page_id));
 
+-- Authors delete their own; the project owner may moderate any comment.
 drop policy if exists comments_delete on public.comments;
 create policy comments_delete on public.comments
-  for delete to authenticated using (author = auth.uid() or public.can_access_page(page_id));
+  for delete to authenticated using (author = auth.uid() or public.can_moderate_page(page_id));
 
 -- milestones --------------------------------------------------------------
 drop policy if exists milestones_all on public.milestones;
-create policy milestones_all on public.milestones
-  for all to authenticated
-  using (public.can_access_project(project_id))
-  with check (public.can_access_project(project_id));
+drop policy if exists milestones_select on public.milestones;
+create policy milestones_select on public.milestones
+  for select to authenticated using (public.can_access_project(project_id));
+
+drop policy if exists milestones_insert on public.milestones;
+create policy milestones_insert on public.milestones
+  for insert to authenticated with check (public.can_edit_project(project_id));
+
+drop policy if exists milestones_update on public.milestones;
+create policy milestones_update on public.milestones
+  for update to authenticated
+  using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));
+
+drop policy if exists milestones_delete on public.milestones;
+create policy milestones_delete on public.milestones
+  for delete to authenticated using (public.can_edit_project(project_id));
 
 -- activity ----------------------------------------------------------------
 drop policy if exists activity_select on public.activity;
@@ -506,31 +680,169 @@ create policy activity_select on public.activity
 
 drop policy if exists activity_insert on public.activity;
 create policy activity_insert on public.activity
-  for insert to authenticated with check (public.can_access_project(project_id) and actor = auth.uid());
+  for insert to authenticated with check (public.can_edit_project(project_id) and actor = auth.uid());
 
 -- workspace_invites ---------------------------------------------------------
--- Members manage their project's invites; redemption goes through the
--- SECURITY DEFINER redeem_invite() so non-members never read this table.
+-- The owner grants access: only they mint, see, and revoke invite links.
+-- Redemption goes through the SECURITY DEFINER redeem_invite() so
+-- non-members never read this table.
 drop policy if exists invites_select on public.workspace_invites;
 create policy invites_select on public.workspace_invites
-  for select to authenticated using (public.can_access_project(project_id));
+  for select to authenticated using (public.is_project_owner(project_id));
 
 drop policy if exists invites_insert on public.workspace_invites;
 create policy invites_insert on public.workspace_invites
   for insert to authenticated
-  with check (public.can_access_project(project_id) and created_by = auth.uid());
+  with check (
+    public.is_project_owner(project_id)
+    and created_by = auth.uid()
+    and role in ('editor', 'viewer')
+  );
 
 drop policy if exists invites_delete on public.workspace_invites;
 create policy invites_delete on public.workspace_invites
-  for delete to authenticated using (public.can_access_project(project_id));
+  for delete to authenticated using (public.is_project_owner(project_id));
+
+-- ============================================================================
+-- Boards (kanban) — boards › board_columns › board_cards.
+-- project_id is denormalised onto columns/cards so RLS and realtime filters
+-- stay one-hop (same approach as can_access_project everywhere else).
+-- ============================================================================
+create table if not exists public.boards (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null default 'Untitled board',
+  color      text not null default '#cf6a2c',
+  position   int  not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.board_columns (
+  id         uuid primary key default gen_random_uuid(),
+  board_id   uuid not null references public.boards(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null default 'Untitled column',
+  color      text not null default '#a59a8c',
+  position   int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.board_cards (
+  id         uuid primary key default gen_random_uuid(),
+  column_id  uuid not null references public.board_columns(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  title      text not null default '',
+  sub        text not null default '',
+  kind       text not null default '',
+  tags       text[] not null default '{}',
+  priority   text,
+  owner      uuid references public.profiles(id) on delete set null,
+  deadline   date,
+  position   int  not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- added later: multiple assignees per card (migrates the old single owner)
+alter table public.board_cards add column if not exists owners uuid[] not null default '{}';
+update public.board_cards set owners = array[owner]
+  where owner is not null and owners = '{}';
+
+create index if not exists idx_boards_project       on public.boards(project_id, position);
+create index if not exists idx_board_cols_board     on public.board_columns(board_id, position);
+create index if not exists idx_board_cols_project   on public.board_columns(project_id);
+create index if not exists idx_board_cards_column   on public.board_cards(column_id, position);
+create index if not exists idx_board_cards_project  on public.board_cards(project_id);
+
+drop trigger if exists set_boards_updated on public.boards;
+create trigger set_boards_updated before update on public.boards
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists set_board_cards_updated on public.board_cards;
+create trigger set_board_cards_updated before update on public.board_cards
+  for each row execute function public.set_updated_at();
+
+alter table public.boards        enable row level security;
+alter table public.board_columns enable row level security;
+alter table public.board_cards   enable row level security;
+
+drop policy if exists boards_all on public.boards;
+create policy boards_all on public.boards
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+drop policy if exists board_columns_all on public.board_columns;
+create policy board_columns_all on public.board_columns
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+drop policy if exists board_cards_all on public.board_cards;
+create policy board_cards_all on public.board_cards
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+-- board_categories — workspace-level card categories (the editable "kind" list)
+create table if not exists public.board_categories (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name       text not null,
+  position   int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_board_cats_project on public.board_categories(project_id, position);
+
+alter table public.board_categories enable row level security;
+
+drop policy if exists board_categories_all on public.board_categories;
+create policy board_categories_all on public.board_categories
+  for all to authenticated
+  using (public.can_access_project(project_id))
+  with check (public.can_access_project(project_id));
+
+-- realtime: board tables stream postgres_changes to subscribed clients
+do $$ begin
+  alter publication supabase_realtime add table public.boards;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.board_categories;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.board_columns;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.board_cards;
+exception when duplicate_object then null; end $$;
 
 -- ============================================================================
 -- Storage: canvas-assets bucket (images dropped/inserted on canvases).
--- Public-read so asset URLs render without signing; writes need auth.
+-- Public-read so asset URLs render without signing. Objects live under
+-- <project_id>/<uuid>.<ext> and writes are scoped to that workspace's
+-- owner/editors — previously ANY authenticated user could upload to (and
+-- delete from!) the whole bucket. Legacy root-level files (no project
+-- prefix) stay readable but are no longer client-deletable.
+-- File size / MIME caps are bucket settings (dashboard), not SQL.
 -- ============================================================================
 insert into storage.buckets (id, name, public)
 values ('canvas-assets', 'canvas-assets', true)
 on conflict (id) do nothing;
+
+-- True when `name` is "<uuid-of-a-project-the-caller-can-edit>/...".
+-- (uuid format is checked before casting so non-uuid folders are just false.)
+create or replace function public.can_write_canvas_asset(name text)
+returns boolean language sql security definer stable set search_path = public as $$
+  select case
+    when array_length(storage.foldername(name), 1) >= 1
+     and (storage.foldername(name))[1]
+         ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then public.can_edit_project(((storage.foldername(name))[1])::uuid)
+    else false
+  end;
+$$;
 
 drop policy if exists canvas_assets_read on storage.objects;
 create policy canvas_assets_read on storage.objects
@@ -538,11 +850,13 @@ create policy canvas_assets_read on storage.objects
 
 drop policy if exists canvas_assets_insert on storage.objects;
 create policy canvas_assets_insert on storage.objects
-  for insert to authenticated with check (bucket_id = 'canvas-assets');
+  for insert to authenticated
+  with check (bucket_id = 'canvas-assets' and public.can_write_canvas_asset(name));
 
 drop policy if exists canvas_assets_delete on storage.objects;
 create policy canvas_assets_delete on storage.objects
-  for delete to authenticated using (bucket_id = 'canvas-assets');
+  for delete to authenticated
+  using (bucket_id = 'canvas-assets' and public.can_write_canvas_asset(name));
 
 -- ============================================================================
 -- Done. Tables are created with RLS; access flows through project_members.
