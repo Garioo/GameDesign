@@ -24,7 +24,27 @@ export type BlockType =
   | "divider"
   | "table"
   | "image"
-  | "script";
+  | "script"
+  | "curve";
+
+// ---- stat curve block --------------------------------------------------
+// A curve is one or more series over a shared x-domain. Each series is
+// either a formula in one variable (any bare identifier reads as x) or a
+// set of hand-placed points interpolated smoothly.
+export interface CurveSeries {
+  label: string;
+  mode: "formula" | "points";
+  formula?: string; // e.g. "50 * level^1.8"
+  points?: [number, number][]; // [x, y], kept sorted by x
+}
+export interface CurveData {
+  domain: [number, number]; // x range, min < max
+  series: CurveSeries[];
+  xLabel?: string;
+  yLabel?: string;
+  /** Sample step for the values table; 0 / undefined hides the table. */
+  tableStep?: number;
+}
 
 // Tone palette for callouts (and any future tinted block). "ember" is default.
 export type BlockTone =
@@ -56,6 +76,7 @@ export interface Block {
   checked?: boolean; // done state for todo blocks
   path?: string; // repo-relative file path for script blocks
   code?: string; // cached file content for script blocks
+  curve?: CurveData; // series + domain for curve blocks
 }
 
 export interface DesignDoc {
