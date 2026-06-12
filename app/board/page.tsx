@@ -13,6 +13,9 @@ import {
   createBoard,
   createCard,
   createColumn,
+  deleteBoard,
+  deleteCard,
+  deleteColumn,
   loadBoards,
   moveCard,
   seedBoardsIfEmpty,
@@ -80,6 +83,17 @@ const css = `
   .sidebar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
   .sidebar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sidebar-divider { height: 1px; background: var(--line-soft); margin: 8px 4px; }
+  .sidebar-del {
+    display: none; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+    color: var(--ink-faint); cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .sidebar-item:hover .sidebar-del { display: flex; }
+  .sidebar-del:hover { background: #fbe2dc; color: #b9421f; }
+  .col-del-btn:hover { background: #fbe2dc; color: #b9421f; }
+  .modal-delete { display: inline-flex; align-items: center; gap: 6px; }
+  .modal-delete:hover { background: #fbe2dc; color: #b9421f; border-color: #f3cabe; }
   .sidebar-new { color: var(--ink-faint); }
   .sidebar-new:hover { color: var(--ember); background: var(--ember-tint); }
   .sidebar-new svg { width: 13px; height: 13px; }
@@ -431,6 +445,11 @@ const ChevronRight = ({ className, style }: IconProps) => (
     <path d="m9 18 6-6-6-6" />
   </svg>
 );
+const Trash = ({ className, style }: IconProps) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M10 11v6M14 11v6" />
+  </svg>
+);
 const Flag = ({ className, style }: IconProps) => (
   <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 22V4a1 1 0 0 1 1-1h11.5a.5.5 0 0 1 .4.8L13 9l3.9 5.2a.5.5 0 0 1-.4.8H5" />
@@ -520,10 +539,11 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, people, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, onAddCard, onDeleteCol, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
   people: Person[];
   onAddCard: (colId: string, title: string) => void;
+  onDeleteCol: (colId: string) => void;
   onCardClick: (card: CardData) => void;
   dragState: DragInfo | null;
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
@@ -546,7 +566,7 @@ function Column({ col, people, onAddCard, onCardClick, dragState, onDragStart, o
         <span className="col-dot" style={{ background: col.color }} />
         <span className="col-name">{col.name}</span>
         <span className="col-count">{col.cards.length}</span>
-        <button className="col-menu-btn" title="Column options"><Dots className="" style={{ width: 15, height: 15 }} /></button>
+        <button className="col-menu-btn col-del-btn" title="Delete column" onClick={() => onDeleteCol(col.id)}><Trash className="" style={{ width: 14, height: 14 }} /></button>
       </div>
 
       <div
@@ -603,11 +623,12 @@ function Column({ col, people, onAddCard, onCardClick, dragState, onDragStart, o
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, people, onClose, onSave, onMakeCanvas }: {
+function CardModal({ card, people, onClose, onSave, onDelete, onMakeCanvas }: {
   card: CardData;
   people: Person[];
   onClose: () => void;
   onSave: (card: CardData) => void;
+  onDelete: (card: CardData) => void;
   onMakeCanvas: (card: CardData) => void;
 }) {
   const [title, setTitle] = useState(card.title);
@@ -663,6 +684,13 @@ function CardModal({ card, people, onClose, onSave, onMakeCanvas }: {
           </div>
         </div>
         <div className="modal-actions">
+          <button
+            className="modal-cancel modal-delete"
+            title="Delete this card"
+            onClick={() => { onDelete(card); onClose(); }}
+          >
+            <Trash style={{ width: 13, height: 13 }} /> Delete
+          </button>
           <button
             className="modal-cancel"
             style={{ marginRight: "auto" }}
@@ -904,6 +932,34 @@ export default function BoardPage() {
     updateCard(updated).catch((e) => console.error("save card failed", e));
   }
 
+  /* delete card */
+  function handleDeleteCard(card: CardData) {
+    if (!window.confirm(`Delete card "${card.title}"?`)) return;
+    setCols((prev) => prev.map((c) => ({ ...c, cards: c.cards.filter((k) => k.id !== card.id) })));
+    deleteCard(card.id).catch((e) => console.error("delete card failed", e));
+  }
+
+  /* delete column (and its cards) */
+  function handleDeleteCol(colId: string) {
+    const col = cols.find((c) => c.id === colId);
+    if (!col) return;
+    const suffix = col.cards.length > 0 ? ` and its ${col.cards.length} card${col.cards.length === 1 ? "" : "s"}` : "";
+    if (!window.confirm(`Delete column "${col.name}"${suffix}?`)) return;
+    setCols((prev) => prev.filter((c) => c.id !== colId));
+    deleteColumn(colId).catch((e) => console.error("delete column failed", e));
+  }
+
+  /* delete board (and everything on it) */
+  function handleDeleteBoard(board: BoardData) {
+    if (!window.confirm(`Delete board "${board.name}" and everything on it? This can't be undone.`)) return;
+    setBoards((prev) => {
+      const next = prev.filter((b) => b.id !== board.id);
+      setActiveBoardId((cur) => (cur === board.id ? (next[0]?.id ?? null) : cur));
+      return next;
+    });
+    deleteBoard(board.id).catch((e) => console.error("delete board failed", e));
+  }
+
   /* add new column */
   async function handleAddCol() {
     const name = window.prompt("New column name");
@@ -1017,6 +1073,14 @@ export default function BoardPage() {
               >
                 <span className="sidebar-dot" style={{ background: b.color }} />
                 <span className="sidebar-name">{b.name}</span>
+                <span
+                  className="sidebar-del"
+                  role="button"
+                  title={`Delete board "${b.name}"`}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteBoard(b); }}
+                >
+                  <Trash style={{ width: 12, height: 12 }} />
+                </span>
               </button>
             ))}
             <div className="sidebar-divider" />
@@ -1118,6 +1182,7 @@ export default function BoardPage() {
                     col={col}
                     people={people}
                     onAddCard={handleAddCard}
+                    onDeleteCol={handleDeleteCol}
                     onCardClick={setEditingCard}
                     dragState={dragState}
                     onDragStart={handleDragStart}
@@ -1146,6 +1211,7 @@ export default function BoardPage() {
             people={people}
             onClose={() => setEditingCard(null)}
             onSave={(updated) => { handleSaveCard(updated); setEditingCard(null); }}
+            onDelete={handleDeleteCard}
             onMakeCanvas={handleMakeCanvas}
           />
         )}

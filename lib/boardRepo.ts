@@ -248,6 +248,24 @@ export async function moveCard(
   );
 }
 
+/** Delete a card. */
+export async function deleteCard(id: string): Promise<void> {
+  const { error } = await supabase.from("board_cards").delete().eq("id", id);
+  if (error) throw new Error(`deleteCard failed: ${error.message}`);
+}
+
+/** Delete a column; its cards cascade in the database. */
+export async function deleteColumn(id: string): Promise<void> {
+  const { error } = await supabase.from("board_columns").delete().eq("id", id);
+  if (error) throw new Error(`deleteColumn failed: ${error.message}`);
+}
+
+/** Delete a board; its columns and cards cascade in the database. */
+export async function deleteBoard(id: string): Promise<void> {
+  const { error } = await supabase.from("boards").delete().eq("id", id);
+  if (error) throw new Error(`deleteBoard failed: ${error.message}`);
+}
+
 /* ── seeding ──────────────────────────────────────────────────────────────── */
 
 const SEED_BOARDS: { name: string; color: string; cards: Record<string, Omit<BoardCard, "id" | "ownerId">[]> }[] = [
