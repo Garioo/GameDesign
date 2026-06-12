@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useRef, type CSSProperties, type DragEvent } from "react";
+import { useRouter } from "next/navigation";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
+import { ensureSession } from "@/lib/session";
+import { createCanvas } from "@/lib/canvasRepo";
 
 /* ── CSS injected into the component (mirrors globals.css tokens) ─────────── */
 const css = `
@@ -694,10 +697,11 @@ function Column({ col, onAddCard, onCardClick, dragState, onDragStart, onDragEnd
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, onClose, onSave }: {
+function CardModal({ card, onClose, onSave, onMakeCanvas }: {
   card: CardData;
   onClose: () => void;
   onSave: (card: CardData) => void;
+  onMakeCanvas: (card: CardData) => void;
 }) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
@@ -752,6 +756,14 @@ function CardModal({ card, onClose, onSave }: {
           </div>
         </div>
         <div className="modal-actions">
+          <button
+            className="modal-cancel"
+            style={{ marginRight: "auto" }}
+            title="Create a canvas named after this card, with the to-do as a sticky note"
+            onClick={() => onMakeCanvas({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null })}
+          >
+            ✦ Open as canvas
+          </button>
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
           <button className="modal-save" onClick={() => { onSave({ ...card, title, sub, kind, priority: priority || null, ownerId: ownerId || null, deadline: deadline || null }); onClose(); }}>Save</button>
         </div>
@@ -762,6 +774,7 @@ function CardModal({ card, onClose, onSave }: {
 
 /* ── Main BoardPage component ─────────────────────────────────────────────── */
 export default function BoardPage() {
+  const router = useRouter();
   const [boards, setBoards] = useState<BoardData[]>(INIT_BOARDS);
   const [activeBoardId, setActiveBoardId] = useState(INIT_BOARDS[0].id);
   const [filterKind, setFilterKind] = useState<string | null>(null);
@@ -781,6 +794,23 @@ export default function BoardPage() {
     setBoards((prev) => prev.map((b) =>
       b.id !== activeBoardId ? b : { ...b, cols: typeof updater === "function" ? updater(b.cols) : updater }
     ));
+  }
+
+  /** Spin a to-do off into its own canvas: create it named after the card,
+      then open it with the card's content spawning as a sticky note (?note=). */
+  async function handleMakeCanvas(card: CardData) {
+    try {
+      const s = await ensureSession();
+      if (!s) { router.push("/login"); return; }
+      const canvas = await createCanvas(s.workspaceId, card.title);
+      const lines = [card.title];
+      if (card.sub) lines.push("", card.sub);
+      const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map((t) => "#" + t).join("  ");
+      if (meta) lines.push("", meta);
+      router.push(`/doc/canvas?c=${canvas.id}&note=${encodeURIComponent(lines.join("\n"))}`);
+    } catch (e) {
+      console.error("make canvas from card failed", e);
+    }
   }
 
   function handleAddBoard() {
@@ -1084,6 +1114,7 @@ export default function BoardPage() {
             card={editingCard}
             onClose={() => setEditingCard(null)}
             onSave={(updated) => { handleSaveCard(updated); setEditingCard(null); }}
+            onMakeCanvas={handleMakeCanvas}
           />
         )}
       </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
-import { GeoShapeGeoStyle, type Editor } from "tldraw";
+import { GeoShapeGeoStyle, toRichText, type Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
 import CanvasBoard, { type SaveState } from "./CanvasBoard";
 import TopBar from "@/app/components/TopBar";
@@ -312,6 +312,25 @@ export default function CanvasPage() {
     else url.searchParams.delete("c");
     window.history.replaceState(null, "", url.toString());
   }, [loading, active?.id]);
+
+  // Arriving from the scrum board (?note=<text>): drop the to-do onto the
+  // fresh canvas as a sticky note. The param is stripped first so reloads
+  // (and React strict-mode re-runs) can't spawn duplicates.
+  useEffect(() => {
+    if (!editor) return;
+    const url = new URL(window.location.href);
+    const note = url.searchParams.get("note");
+    if (!note) return;
+    url.searchParams.delete("note");
+    window.history.replaceState(null, "", url.toString());
+    const center = editor.getViewportPageBounds().center;
+    editor.createShape({
+      type: "note",
+      x: center.x - 100,
+      y: center.y - 100,
+      props: { richText: toRichText(note), size: "l" },
+    });
+  }, [editor]);
 
   // Close the shape menu on outside click.
   useEffect(() => {
