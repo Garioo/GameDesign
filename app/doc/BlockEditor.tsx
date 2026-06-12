@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BLOCK_TONES, type Block, type BlockTone, type BlockType, type CurveData } from "./data";
 import CurveBlock, { DEFAULT_CURVE } from "./CurveBlock";
 import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
 import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
 import "./BlockEditor.css";
+
+// True when the editor renders for a viewer: blocks display normally but
+// nothing is editable. Context (rather than prop-threading) so the nested
+// block components (tables, images, tone picker…) can all consume it.
+const ReadOnlyCtx = createContext(false);
 
 /* ---------- slash-menu icons (no emoji) ---------- */
 const sv = {
@@ -372,6 +377,7 @@ export default function BlockEditor({
   mentionTargets = [],
   validRefs,
   onNavigate,
+  readOnly = false,
 }: {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
@@ -386,7 +392,15 @@ export default function BlockEditor({
   validRefs?: Set<string>;
   // Follow a mention chip ("<pageId>" or "canvas:<id>").
   onNavigate?: (ref: string) => void;
+  // Viewer mode: render everything, mutate nothing (RLS rejects writes anyway).
+  readOnly?: boolean;
 }) {
+  // Belt and braces: even if some affordance slips through, no change events
+  // ever leave a read-only editor.
+  if (readOnly) {
+    onChange = () => {};
+    onLiveInput = undefined;
+  }
   const refs = useRef(new Map<string, HTMLDivElement>());
   const [slash, setSlash] = useState<Slash | null>(null);
   const [mention, setMention] = useState<Mention | null>(null);
@@ -842,8 +856,9 @@ export default function BlockEditor({
   };
 
   return (
+    <ReadOnlyCtx.Provider value={readOnly}>
     <div
-      className="blocks"
+      className={"blocks" + (readOnly ? " read-only" : "")}
       onClick={(e) => {
         // Mention chips: plain click navigates in-app; cmd/ctrl/shift-click
         // falls through to the real href (open in new tab).
@@ -905,6 +920,7 @@ export default function BlockEditor({
         />
       ))}
     </div>
+    </ReadOnlyCtx.Provider>
   );
 }
 
@@ -982,6 +998,7 @@ function BlockRow({
   onDragOver: () => void;
   onDrop: () => void;
 }) {
+  const readOnly = useContext(ReadOnlyCtx);
   const ref = useRef<HTMLDivElement | null>(null);
 
   // Keep DOM content in sync with state without disturbing the caret.
@@ -1013,7 +1030,7 @@ function BlockRow({
         register(block.id, el);
       }}
       className={"blk-text" + (focused ? " is-focused" : "")}
-      contentEditable
+      contentEditable={!readOnly}
       suppressContentEditableWarning
       data-ph={PLACEHOLDER[block.type]}
       onInput={(e) => onInput(block.id, e.currentTarget)}
@@ -1056,14 +1073,16 @@ function BlockRow({
       </div>
     );
   } else if (block.type === "script") {
+    // Read-only: the script/curve internals keep their own controls, so the
+    // whole card goes inert rather than threading the flag into each one.
     main = (
-      <div className="blk-main">
+      <div className="blk-main" style={readOnly ? { pointerEvents: "none" } : undefined}>
         <ScriptBlock repo={repo} path={block.path} code={block.code} onSet={onSetScript} />
       </div>
     );
   } else if (block.type === "curve") {
     main = (
-      <div className="blk-main">
+      <div className="blk-main" style={readOnly ? { pointerEvents: "none" } : undefined}>
         <CurveBlock data={block.curve} onChange={onCurveChange} />
       </div>
     );
@@ -1089,9 +1108,10 @@ function BlockRow({
           contentEditable={false}
           role="checkbox"
           aria-checked={!!block.checked}
-          title={block.checked ? "Mark as not done" : "Mark as done"}
+          disabled={readOnly}
+          title={readOnly ? undefined : block.checked ? "Mark as not done" : "Mark as done"}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={onToggleChecked}
+          onClick={readOnly ? undefined : onToggleChecked}
         >
           {block.checked && (
             <svg viewBox="0 0 24 24" {...sv} strokeWidth={3}>
@@ -1124,36 +1144,40 @@ function BlockRow({
         (dropTarget ? " is-drop" : "")
       }
       onDragOver={(e) => {
+        if (readOnly) return;
         e.preventDefault();
         onDragOver();
       }}
       onDrop={(e) => {
+        if (readOnly) return;
         e.preventDefault();
         onDrop();
       }}
     >
-      <div className={"blk-gutter" + (menuOpen ? " is-open" : "")} contentEditable={false}>
-        <button
-          className="blk-plus"
-          title="Add block below"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onPlus}
-        >
-          +
-        </button>
-        <button
-          className="blk-handle"
-          title="Drag to move · click for options"
-          draggable
-          onClick={onToggleMenu}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-        >
-          ⠿
-        </button>
-      </div>
+      {!readOnly && (
+        <div className={"blk-gutter" + (menuOpen ? " is-open" : "")} contentEditable={false}>
+          <button
+            className="blk-plus"
+            title="Add block below"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onPlus}
+          >
+            +
+          </button>
+          <button
+            className="blk-handle"
+            title="Drag to move · click for options"
+            draggable
+            onClick={onToggleMenu}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+          >
+            ⠿
+          </button>
+        </div>
+      )}
 
-      {menuOpen && (
+      {!readOnly && menuOpen && (
         <div className="blk-menu" contentEditable={false}>
           <button onMouseDown={(e) => { e.preventDefault(); onDuplicate(); }}>
             <ICopy /> Duplicate
@@ -1229,6 +1253,7 @@ function TableBlock({
   rows: string[][];
   onChange: (rows: string[][]) => void;
 }) {
+  const readOnly = useContext(ReadOnlyCtx);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
   const key = (r: number, c: number) => `${r}:${c}`;
   const cols = rows[0]?.length ?? 1;
@@ -1291,7 +1316,7 @@ function TableBlock({
               <tr key={ri}>
                 {row.map((cell, ci) => (
                   <td key={ci} className={ri === 0 ? "tbl-head" : undefined}>
-                    {ci === 0 && rows.length > 1 && (
+                    {!readOnly && ci === 0 && rows.length > 1 && (
                       <button
                         className="row-del"
                         title="Delete row"
@@ -1301,7 +1326,7 @@ function TableBlock({
                         ×
                       </button>
                     )}
-                    {ri === 0 && cols > 1 && (
+                    {!readOnly && ri === 0 && cols > 1 && (
                       <button
                         className="col-del"
                         title="Delete column"
@@ -1326,23 +1351,27 @@ function TableBlock({
             ))}
           </tbody>
         </table>
+        {!readOnly && (
+          <button
+            className="tbl-add tbl-add-col"
+            title="Add column"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={addCol}
+          >
+            +
+          </button>
+        )}
+      </div>
+      {!readOnly && (
         <button
-          className="tbl-add tbl-add-col"
-          title="Add column"
+          className="tbl-add tbl-add-row"
+          title="Add row"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={addCol}
+          onClick={addRow}
         >
           +
         </button>
-      </div>
-      <button
-        className="tbl-add tbl-add-row"
-        title="Add row"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={addRow}
-      >
-        +
-      </button>
+      )}
     </div>
   );
 }
@@ -1358,6 +1387,7 @@ function TableCell({
   onBlur: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
 }) {
+  const readOnly = useContext(ReadOnlyCtx);
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = ref.current;
@@ -1370,7 +1400,7 @@ function TableCell({
         register(el);
       }}
       className="tbl-cell"
-      contentEditable
+      contentEditable={!readOnly}
       suppressContentEditableWarning
       onBlur={onBlur}
       onKeyDown={onKeyDown}
@@ -1392,6 +1422,7 @@ function ImageBlock({
   onSetImage: (src: string) => void;
   onSetCaption: (text: string) => void;
 }) {
+  const readOnly = useContext(ReadOnlyCtx);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const capRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1416,6 +1447,18 @@ function ImageBlock({
   };
 
   if (!src) {
+    if (readOnly) {
+      return (
+        <div className="img-drop" contentEditable={false}>
+          <div className="img-drop-head">
+            <span className="img-drop-glyph">
+              <IImage />
+            </span>
+            <span className="img-drop-text">No image yet</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         className={"img-drop" + (over ? " is-over" : "") + (loading ? " is-loading" : "")}
@@ -1477,6 +1520,7 @@ function ImageBlock({
       <div className="img-frame">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="img-el" src={src} alt={caption || "image"} />
+        {!readOnly && (
         <div className="img-tools">
           <button
             onMouseDown={(e) => e.preventDefault()}
@@ -1492,6 +1536,7 @@ function ImageBlock({
             Remove
           </button>
         </div>
+        )}
         <input
           ref={fileRef}
           type="file"
@@ -1503,9 +1548,9 @@ function ImageBlock({
       <figcaption
         ref={capRef}
         className="img-caption"
-        contentEditable
+        contentEditable={!readOnly}
         suppressContentEditableWarning
-        data-ph="Add a caption…"
+        data-ph={readOnly ? undefined : "Add a caption…"}
         onBlur={(e) => onSetCaption(e.currentTarget.innerText.trim())}
       />
     </figure>
@@ -1769,6 +1814,7 @@ function TonePicker({
   tone: BlockTone;
   onSetTone: (tone: BlockTone) => void;
 }) {
+  const readOnly = useContext(ReadOnlyCtx);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -1778,6 +1824,14 @@ function TonePicker({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
+
+  if (readOnly) {
+    return (
+      <span className="tone-pick" contentEditable={false}>
+        <span className={"tone-dot tone-dot-" + tone} />
+      </span>
+    );
+  }
 
   return (
     <span className="tone-pick" contentEditable={false}>

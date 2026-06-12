@@ -50,6 +50,7 @@ export default function CommandPalette({
   onNewPage,
   onNewSection,
   onOpenSettings,
+  canCreate = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -60,6 +61,8 @@ export default function CommandPalette({
   onNewPage: (sectionId: string | null, sectionName: string) => void;
   onNewSection: () => void;
   onOpenSettings?: () => void;
+  /** False for viewers: the "New page / New section" actions are hidden. */
+  canCreate?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -108,25 +111,29 @@ export default function CommandPalette({
       .filter((x): x is Item => x !== null)
       .slice(0, 50);
     const actions: Item[] = [
-      {
-        key: "act:new-page",
-        label: "New page",
-        hint: `in ${activeGroup}`,
-        kind: "action" as const,
-        run: () => {
-          onNewPage(activeSectionId, activeGroup);
-          onClose();
-        },
-      },
-      {
-        key: "act:new-section",
-        label: "New section",
-        kind: "action" as const,
-        run: () => {
-          onNewSection();
-          onClose();
-        },
-      },
+      ...(canCreate
+        ? [
+            {
+              key: "act:new-page",
+              label: "New page",
+              hint: `in ${activeGroup}`,
+              kind: "action" as const,
+              run: () => {
+                onNewPage(activeSectionId, activeGroup);
+                onClose();
+              },
+            },
+            {
+              key: "act:new-section",
+              label: "New section",
+              kind: "action" as const,
+              run: () => {
+                onNewSection();
+                onClose();
+              },
+            },
+          ]
+        : []),
       ...(onOpenSettings
         ? [
             {
@@ -143,7 +150,7 @@ export default function CommandPalette({
         : []),
     ].filter((a) => !q || a.label.toLowerCase().includes(q));
     return [...pageItems, ...actions];
-  }, [query, docs, activeSectionId, activeGroup, onJump, onNewPage, onNewSection, onClose]);
+  }, [query, docs, activeSectionId, activeGroup, onJump, onNewPage, onNewSection, onClose, canCreate, onOpenSettings]);
 
   useEffect(() => {
     if (index >= items.length) setIndex(Math.max(0, items.length - 1));

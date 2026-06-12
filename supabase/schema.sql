@@ -769,11 +769,29 @@ exception when duplicate_object then null; end $$;
 
 -- ============================================================================
 -- Storage: canvas-assets bucket (images dropped/inserted on canvases).
--- Public-read so asset URLs render without signing; writes need auth.
+-- Public-read so asset URLs render without signing. Objects live under
+-- <project_id>/<uuid>.<ext> and writes are scoped to that workspace's
+-- owner/editors — previously ANY authenticated user could upload to (and
+-- delete from!) the whole bucket. Legacy root-level files (no project
+-- prefix) stay readable but are no longer client-deletable.
+-- File size / MIME caps are bucket settings (dashboard), not SQL.
 -- ============================================================================
 insert into storage.buckets (id, name, public)
 values ('canvas-assets', 'canvas-assets', true)
 on conflict (id) do nothing;
+
+-- True when `name` is "<uuid-of-a-project-the-caller-can-edit>/...".
+-- (uuid format is checked before casting so non-uuid folders are just false.)
+create or replace function public.can_write_canvas_asset(name text)
+returns boolean language sql security definer stable set search_path = public as $$
+  select case
+    when array_length(storage.foldername(name), 1) >= 1
+     and (storage.foldername(name))[1]
+         ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then public.can_edit_project(((storage.foldername(name))[1])::uuid)
+    else false
+  end;
+$$;
 
 drop policy if exists canvas_assets_read on storage.objects;
 create policy canvas_assets_read on storage.objects
@@ -781,11 +799,13 @@ create policy canvas_assets_read on storage.objects
 
 drop policy if exists canvas_assets_insert on storage.objects;
 create policy canvas_assets_insert on storage.objects
-  for insert to authenticated with check (bucket_id = 'canvas-assets');
+  for insert to authenticated
+  with check (bucket_id = 'canvas-assets' and public.can_write_canvas_asset(name));
 
 drop policy if exists canvas_assets_delete on storage.objects;
 create policy canvas_assets_delete on storage.objects
-  for delete to authenticated using (bucket_id = 'canvas-assets');
+  for delete to authenticated
+  using (bucket_id = 'canvas-assets' and public.can_write_canvas_asset(name));
 
 -- ============================================================================
 -- Done. Tables are created with RLS; access flows through project_members.

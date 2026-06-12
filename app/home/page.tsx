@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import {
   ensureSession,
   setActiveWorkspace,
+  signOutAndClear,
   storedActiveWorkspace,
   type SessionInfo,
 } from "@/lib/session";
@@ -402,7 +403,7 @@ export default function HomeDashboard() {
 
   const handleSignOut = async () => {
     clearSnapshots(); // don't leave dashboard data behind on a shared machine
-    await supabase.auth.signOut();
+    await signOutAndClear();
     router.replace("/login");
   };
 

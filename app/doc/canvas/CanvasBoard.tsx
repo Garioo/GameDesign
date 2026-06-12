@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Tldraw,
   type Editor,
@@ -17,7 +17,7 @@ import {
 import "tldraw/tldraw.css";
 import { supabase } from "@/lib/supabase";
 import { loadCanvasScene, saveCanvasScene, type CanvasScene } from "@/lib/canvasRepo";
-import { canvasAssetStore, removeAssetUrls, isCanvasAssetUrl } from "@/lib/canvasAssets";
+import { makeCanvasAssetStore, removeAssetUrls, isCanvasAssetUrl } from "@/lib/canvasAssets";
 import type { SessionInfo } from "@/lib/session";
 
 type RecordsDiff = {
@@ -63,12 +63,21 @@ export default function CanvasBoard({
   /** Reports undo/redo availability so the nav bar can enable its buttons. */
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
 }) {
+  // Upload paths are prefixed with the workspace id so Storage RLS can scope
+  // writes to this workspace's editors.
+  const assetStore = useMemo(() => makeCanvasAssetStore(session.workspaceId), [session.workspaceId]);
+
   const handleMount = useCallback(
     (editor: Editor) => {
       let disposed = false;
       let localEdits = false; // the user has drawn since mount
       let peerSnapshotApplied = false;
       let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+      // Viewers get a read-only editor: tools are disabled and edits are
+      // rejected locally (RLS would refuse the writes anyway).
+      if (session.role === "viewer") {
+        editor.updateInstanceState({ isReadonly: true });
+      }
       onReady?.(editor);
 
       // Mirror the active tool + undo/redo availability up to the nav bar.
@@ -292,7 +301,7 @@ export default function CanvasBoard({
       <Tldraw
         onMount={handleMount}
         components={{ Toolbar: null }}
-        assets={canvasAssetStore}
+        assets={assetStore}
         licenseKey={tldrawLicenseKey}
       />
     </div>

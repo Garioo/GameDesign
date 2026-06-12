@@ -9,7 +9,7 @@ import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
-import { ensureSession, type SessionInfo } from "@/lib/session";
+import { ensureSession, signOutAndClear, type SessionInfo } from "@/lib/session";
 import {
   createCanvas,
   deleteCanvas,
@@ -269,9 +269,13 @@ export default function CanvasPage() {
 
   const active = canvases.find((c) => c.id === activeId) ?? canvases[0] ?? null;
 
+  // Viewers get a read-only board (CanvasBoard sets tldraw's isReadonly);
+  // creating, renaming and deleting boards is hidden for them too.
+  const canEdit = session?.role !== "viewer";
+
   const handleNew = async () => {
     const wsId = wsRef.current;
-    if (!wsId) return;
+    if (!wsId || !canEdit) return;
     try {
       const c = await createCanvas(wsId);
       setCanvases((prev) => [...prev, c]);
@@ -282,11 +286,13 @@ export default function CanvasPage() {
   };
 
   const handleRename = (id: string, name: string) => {
+    if (!canEdit) return;
     setCanvases((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
     renameCanvas(id, name).catch(console.error);
   };
 
   const handleDelete = (id: string) => {
+    if (!canEdit) return;
     setCanvases((prev) => prev.filter((c) => c.id !== id));
     setActiveId((cur) => (cur === id ? null : cur));
     deleteCanvas(id).catch(console.error);
@@ -408,7 +414,7 @@ export default function CanvasPage() {
         <button
           className="share-btn"
           onClick={async () => {
-            await supabase.auth.signOut();
+            await signOutAndClear();
             router.replace("/login");
           }}
         >
@@ -426,6 +432,7 @@ export default function CanvasPage() {
           onNew={handleNew}
           onRename={handleRename}
           onDelete={handleDelete}
+          canEdit={canEdit}
         />
 
         {/* canvas area */}
@@ -454,10 +461,12 @@ export default function CanvasPage() {
             >
               <Grid className="dock-icon" style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
               <p style={{ fontSize: 15 }}>No canvas selected</p>
-              <button className="new-page" style={{ marginTop: 12 }} onClick={handleNew}>
-                <Plus className="new-page-icon" />
-                New canvas
-              </button>
+              {canEdit && (
+                <button className="new-page" style={{ marginTop: 12 }} onClick={handleNew}>
+                  <Plus className="new-page-icon" />
+                  New canvas
+                </button>
+              )}
             </div>
           )}
         </main>
@@ -466,7 +475,7 @@ export default function CanvasPage() {
       {/* dock (global chrome) — tldraw tools by default; hovering the strip
           underneath swaps in the app nav until the mouse leaves the bar */}
       <Dock
-        onNew={handleNew}
+        onNew={canEdit ? handleNew : undefined}
         tools={
           <div className="dock-tools">
             {TOOLS.map((t) => (
