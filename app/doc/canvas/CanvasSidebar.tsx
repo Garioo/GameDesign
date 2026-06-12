@@ -62,6 +62,8 @@ interface CanvasSidebarProps {
   onRenameFolder: (id: string, name: string) => void;
   onDeleteFolder: (id: string) => void;
   onMoveToFolder: (canvasId: string, folderId: string | null) => void;
+  /** Viewers get a read-only list: no create/rename/delete/drag. */
+  canEdit: boolean;
 }
 
 export default function CanvasSidebar({
@@ -76,6 +78,7 @@ export default function CanvasSidebar({
   onRenameFolder,
   onDeleteFolder,
   onMoveToFolder,
+  canEdit,
 }: CanvasSidebarProps) {
   const [menu, setMenu] = useState<Menu>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -150,7 +153,7 @@ export default function CanvasSidebar({
         key={c.id}
         className={"nav-item" + (c.id === activeId ? " is-active" : "") + (dragId === c.id ? " is-dragging" : "")}
         style={{ paddingLeft: 9 + depth * 16 }}
-        draggable={!isRenaming}
+        draggable={canEdit && !isRenaming}
         onClick={() => onSelect(c.id)}
         onDragStart={(e) => {
           setDragId(c.id);
@@ -176,16 +179,18 @@ export default function CanvasSidebar({
         ) : (
           <span className="nav-title">{c.name}</span>
         )}
-        <button
-          className="row-dots"
-          title="Canvas options"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenu((m) => (m?.kind === "canvas" && m.id === c.id ? null : { kind: "canvas", id: c.id }));
-          }}
-        >
-          <Dots className="row-dots-icon" />
-        </button>
+        {canEdit && (
+          <button
+            className="row-dots"
+            title="Canvas options"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenu((m) => (m?.kind === "canvas" && m.id === c.id ? null : { kind: "canvas", id: c.id }));
+            }}
+          >
+            <Dots className="row-dots-icon" />
+          </button>
+        )}
         {menu?.kind === "canvas" && menu.id === c.id && (
           <div className="row-menu" onClick={(e) => e.stopPropagation()}>
             {confirmId === c.id ? (
@@ -245,7 +250,7 @@ export default function CanvasSidebar({
 
       <div className="nav-label-row">
         <span className="nav-label">Boards</span>
-        {folders.length > 0 && <span className="drag-hint">drag into folders</span>}
+        {canEdit && folders.length > 0 && <span className="drag-hint">drag into folders</span>}
       </div>
 
       <nav className="nav">
@@ -320,25 +325,27 @@ export default function CanvasSidebar({
                     <span className="nav-title">{f.name}</span>
                   )}
                 </span>
-                <span className="nav-group-actions">
-                  <button
-                    className="nav-add"
-                    title={`New canvas in ${f.name}`}
-                    onClick={(e) => { e.stopPropagation(); onNew(f.id); }}
-                  >
-                    <Plus className="nav-add-icon" />
-                  </button>
-                  <button
-                    className="row-dots"
-                    title="Folder options"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenu((m) => (m?.kind === "folder" && m.id === f.id ? null : { kind: "folder", id: f.id }));
-                    }}
-                  >
-                    <Dots className="row-dots-icon" />
-                  </button>
-                </span>
+                {canEdit && (
+                  <span className="nav-group-actions">
+                    <button
+                      className="nav-add"
+                      title={`New canvas in ${f.name}`}
+                      onClick={(e) => { e.stopPropagation(); onNew(f.id); }}
+                    >
+                      <Plus className="nav-add-icon" />
+                    </button>
+                    <button
+                      className="row-dots"
+                      title="Folder options"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenu((m) => (m?.kind === "folder" && m.id === f.id ? null : { kind: "folder", id: f.id }));
+                      }}
+                    >
+                      <Dots className="row-dots-icon" />
+                    </button>
+                  </span>
+                )}
                 {menu?.kind === "folder" && menu.id === f.id && (
                   <div className="row-menu" onClick={(e) => e.stopPropagation()}>
                     {confirmId === f.id ? (
@@ -384,12 +391,14 @@ export default function CanvasSidebar({
         })}
       </nav>
 
-      <button className="new-page" onClick={() => onNew(null)}>
-        <Plus className="new-page-icon" />
-        New canvas
-      </button>
+      {canEdit && (
+        <button className="new-page" onClick={() => onNew(null)}>
+          <Plus className="new-page-icon" />
+          New canvas
+        </button>
+      )}
 
-      {newFolderOpen ? (
+      {!canEdit ? null : newFolderOpen ? (
         <input
           className="new-section-input"
           autoFocus
