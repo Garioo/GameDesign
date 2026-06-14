@@ -86,7 +86,7 @@ export default function HomePage() {
           <span className={styles.logo}>
             <Flame className={styles.logoIcon} />
           </span>
-          <span className={styles.brandName}>GAME DESIGN DOC</span>
+          <span className={styles.brandName}>FOUNDRY</span>
         </div>
         <Link href="/login" className={styles.signIn}>
           Sign in
@@ -95,7 +95,7 @@ export default function HomePage() {
 
       <section className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Game Design System</p>
+          <p className={styles.eyebrow}>Foundry</p>
           <h1 className={styles.title}>
             Where your game <span className={styles.titleAccent}>takes shape</span>.
           </h1>
@@ -179,7 +179,7 @@ export default function HomePage() {
       </section>
 
       <footer className={styles.footer}>
-        <span className={styles.footerBrand}>GAME DESIGN DOC</span>
+        <span className={styles.footerBrand}>FOUNDRY</span>
         <span>The team&apos;s living game design documents.</span>
       </footer>
     </div>

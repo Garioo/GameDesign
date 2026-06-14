@@ -203,7 +203,7 @@ export default function OnboardingPage() {
           if (!busy && stepValid) primaryAction();
         }}
       >
-        <p className={styles.brand}>GAME DESIGN DOC</p>
+        <p className={styles.brand}>FOUNDRY</p>
 
         <ol className={styles.steps} aria-label="Onboarding progress">
           {STEPS.map((label, i) => (

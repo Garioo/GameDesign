@@ -12,7 +12,7 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Game Design Doc",
+  title: "Foundry",
   description: "Your team's living game design document.",
 };
 

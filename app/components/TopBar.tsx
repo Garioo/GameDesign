@@ -41,7 +41,7 @@ export default function TopBar({
         <span className="logo">
           <Flame className="logo-icon" />
         </span>
-        <span className="brand-name">{brandName || "GAME DESIGN DOC"}</span>
+        <span className="brand-name">{brandName || "FOUNDRY"}</span>
         {crumbs.map((crumb, i) => (
           <Fragment key={`${i}-${crumb}`}>
             <span className="crumb-sep">/</span>

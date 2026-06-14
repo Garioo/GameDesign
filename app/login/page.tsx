@@ -45,7 +45,7 @@ export default function LoginPage() {
   return (
     <main className="auth">
       <div className="auth-card">
-        <h1 className="auth-title">Game Design System</h1>
+        <h1 className="auth-title">Foundry</h1>
         <p className="auth-sub">Sign in to open your team's design docs.</p>
 
         {error && <p className="auth-error">{error}</p>}
