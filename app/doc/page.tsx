@@ -1,5 +1,7 @@
 "use client";
 
+import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
+
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor from "./BlockEditor";
@@ -310,6 +312,26 @@ function DocPageInner() {
       cancelled = true;
     };
   }, [router]);
+
+  useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null,
+    ["pages", "sections", "canvases"], async () => {
+      if (!session) return;
+      const [fresh, secs, canvasList] = await Promise.all([
+        loadWorkspace(session.workspaceId), listSections(session.workspaceId), listCanvases(session.workspaceId),
+      ]);
+      setSections(secs); setCanvases(canvasList);
+      setDocs(prev => {
+        const current = new Map(prev.map(doc => [doc.id, doc]));
+        return fresh.map(doc => {
+          const existing = current.get(doc.id);
+          if (!existing) return doc;
+          // Keep local editor content and pending edits; refresh sidebar metadata.
+          if ((suppress.current[doc.id] ?? 0) > Date.now()) return existing;
+          return { ...existing, title: doc.title, sectionId: doc.sectionId,
+            parentId: doc.parentId, position: doc.position, group: doc.group };
+        });
+      });
+    });
 
   // ---- realtime: remote page/block changes + presence ----
   useEffect(() => {

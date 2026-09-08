@@ -14,6 +14,11 @@ installations can use the updated `supabase/schema.sql`.
 The existing board read remains compatible before migration. Saving timeline
 dates requires the migration; an unavailable column produces an inline error.
 
+Select **All boards** in the Gantt sidebar (or the board dropdown on mobile)
+to combine every board in the workspace. Groups show the board and column name;
+search and deadline filters apply across all boards. Date and card edits still
+update the original card. Select a single board to add columns.
+
 ## Scheduling
 
 Select a row or bar to edit its start and deadline, then save. Date-only writes

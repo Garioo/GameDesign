@@ -2,12 +2,12 @@
 
 import { Fragment, useState, type CSSProperties, type FormEvent } from "react";
 import type { BoardCard, BoardColumn } from "@/lib/boardRepo";
-import { barRange, dayKey, dayNumber, localToday } from "@/lib/gantt";
+import { barRange, dayNumber, localToday } from "@/lib/gantt";
 import "./gantt.css";
 
 type Person = { id: string; name: string; initials: string; color: string };
 type Props = {
-  columns: BoardColumn[];
+  columns: (BoardColumn & { boardName?: string })[];
   people: Person[];
   canEdit: boolean;
   onOpen: (card: BoardCard) => void;
@@ -48,14 +48,14 @@ export default function GanttChart({ columns, people, canEdit, onOpen, onSchedul
         <button onClick={showFirstTask} disabled={!scheduled.length}>First task</button>
       </div>
     </div>
-    <div className="gantt-caption"><span>{dateLabel(first, { month: "long", day: "numeric", year: "numeric" })} — {dateLabel(first + days - 1, { month: "long", day: "numeric", year: "numeric" })}</span><span>Grouped by board column · Select a task to schedule it</span></div>
+    <div className="gantt-caption"><span>{dateLabel(first, { month: "long", day: "numeric", year: "numeric" })} — {dateLabel(first + days - 1, { month: "long", day: "numeric", year: "numeric" })}</span><span>Grouped by {columns.some(col => col.boardName) ? "board and column" : "board column"} · Select a task to schedule it</span></div>
     <div className="gantt-scroll" tabIndex={0} aria-label="Scrollable timeline">
       <div className="gantt-grid" style={{ "--gantt-days": days, "--gantt-width": `${Math.max(680, days * 25)}px` } as CSSProperties}>
         <div className="gantt-header gantt-sticky">Task / assignees</div>
         <div className="gantt-header gantt-dates">{dates.map(day => <span key={day} className={day === today ? "is-today" : ""}>{days < 84 || (day - first) % 7 === 0 ? <>{dateLabel(day, { weekday: "narrow" })}<b>{dateLabel(day, { day: "numeric" })}</b></> : null}</span>)}</div>
         {groups.map(col => <Fragment key={col.id}>
           <button className="gantt-group gantt-sticky" onClick={() => setCollapsed(prev => prev.includes(col.id) ? prev.filter(id => id !== col.id) : [...prev, col.id])} aria-expanded={!collapsed.includes(col.id)}>
-            <span>{collapsed.includes(col.id) ? "▸" : "▾"}</span><i style={{ background: col.color }} />{col.name}<small>{col.cards.length}</small>
+            <span>{collapsed.includes(col.id) ? "▸" : "▾"}</span><i style={{ background: col.color }} /><span className="gantt-group-name" title={col.boardName ? `${col.boardName} · ${col.name}` : col.name}>{col.boardName && <span>{col.boardName} · </span>}{col.name}</span><small>{col.cards.length}</small>
           </button><div className="gantt-group-fill" />
           {!collapsed.includes(col.id) && col.cards.map(card => {
             const range = barRange(card.startDate, card.deadline, first, days);

@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import GanttChart from "./GanttChart";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
-import { createCanvas, ensureCanvasFolder } from "@/lib/canvasRepo";
+import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
 import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
 import {
   createBoard,
@@ -27,6 +28,7 @@ import {
   seedBoardsIfEmpty,
   updateCard,
   updateCardSchedule,
+  openBoardCardCanvas,
   type Board as BoardData,
   type BoardCard as CardData,
   type BoardCategory,
@@ -441,7 +443,8 @@ const css = `
     font-size: 8.5px; font-weight: 600; color: #fff; flex-shrink: 0;
   }
   .modal-input:focus, .modal-textarea:focus, .modal-select:focus { border-color: var(--ember-tint2); box-shadow: 0 0 0 2px var(--ember-tint2); }
-  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+  .canvas-link-picker { display: grid; gap: 8px; margin-top: 10px; }
+  .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 22px; }
   .modal-save { font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; padding: 8px 20px; border-radius: 9px; border: none; cursor: pointer; background: linear-gradient(150deg, #e98a45, #c0531c); box-shadow: 0 2px 8px rgba(191,99,43,0.35); transition: filter .1s; }
   .modal-save:hover { filter: brightness(1.06); }
   .modal-cancel { font: inherit; font-size: 13.5px; color: var(--ink-soft); padding: 8px 18px; border-radius: 9px; border: 1px solid var(--line); background: none; cursor: pointer; transition: background .1s; }
@@ -695,14 +698,15 @@ function Column({ col, people, canMoveLeft, canMoveRight, isColDragOver, onMoveC
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, people, categories, onClose, onSave, onDelete, onMakeCanvas }: {
+function CardModal({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas }: {
   card: CardData;
+  workspaceId: string;
   people: Person[];
   categories: BoardCategory[];
   onClose: () => void;
   onSave: (card: CardData) => Promise<void>;
   onDelete: (card: CardData) => void;
-  onMakeCanvas: (card: CardData) => void;
+  onMakeCanvas: (card: CardData, existingCanvasId?: string) => Promise<void>;
 }) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
@@ -713,6 +717,23 @@ function CardModal({ card, people, categories, onClose, onSave, onDelete, onMake
   const [startDate, setStartDate] = useState(card.startDate ?? "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [canvasBusy, setCanvasBusy] = useState(false);
+  const [canvasChoices, setCanvasChoices] = useState<CanvasInfo[] | null>(null);
+  const [chosenCanvas, setChosenCanvas] = useState("");
+
+  async function openCanvas(existingId?: string) {
+    if (canvasBusy) return;
+    setCanvasBusy(true); setSaveError("");
+    try { await onMakeCanvas(card, existingId); }
+    catch (e) { setSaveError(e instanceof Error ? e.message : "Could not open canvas."); }
+    finally { setCanvasBusy(false); }
+  }
+  async function chooseCanvas() {
+    setCanvasBusy(true); setSaveError("");
+    try { setCanvasChoices(await listCanvases(workspaceId)); }
+    catch (e) { setSaveError(e instanceof Error ? e.message : "Could not load canvases."); }
+    finally { setCanvasBusy(false); }
+  }
 
   function toggleOwner(id: string) {
     setOwnerIds((prev) => prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]);
@@ -775,6 +796,20 @@ function CardModal({ card, people, categories, onClose, onSave, onDelete, onMake
           <label className="modal-label" htmlFor="card-deadline">Deadline</label>
           <input id="card-deadline" min={startDate || undefined} type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </div>
+        <div className="modal-field">
+          <button className="modal-cancel" disabled={canvasBusy || saving} onClick={chooseCanvas}>
+            {card.canvasId ? "Change linked canvas" : "Link existing canvas"}
+          </button>
+          {canvasChoices && <div className="canvas-link-picker">
+            <label className="modal-label" htmlFor="linked-canvas">Canvas in this workspace</label>
+            <select id="linked-canvas" className="modal-select" value={chosenCanvas} onChange={e => setChosenCanvas(e.target.value)}>
+              <option value="">Choose a canvas…</option>
+              {canvasChoices.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {canvasChoices.length === 0 && <p>No canvases yet. Use Open as canvas to create one.</p>}
+            <button className="modal-cancel" disabled={!chosenCanvas || canvasBusy || saving} onClick={() => openCanvas(chosenCanvas)}>Link and open</button>
+          </div>}
+        </div>
         {saveError && <p role="alert" className="gantt-error">{saveError}</p>}
         <div className="modal-actions">
           <button
@@ -784,13 +819,8 @@ function CardModal({ card, people, categories, onClose, onSave, onDelete, onMake
           >
             <Trash style={{ width: 13, height: 13 }} /> Delete
           </button>
-          <button
-            className="modal-cancel"
-            style={{ marginRight: "auto" }}
-            title="Create a canvas named after this card, with the to-do as a sticky note"
-            onClick={() => onMakeCanvas({ ...card, title, sub, kind, priority: priority || null, ownerIds, deadline: deadline || null })}
-          >
-            ✦ Open as canvas
+          <button className="modal-cancel" disabled={canvasBusy || saving} onClick={() => openCanvas()}>
+            {canvasBusy ? "Opening…" : card.canvasId ? "Open linked canvas" : "Open as canvas"}
           </button>
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
           <button className="modal-save" disabled={saving} onClick={async () => {
@@ -820,6 +850,8 @@ export default function BoardWorkspace() {
   const [boards, setBoards] = useState<BoardData[]>([]);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
+  const [allBoards, setAllBoards] = useState(false);
+  const combined = isGantt && allBoards;
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [calMonth, setCalMonth] = useState(() => {
@@ -868,36 +900,20 @@ export default function BoardWorkspace() {
     return () => { cancelled = true; };
   }, [router]);
 
+  useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null,
+    ["boards", "board_columns", "board_cards", "board_categories"], async () => {
+      if (!session) return;
+      const [fresh, cats] = await Promise.all([loadBoards(session.workspaceId), listCategories(session.workspaceId)]);
+      setBoards(fresh); setCategories(cats);
+      setActiveBoardId(cur => cur && fresh.some(b => b.id === cur) ? cur : fresh[0]?.id ?? null);
+    });
+
   // ---- realtime: refetch on any board change from a teammate + presence ----
   useEffect(() => {
     const wsId = wsRef.current;
     if (loading || !wsId || !session) return;
 
-    let refetchTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefetch = () => {
-      if (refetchTimer) clearTimeout(refetchTimer);
-      refetchTimer = setTimeout(async () => {
-        refetchTimer = null;
-        try {
-          const [fresh, cats] = await Promise.all([loadBoards(wsId), listCategories(wsId)]);
-          setBoards(fresh);
-          setCategories(cats);
-          setActiveBoardId((cur) => (cur && fresh.some((b) => b.id === cur) ? cur : (fresh[0]?.id ?? null)));
-        } catch (e) {
-          console.error("board refetch failed", e);
-        }
-      }, 500);
-    };
-
-    const tables = ["boards", "board_columns", "board_cards", "board_categories"];
-    let channel = supabase.channel(`board:${wsId}`, { config: { broadcast: { self: false } } });
-    for (const table of tables) {
-      channel = channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table, filter: `project_id=eq.${wsId}` },
-        scheduleRefetch,
-      );
-    }
+    const channel = supabase.channel(`board:${wsId}`, { config: { broadcast: { self: false } } });
     channel
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{ key: string; name: string; initials: string; color: string }>();
@@ -919,7 +935,6 @@ export default function BoardWorkspace() {
       });
 
     return () => {
-      if (refetchTimer) clearTimeout(refetchTimer);
       supabase.removeChannel(channel);
     };
   }, [loading, session]);
@@ -932,6 +947,9 @@ export default function BoardWorkspace() {
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const cols = activeBoard?.cols ?? [];
+  const visibleCols = combined
+    ? boards.flatMap(board => board.cols.map(col => ({ ...col, boardName: board.name })))
+    : cols;
 
   function setCols(updater: ColData[] | ((cols: ColData[]) => ColData[])) {
     setBoards((prev) => prev.map((b) =>
@@ -939,23 +957,21 @@ export default function BoardWorkspace() {
     ));
   }
 
-  /** Spin a to-do off into its own canvas: create it named after the card
-      inside the "Scrum board" folder (created on first use), then open it
-      with the card's content spawning as a sticky note (?note=). */
-  async function handleMakeCanvas(card: CardData) {
-    try {
-      const s = await ensureSession();
-      if (!s) { router.push("/login"); return; }
-      const folder = await ensureCanvasFolder(s.workspaceId, "Scrum board");
-      const canvas = await createCanvas(s.workspaceId, card.title, folder.id);
+  /** Reuse the persistent link; only a newly created canvas receives the seed note. */
+  async function handleMakeCanvas(card: CardData, existingCanvasId?: string) {
+    const canvas = await openBoardCardCanvas(card.id, existingCanvasId);
+    setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({ ...c,
+      cards: c.cards.map(k => k.id === card.id ? { ...k, canvasId: canvas.id } : k)
+    })) })));
+    const params = new URLSearchParams({ c: canvas.id });
+    if (canvas.created) {
       const lines = [card.title];
       if (card.sub) lines.push("", card.sub);
-      const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map((t) => "#" + t).join("  ");
+      const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map(t => "#" + t).join("  ");
       if (meta) lines.push("", meta);
-      router.push(`/doc/canvas?c=${canvas.id}&note=${encodeURIComponent(lines.join("\n"))}`);
-    } catch (e) {
-      console.error("make canvas from card failed", e);
+      params.set("note", lines.join("\n"));
     }
+    router.push(`/doc/canvas?${params}`);
   }
 
   async function handleAddBoard() {
@@ -1063,7 +1079,7 @@ export default function BoardWorkspace() {
   /* delete card */
   function handleDeleteCard(card: CardData) {
     if (!window.confirm(`Delete card "${card.title}"?`)) return;
-    setCols((prev) => prev.map((c) => ({ ...c, cards: c.cards.filter((k) => k.id !== card.id) })));
+    setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({ ...c, cards: c.cards.filter(k => k.id !== card.id) })) })));
     deleteCard(card.id).catch((e) => console.error("delete card failed", e));
   }
 
@@ -1187,7 +1203,7 @@ export default function BoardWorkspace() {
     setColDragOver(null);
   }
 
-  const displayCols = cols.map((c) => ({
+  const displayCols = visibleCols.map((c) => ({
     ...c,
     cards: c.cards.filter((k) =>
       (!filterKind || k.kind === filterKind) &&
@@ -1197,7 +1213,7 @@ export default function BoardWorkspace() {
 
   /* ── calendar data ── */
   const dueMap: Record<string, (CardData & { colId: string; colName: string })[]> = {};
-  for (const c of cols) {
+  for (const c of visibleCols) {
     for (const k of c.cards) {
       if (!k.deadline) continue;
       (dueMap[k.deadline] ??= []).push({ ...k, colId: c.id, colName: c.name });
@@ -1277,11 +1293,15 @@ export default function BoardWorkspace() {
           {/* sidebar: board list */}
           <aside className="sidebar">
             <div className="sidebar-label">Boards</div>
+            {isGantt && <button className={`sidebar-item${combined ? " active" : ""}`} onClick={() => setAllBoards(true)} title="All boards">
+              <span className="sidebar-dot" style={{ background: "var(--ember)" }} />
+              <span className="sidebar-name">All boards</span>
+            </button>}
             {boards.map((b) => (
               <button
                 key={b.id}
-                className={`sidebar-item${b.id === activeBoardId ? " active" : ""}`}
-                onClick={() => setActiveBoardId(b.id)}
+                className={`sidebar-item${!combined && b.id === activeBoardId ? " active" : ""}`}
+                onClick={() => { setAllBoards(false); setActiveBoardId(b.id); }}
                 title={b.name}
               >
                 <span className="sidebar-dot" style={{ background: b.color }} />
@@ -1356,14 +1376,15 @@ export default function BoardWorkspace() {
           </aside>
 
           <div className="main-col">
-            {isGantt && <select className="gantt-board-select" aria-label="Choose board" value={activeBoardId ?? ""} onChange={e => setActiveBoardId(e.target.value)}>
+            {isGantt && <select className="gantt-board-select" aria-label="Choose board" value={combined ? "all" : activeBoardId ?? ""} onChange={e => { setAllBoards(e.target.value === "all"); if (e.target.value !== "all") setActiveBoardId(e.target.value); }}>
+              <option value="all">All boards</option>
               {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>}
             {/* toolbar */}
             <div className="board-toolbar">
               <div>
                 <div className="board-label">Design Workspace · {isGantt ? "Gantt" : "Board"}</div>
-                <div className="board-heading">{activeBoard?.name ?? "No boards yet"}</div>
+                <div className="board-heading">{combined ? "All boards" : activeBoard?.name ?? "No boards yet"}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <div className="filter-row">
@@ -1396,13 +1417,13 @@ export default function BoardWorkspace() {
                     <Plus style={{ width: 12, height: 12 }} /> Category
                   </button>
                 </div>
-                <button className="add-col-btn" onClick={handleAddCol}>
+                <button className="add-col-btn" disabled={combined} title={combined ? "Select a board to add a column" : "Add column"} onClick={handleAddCol}>
                   <Plus style={{ width: 15, height: 15 }} /> Column
                 </button>
               </div>
             </div>
 
-            {isGantt ? <GanttChart key={activeBoardId} columns={displayCols} people={people}
+            {isGantt ? <GanttChart key={combined ? "all" : activeBoardId} columns={displayCols} people={people}
               canEdit={!!session && session.role !== "viewer"} onOpen={setEditingCard} onSchedule={handleSchedule} /> :
             <div className="board-scroll">
               <div className="board-cols">
@@ -1446,6 +1467,7 @@ export default function BoardWorkspace() {
         {editingCard && (
           <CardModal
             card={editingCard}
+            workspaceId={session?.workspaceId ?? ""}
             people={people}
             categories={categories}
             onClose={() => setEditingCard(null)}

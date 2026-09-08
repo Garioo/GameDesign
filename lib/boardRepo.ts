@@ -16,6 +16,7 @@ export interface BoardCard {
   tags: string[];
   priority: string | null;
   ownerIds: string[];
+  canvasId?: string | null;
   startDate?: string | null;
   deadline?: string | null;
   dragging?: boolean;
@@ -44,6 +45,7 @@ interface CardRow {
   tags: string[] | null;
   priority: string | null;
   owners: string[] | null;
+  canvas_id?: string | null;
   start_date?: string | null;
   deadline: string | null;
   position: number;
@@ -90,6 +92,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       tags: r.tags ?? [],
       priority: r.priority,
       ownerIds: r.owners ?? [],
+      canvasId: r.canvas_id,
       startDate: r.start_date,
       deadline: r.deadline,
     };
@@ -439,4 +442,18 @@ function validateSchedule(start?: string | null, end?: string | null) {
     }
   }
   if (start && end && start > end) throw new Error("Deadline must be on or after the start date.");
+}
+
+/** Atomically reuse, create, or explicitly link a canvas for the original card. */
+export async function openBoardCardCanvas(cardId: string, existingCanvasId?: string): Promise<{ id: string; created: boolean }> {
+  const { data, error } = await supabase.rpc("open_board_card_canvas", {
+    p_card_id: cardId,
+    p_existing_canvas_id: existingCanvasId ?? null,
+  }).single();
+  if (error) throw new Error(error.code === "PGRST202"
+    ? "Canvas linking is not set up yet. Run supabase/migrate-board-canvas-link.sql in Supabase, then retry."
+    : `Could not open canvas: ${error.message}`);
+  const result = data as { canvas_id: string; created: boolean } | null;
+  if (!result?.canvas_id) throw new Error("Could not resolve the linked canvas.");
+  return { id: result.canvas_id, created: result.created };
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
+
 import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { GeoShapeGeoStyle, toRichText, type Editor } from "tldraw";
@@ -225,6 +227,13 @@ export default function CanvasPage() {
     return () => { cancelled = true; };
   }, [router]);
 
+  useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null,
+    ["canvases", "canvas_folders"], async () => {
+      if (!session) return;
+      const [list, folderList] = await Promise.all([listCanvases(session.workspaceId), listCanvasFolders(session.workspaceId)]);
+      setCanvases(list); setFolders(folderList);
+    });
+
   // ---- realtime: canvas list changes + presence ----
   useEffect(() => {
     const wsId = wsRef.current;
@@ -232,57 +241,6 @@ export default function CanvasPage() {
 
     const channel = supabase
       .channel(`canvas:${wsId}`, { config: { broadcast: { self: false } } })
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "canvases", filter: `project_id=eq.${wsId}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const oldId = (payload.old as { id?: string })?.id;
-            if (oldId) setCanvases((prev) => prev.filter((c) => c.id !== oldId));
-            return;
-          }
-          const row = payload.new as { id?: string; name?: string; position?: number; updated_at?: string; folder_id?: string | null };
-          if (!row?.id) return;
-          setCanvases((prev) => {
-            const info: CanvasInfo = {
-              id: row.id!,
-              name: row.name ?? "Untitled canvas",
-              position: row.position ?? prev.length,
-              updatedAt: row.updated_at ?? new Date().toISOString(),
-              folderId: row.folder_id ?? null,
-            };
-            return prev.some((c) => c.id === row.id)
-              ? prev.map((c) => (c.id === row.id ? { ...c, ...info } : c))
-              : [...prev, info];
-          });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "canvas_folders", filter: `project_id=eq.${wsId}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const oldId = (payload.old as { id?: string })?.id;
-            if (oldId) {
-              setFolders((prev) => prev.filter((f) => f.id !== oldId));
-              setCanvases((prev) => prev.map((c) => (c.folderId === oldId ? { ...c, folderId: null } : c)));
-            }
-            return;
-          }
-          const row = payload.new as { id?: string; name?: string; position?: number };
-          if (!row?.id) return;
-          setFolders((prev) => {
-            const info: CanvasFolderInfo = {
-              id: row.id!,
-              name: row.name ?? "Untitled folder",
-              position: row.position ?? prev.length,
-            };
-            return prev.some((f) => f.id === row.id)
-              ? prev.map((f) => (f.id === row.id ? { ...f, ...info } : f))
-              : [...prev, info];
-          });
-        },
-      )
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<PresenceUser>();
         const seen = new Map<string, PresenceUser>();

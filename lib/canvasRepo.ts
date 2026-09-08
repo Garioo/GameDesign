@@ -27,11 +27,12 @@ export type CanvasScene = Record<string, unknown>;
 
 /** List a workspace's canvases, ordered. */
 export async function listCanvases(workspaceId: string): Promise<CanvasInfo[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("canvases")
     .select("id, name, position, updated_at, folder_id")
     .eq("project_id", workspaceId)
     .order("position", { ascending: true });
+  if (error) throw new Error(`Could not load canvases: ${error.message}`);
   return ((data ?? []) as { id: string; name: string; position: number; updated_at: string; folder_id: string | null }[]).map(
     (r) => ({ id: r.id, name: r.name, position: r.position, updatedAt: r.updated_at, folderId: r.folder_id }),
   );
@@ -97,11 +98,12 @@ export async function moveCanvasToFolder(id: string, folderId: string | null): P
 
 /** List a workspace's canvas folders, ordered. */
 export async function listCanvasFolders(workspaceId: string): Promise<CanvasFolderInfo[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("canvas_folders")
     .select("id, name, position")
     .eq("project_id", workspaceId)
     .order("position", { ascending: true });
+  if (error) throw new Error(`Could not load canvas folders: ${error.message}`);
   return (data ?? []) as CanvasFolderInfo[];
 }
 
