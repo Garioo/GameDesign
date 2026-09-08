@@ -28,7 +28,7 @@ const Columns = ({ className }: IconProps) => (
 );
 const TableIcon = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />
+    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 7h5M10 12h7M7 17h7" />
   </svg>
 );
 const Plus = ({ className }: IconProps) => (
@@ -42,12 +42,13 @@ const ITEMS: { id: string; label: string; href?: string; Icon: ComponentType<Ico
   { id: "pages", label: "Pages", href: "/doc", Icon: Doc },
   { id: "canvas", label: "Canvas", href: "/doc/canvas", Icon: Grid },
   { id: "board", label: "Board", href: "/board", Icon: Columns },
-  { id: "table", label: "Table", Icon: TableIcon }, // no route yet
+  { id: "table", label: "Gantt", href: "/table", Icon: TableIcon },
 ];
 
 function activeFromPath(path: string): string {
   if (path.startsWith("/doc/canvas")) return "canvas";
   if (path.startsWith("/doc")) return "pages";
+  if (path.startsWith("/table")) return "table";
   if (path.startsWith("/board")) return "board";
   if (path.startsWith("/home")) return "home";
   return "";

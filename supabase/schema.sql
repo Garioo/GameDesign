@@ -739,10 +739,17 @@ create table if not exists public.board_cards (
   priority   text,
   owner      uuid references public.profiles(id) on delete set null,
   deadline   date,
+  start_date date,
   position   int  not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Gantt scheduling for existing installations.
+alter table public.board_cards add column if not exists start_date date;
+alter table public.board_cards drop constraint if exists board_cards_schedule_order;
+alter table public.board_cards add constraint board_cards_schedule_order
+  check (start_date is null or deadline is null or deadline >= start_date);
 
 -- added later: multiple assignees per card (migrates the old single owner)
 alter table public.board_cards add column if not exists owners uuid[] not null default '{}';

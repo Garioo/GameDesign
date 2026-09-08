@@ -16,6 +16,7 @@ export interface BoardCard {
   tags: string[];
   priority: string | null;
   ownerIds: string[];
+  startDate?: string | null;
   deadline?: string | null;
   dragging?: boolean;
 }
@@ -43,6 +44,7 @@ interface CardRow {
   tags: string[] | null;
   priority: string | null;
   owners: string[] | null;
+  start_date?: string | null;
   deadline: string | null;
   position: number;
 }
@@ -69,10 +71,14 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       .order("position", { ascending: true }),
     supabase
       .from("board_cards")
-      .select("id, column_id, title, sub, kind, tags, priority, owners, deadline, position")
+      .select("*")
       .eq("project_id", workspaceId)
       .order("position", { ascending: true }),
   ]);
+
+  for (const result of [boardsRes, colsRes, cardsRes]) {
+    if (result.error) throw new Error(result.error.message);
+  }
 
   const cardsByCol = new Map<string, BoardCard[]>();
   for (const r of (cardsRes.data ?? []) as CardRow[]) {
@@ -84,6 +90,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       tags: r.tags ?? [],
       priority: r.priority,
       ownerIds: r.owners ?? [],
+      startDate: r.start_date,
       deadline: r.deadline,
     };
     (cardsByCol.get(r.column_id) ?? cardsByCol.set(r.column_id, []).get(r.column_id)!).push(card);
@@ -211,6 +218,7 @@ export async function createCard(
 
 /** Persist edits from the card modal. */
 export async function updateCard(card: BoardCard): Promise<void> {
+  validateSchedule(card.startDate, card.deadline);
   const { error } = await supabase
     .from("board_cards")
     .update({
@@ -221,6 +229,7 @@ export async function updateCard(card: BoardCard): Promise<void> {
       priority: card.priority,
       owners: card.ownerIds ?? [],
       deadline: card.deadline || null,
+      ...(card.startDate !== undefined ? { start_date: card.startDate || null } : {}),
     })
     .eq("id", card.id);
   if (error) throw new Error(`updateCard failed: ${error.message}`);
@@ -411,4 +420,23 @@ export async function seedBoardsIfEmpty(workspaceId: string): Promise<void> {
       }
     }
   }
+}
+
+/** Date-only writes avoid overwriting concurrent edits to titles or owners. */
+export async function updateCardSchedule(id: string, startDate: string | null, deadline: string | null): Promise<void> {
+  validateSchedule(startDate, deadline);
+  const { error } = await supabase.from("board_cards")
+    .update({ start_date: startDate, deadline }).eq("id", id).select("id").single();
+  if (error) throw new Error(error.message.includes("start_date")
+    ? "Start dates are not set up yet. Run supabase/migrate-board-gantt.sql in Supabase, then retry."
+    : `Could not save schedule: ${error.message}`);
+}
+
+function validateSchedule(start?: string | null, end?: string | null) {
+  for (const value of [start, end]) {
+    if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)))) {
+      throw new Error("Choose a valid date.");
+    }
+  }
+  if (start && end && start > end) throw new Error("Deadline must be on or after the start date.");
 }
