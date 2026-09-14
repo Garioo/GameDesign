@@ -1,5 +1,6 @@
 "use client";
 
+import LinkedDocuments from "./LinkedDocuments";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -934,11 +935,11 @@ function DocPageInner() {
     return (
       <div className="app">
         <div className="screen">
-          <h1>{workspace?.name ?? "This workspace"} is empty</h1>
+          <h1>{workspace?.name ?? "Workspace"} pages</h1>
           <p style={{ color: "var(--ink-soft)" }}>
             {canEdit
               ? "Start the design doc with its first page."
-              : "Nothing here yet — an editor needs to create the first page."}
+              : "No internal pages yet — an editor can create the first page."}
           </p>
           {canEdit && (
             <button
@@ -949,6 +950,7 @@ function DocPageInner() {
               Create your first page
             </button>
           )}
+          {session && <LinkedDocuments key={session.workspaceId} workspaceId={session.workspaceId} canEdit={canEdit} />}
         </div>
       </div>
     );
@@ -1007,6 +1009,7 @@ function DocPageInner() {
       <div className="body">
         {/* ---------------- left sidebar ---------------- */}
         <Sidebar
+          workspaceId={session!.workspaceId}
           docs={docs}
           sections={sections}
           active={active}

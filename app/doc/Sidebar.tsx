@@ -1,5 +1,7 @@
 "use client";
 
+import LinkedDocuments from "./LinkedDocuments";
+
 import { useEffect, useState } from "react";
 import type { DesignDoc } from "./data";
 import type { SectionInfo } from "@/lib/docsRepo";
@@ -49,6 +51,7 @@ type Menu = { kind: "page" | "section"; id: string } | null;
 type Renaming = { kind: "page" | "section"; id: string } | null;
 
 interface SidebarProps {
+  workspaceId: string;
   docs: DesignDoc[];
   sections: SectionInfo[];
   active: DesignDoc;
@@ -68,6 +71,7 @@ interface SidebarProps {
 const byPos = (a: DesignDoc, b: DesignDoc) => (a.position ?? 0) - (b.position ?? 0);
 
 export default function Sidebar({
+  workspaceId,
   docs,
   sections,
   active,
@@ -445,6 +449,7 @@ export default function Sidebar({
           New section
         </button>
       )}
+      <LinkedDocuments key={workspaceId} workspaceId={workspaceId} canEdit={canEdit} />
     </aside>
   );
 }
