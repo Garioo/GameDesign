@@ -1,3 +1,5 @@
+import type { DriveFile } from "@/lib/googleDriveFile";
+
 // Domain types + seed data for the game design documents.
 // Local-only for now — no backend yet. Swap this out for Supabase later.
 
@@ -25,7 +27,8 @@ export type BlockType =
   | "table"
   | "image"
   | "script"
-  | "curve";
+  | "curve"
+  | "googleDrive";
 
 // ---- stat curve block --------------------------------------------------
 // A curve is one or more series over a shared x-domain. Each series is
@@ -76,6 +79,7 @@ export interface Block {
   checked?: boolean; // done state for todo blocks
   path?: string; // repo-relative file path for script blocks
   code?: string; // cached file content for script blocks
+  driveFile?: DriveFile;
   curve?: CurveData; // series + domain for curve blocks
 }
 

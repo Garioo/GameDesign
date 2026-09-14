@@ -1,3 +1,4 @@
+import { normalizeDriveFile } from "./googleDriveFile";
 import { supabase, WORKSPACE_ID } from "./supabase";
 import { assertMaxBytes, cleanText, LIMITS, ValidationError } from "./validate";
 import {
@@ -50,6 +51,7 @@ interface BlockRow {
     path?: string;
     code?: string;
     curve?: Block["curve"];
+    driveFile?: Block["driveFile"];
   };
   position: number;
 }
@@ -112,6 +114,7 @@ const blockContent = (b: Block): BlockRow["content"] => {
   if (b.path) c.path = b.path;
   if (b.code !== undefined) c.code = b.code;
   if (b.curve) c.curve = b.curve;
+  if (b.driveFile) c.driveFile = normalizeDriveFile(b.driveFile);
   return c;
 };
 
@@ -134,6 +137,7 @@ const rowToBlock = (r: BlockRow): Block => ({
   ...(r.content?.path ? { path: r.content.path } : {}),
   ...(r.content?.code !== undefined ? { code: r.content.code } : {}),
   ...(r.content?.curve ? { curve: r.content.curve } : {}),
+  ...(r.content?.driveFile ? { driveFile: r.content.driveFile } : {}),
 });
 
 /** Load the whole workspace into the in-memory DesignDoc[] the UI expects. */

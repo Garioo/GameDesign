@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BLOCK_TONES, type Block, type BlockTone, type BlockType, type CurveData } from "./data";
+import GoogleDriveBlock from "./GoogleDriveBlock";
 import CurveBlock, { DEFAULT_CURVE } from "./CurveBlock";
 import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
@@ -122,6 +123,7 @@ const MENU: MenuItem[] = [
   { type: "quote", label: "Quote", hint: "Capture a quote", Icon: IQuote },
   { type: "callout", label: "Callout", hint: "Make text stand out", Icon: ICallout },
   { type: "image", label: "Image", hint: "Upload or embed a picture", Icon: IImage },
+  { type: "googleDrive", label: "Google Drive", hint: "Search your Google documents and embed one", Icon: IGrid },
   { type: "script", label: "Script", hint: "Attach a file from the GitHub repo", Icon: ICode },
   { type: "table", label: "Table", hint: "Add a simple table", Icon: ITable },
   { type: "curve", label: "Stat curve", hint: "Plot a formula or hand-drawn curve", Icon: ICurve },
@@ -142,11 +144,12 @@ const PLACEHOLDER: Record<BlockType, string> = {
   image: "",
   script: "",
   curve: "",
+  googleDrive: "",
 };
 
 // Blocks with no inline-editable text (rendered as standalone "chrome").
 const isChromeBlock = (t: BlockType) =>
-  t === "divider" || t === "table" || t === "image" || t === "script" || t === "curve";
+  t === "divider" || t === "table" || t === "image" || t === "script" || t === "curve" || t === "googleDrive";
 
 // UUID so new blocks upsert directly into the `blocks` table (uuid PK).
 const newId = () =>
@@ -546,7 +549,7 @@ export default function BlockEditor({
       setFocusReq({ id, pos: "start" });
       return true;
     }
-    if (prev.type === "table" || prev.type === "image" || prev.type === "script" || prev.type === "curve") return false; // don't merge into these
+    if (prev.type === "table" || prev.type === "image" || prev.type === "script" || prev.type === "curve" || prev.type === "googleDrive") return false; // don't merge into these
 
     const prevEl = refs.current.get(prev.id);
     const caretAt = prevEl ? prevEl.innerText.replace(/\n$/, "").length : prev.text.length;
@@ -577,6 +580,8 @@ export default function BlockEditor({
                 ["", ""],
               ],
             }
+          : type === "googleDrive"
+            ? { id: block.id, type: "googleDrive", text: "" }
           : type === "image"
             ? { id: block.id, type: "image", text: "", src: "" }
             : type === "script"
@@ -898,6 +903,7 @@ export default function BlockEditor({
             onChange(readBlocks());
           }}
           onTableChange={(rows) => updateBlock(b.id, { rows })}
+          onDriveFileChange={(driveFile) => updateBlock(b.id, { driveFile })}
           onCurveChange={(curve) => updateBlock(b.id, { curve })}
           onSetImage={(src) => updateBlock(b.id, { src })}
           onSetCaption={(text) => updateBlock(b.id, { text })}
@@ -951,6 +957,7 @@ function BlockRow({
   onBlur,
   onTableChange,
   onCurveChange,
+  onDriveFileChange,
   onSetImage,
   onSetCaption,
   onSetTone,
@@ -986,6 +993,7 @@ function BlockRow({
   onBlur: () => void;
   onTableChange: (rows: string[][]) => void;
   onCurveChange: (curve: CurveData) => void;
+  onDriveFileChange: (file: NonNullable<Block["driveFile"]>) => void;
   onSetImage: (src: string) => void;
   onSetCaption: (text: string) => void;
   onSetTone: (tone: BlockTone) => void;
@@ -1061,6 +1069,8 @@ function BlockRow({
         <TableBlock rows={block.rows ?? [["", ""]]} onChange={onTableChange} />
       </div>
     );
+  } else if (block.type === "googleDrive") {
+    main = <div className="blk-main"><GoogleDriveBlock file={block.driveFile} onChange={onDriveFileChange} readOnly={readOnly} /></div>;
   } else if (block.type === "image") {
     main = (
       <div className="blk-main">

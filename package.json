@@ -16,6 +16,8 @@
     "tldraw": "^5.1.0"
   },
   "devDependencies": {
+    "@types/google.accounts": "^0.0.18",
+    "@types/google.picker": "^0.0.52",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
