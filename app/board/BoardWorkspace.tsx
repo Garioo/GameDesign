@@ -1,10 +1,17 @@
 "use client";
+import { loadSchedule, mutateSchedule, type ScheduleSnapshot, type ScheduleResult } from '@/lib/ganttRepo';
 
 import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import GanttChart from "./GanttChart";
-import TopBar from "@/app/components/TopBar";
+import PlanningHeader from "./PlanningHeader";
+import StageDialog from "./StageDialog";
+import {PlanningIcon} from "./PlanningIcons";
+import "./planning.css";
+import PlanningDialog,{type PlanningAction} from './PlanningDialog';
+import CategoryManager from './CategoryManager';
+import TopBar, { type PresenceUser } from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
@@ -12,22 +19,12 @@ import { ensureSession, type SessionInfo } from "@/lib/session";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
 import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
 import {
-  createBoard,
   createCard,
-  createCategory,
-  createColumn,
   deleteBoard,
   deleteCard,
-  deleteCategory,
-  deleteColumn,
   listCategories,
   loadBoards,
   moveCard,
-  renameCategory,
-  reorderColumns,
-  seedBoardsIfEmpty,
-  updateCard,
-  updateCardSchedule,
   openBoardCardCanvas,
   type Board as BoardData,
   type BoardCard as CardData,
@@ -35,24 +32,8 @@ import {
   type BoardColumn as ColData,
 } from "@/lib/boardRepo";
 
-/* ── CSS injected into the component (mirrors globals.css tokens) ─────────── */
+/* Board layout inherits the shared typography and design tokens. */
 const css = `
-  :root {
-    --bg: #f6f1e9;
-    --surface: #fffdfa;
-    --ink: #2a241e;
-    --ink-soft: #6f655a;
-    --ink-faint: #a59a8c;
-    --line: #e8dfd1;
-    --line-soft: #efe8db;
-    --ember: #cf6a2c;
-    --ember-deep: #b9551f;
-    --ember-tint: #fbede0;
-    --ember-tint2: #f8e2cf;
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
-
   .board-app {
     min-height: 100vh;
     background:
@@ -548,15 +529,17 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
   return (
     <div
       className={`card${card.dragging ? " dragging" : ""}${dropState === "above" ? " drop-above" : ""}${dropState === "below" ? " drop-below" : ""}`}
+      role="button" tabIndex={0} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onClick(card);}}}
       draggable
       onDragStart={(e) => onDragStart(e, card.id)}
       onDragEnd={onDragEnd}
       onClick={() => onClick(card)}
     >
-      {(card.kind || card.tags.length > 0) && (
+      {(card.kind || card.tags.length > 0 || card.priority) && (
         <div className="card-tags">
           {card.kind && <span className={`card-tag kind-${card.kind}`}>{card.kind}</span>}
           {card.tags.map((t) => <span key={t} className="card-tag">{t}</span>)}
+          {card.priority && <span className={`card-priority ${card.priority}`}>{card.priority}</span>}
         </div>
       )}
       <div className="card-title">{card.title}</div>
@@ -584,9 +567,7 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
               <Flag /> {formatDeadline(card.deadline)}
             </span>
           )}
-          {card.priority && (
-            <span className={`card-priority ${card.priority}`}>{card.priority}</span>
-          )}
+
         </div>
       </div>
     </div>
@@ -594,19 +575,12 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, people, canMoveLeft, canMoveRight, isColDragOver, onMoveCol, onColDragStart, onColDragOver, onColDrop, onColDragEnd, onAddCard, onDeleteCol, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
   people: Person[];
-  canMoveLeft: boolean;
-  canMoveRight: boolean;
-  isColDragOver: boolean;
-  onMoveCol: (colId: string, dir: -1 | 1) => void;
-  onColDragStart: (e: DragEvent<HTMLDivElement>, colId: string) => void;
-  onColDragOver: (e: DragEvent<HTMLDivElement>, colId: string) => void;
-  onColDrop: (e: DragEvent<HTMLDivElement>, colId: string) => void;
-  onColDragEnd: () => void;
+  canEdit:boolean;
+  onManageStages:()=>void;
   onAddCard: (colId: string, title: string) => void;
-  onDeleteCol: (colId: string) => void;
   onCardClick: (card: CardData) => void;
   dragState: DragInfo | null;
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
@@ -625,23 +599,19 @@ function Column({ col, people, canMoveLeft, canMoveRight, isColDragOver, onMoveC
 
   return (
     <div
-      className={`col${isColDragOver ? " col-drag-target" : ""}`}
-      onDragOver={(e) => onColDragOver(e, col.id)}
-      onDrop={(e) => onColDrop(e, col.id)}
+      className="col"
     >
       <div
         className="col-head"
-        draggable
-        title="Drag to reorder columns"
-        onDragStart={(e) => onColDragStart(e, col.id)}
-        onDragEnd={onColDragEnd}
+        title="Manage stages to change their order"
       >
-        <span className="col-dot" style={{ background: col.color }} />
-        <span className="col-name">{col.name}</span>
+        <span className="col-status" style={{ "--stage-color": col.color } as CSSProperties}>
+          <span className="col-dot" />
+          <span className="col-name">{col.name}</span>
+        </span>
         <span className="col-count">{col.cards.length}</span>
-        <button className="col-menu-btn" title="Move column left" disabled={!canMoveLeft} onClick={() => onMoveCol(col.id, -1)}><ChevronLeft className="" style={{ width: 13, height: 13 }} /></button>
-        <button className="col-menu-btn" title="Move column right" disabled={!canMoveRight} onClick={() => onMoveCol(col.id, 1)}><ChevronRight className="" style={{ width: 13, height: 13 }} /></button>
-        <button className="col-menu-btn col-del-btn" title="Delete column" onClick={() => onDeleteCol(col.id)}><Trash className="" style={{ width: 14, height: 14 }} /></button>
+        {canEdit&&<details className="planning-menu stage-header-menu"><summary aria-label={`Actions for ${col.name}`}><PlanningIcon name="more"/></summary><div><button onClick={onManageStages}>Manage stages</button><button onClick={()=>setAdding(true)}>Add task</button></div></details>}
+        {canEdit && <button className="col-add-task" aria-label={`Add task to ${col.name}`} onClick={() => setAdding(true)}><PlanningIcon name="plus" /></button>}
       </div>
 
       <div
@@ -671,40 +641,41 @@ function Column({ col, people, canMoveLeft, canMoveRight, isColDragOver, onMoveC
           );
         })}
 
-        {adding ? (
+        {canEdit&&(adding ? (
           <div className="new-card-form">
             <textarea
               className="new-card-input"
               rows={2}
-              placeholder="Card title…"
+              placeholder="Task title…"
               autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitAdd(); } if (e.key === "Escape") { setAdding(false); setDraft(""); } }}
             />
             <div className="new-card-actions">
-              <button className="btn-save" onClick={commitAdd}>Add card</button>
+              <button className="btn-save" onClick={commitAdd}>Add task</button>
               <button className="btn-cancel" onClick={() => { setAdding(false); setDraft(""); }}>Cancel</button>
             </div>
           </div>
         ) : (
           <button className="add-card-btn" onClick={() => setAdding(true)}>
-            <Plus className="" style={{ width: 14, height: 14 }} /> Add card
+            <Plus className="" style={{ width: 14, height: 14 }} /> Add task
           </button>
-        )}
+        ))}
       </div>
     </div>
   );
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas }: {
+function CardModal({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, panel, canEdit, columns }: {
+  panel: boolean; canEdit: boolean; columns: {id:string;name:string}[];
   card: CardData;
   workspaceId: string;
   people: Person[];
   categories: BoardCategory[];
   onClose: () => void;
-  onSave: (card: CardData) => Promise<void>;
+  onSave: (card: CardData, snapshot: ScheduleSnapshot) => Promise<void>;
   onDelete: (card: CardData) => void;
   onMakeCanvas: (card: CardData, existingCanvasId?: string) => Promise<void>;
 }) {
@@ -715,6 +686,28 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   const [ownerIds, setOwnerIds] = useState<string[]>(card.ownerIds ?? []);
   const [deadline, setDeadline] = useState(card.deadline ?? "");
   const [startDate, setStartDate] = useState(card.startDate ?? "");
+  const [firmDeadline, setFirmDeadline] = useState(card.firmDeadline ?? "");
+  const [columnId, setColumnId] = useState(card.columnId ?? "");
+  const [baseline, setBaseline] = useState<ScheduleSnapshot | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const dialogRef=useRef<HTMLDivElement>(null);
+  const closeRef=useRef(onClose);
+  closeRef.current=onClose;
+  useEffect(()=>{
+    const previous=document.activeElement as HTMLElement|null;
+    dialogRef.current?.querySelector<HTMLElement>('button')?.focus();
+    function key(e:KeyboardEvent){
+      if(e.key==='Escape'){e.preventDefault();closeRef.current();}
+      if(e.key==='Tab'){
+        const items=Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')??[]).filter(el=>el.offsetParent!==null&&!el.closest('fieldset:disabled'));
+        const first=items[0],last=items[items.length-1];
+        if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
+        else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+      }
+    }
+    document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};
+  },[card.id]);
+  useEffect(() => { let active=true; loadSchedule(workspaceId).then(s=>{if(active)setBaseline(s);}).catch(e=>{if(active)setSaveError(e.message);}); return()=>{active=false;}; }, [workspaceId]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [canvasBusy, setCanvasBusy] = useState(false);
@@ -740,9 +733,11 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Edit card</h2>
+    <div className={`modal-backdrop${panel ? " gantt-inspector-backdrop" : ""}`} onClick={onClose}>
+      <div ref={dialogRef} className={`modal${panel ? " gantt-inspector" : ""}${expanded ? " expanded" : ""}`} role="dialog" aria-modal="true" aria-label="Task details" onClick={(e) => e.stopPropagation()}>
+        <div className="gantt-inspector-heading"><h2>Task details</h2><button onClick={onClose} aria-label="Close task details">×</button></div>
+        {panel && <button className="gantt-sheet-toggle" onClick={()=>setExpanded(!expanded)}>{expanded ? "Reduce panel" : "Expand panel"}</button>}
+        <fieldset disabled={!canEdit || saving} className="gantt-card-fields">
         <div className="modal-field">
           <label className="modal-label">Title</label>
           <input className="modal-input" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -793,9 +788,11 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
           <input id="card-start" type="date" className="modal-input" value={startDate} max={deadline || undefined} onChange={(e) => setStartDate(e.target.value)} />
         </div>
         <div className="modal-field">
-          <label className="modal-label" htmlFor="card-deadline">Deadline</label>
+          <label className="modal-label" htmlFor="card-deadline">Scheduled end</label>
           <input id="card-deadline" min={startDate || undefined} type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </div>
+        <div className="modal-field"><label className="modal-label" htmlFor="card-firm">Firm deadline (optional)</label><input id="card-firm" type="date" className="modal-input" value={firmDeadline} onChange={e=>setFirmDeadline(e.target.value)}/></div>
+        <div className="modal-field"><label className="modal-label" htmlFor="card-status">Stage</label><select id="card-status" className="modal-select" value={columnId} onChange={e=>setColumnId(e.target.value)}>{columns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         <div className="modal-field">
           <button className="modal-cancel" disabled={canvasBusy || saving} onClick={chooseCanvas}>
             {card.canvasId ? "Change linked canvas" : "Link existing canvas"}
@@ -823,16 +820,18 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
             {canvasBusy ? "Opening…" : card.canvasId ? "Open linked canvas" : "Open as canvas"}
           </button>
           <button className="modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="modal-save" disabled={saving} onClick={async () => {
+          <button className="modal-save" disabled={saving || !baseline} onClick={async () => {
             setSaving(true); setSaveError("");
             try {
-              await onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds,
-                startDate: startDate || (card.startDate === undefined ? undefined : null), deadline: deadline || null });
+              if (!baseline) return;
+              await onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, columnId,
+                startDate: startDate || null, deadline: deadline || null, firmDeadline: firmDeadline || null }, baseline);
               onClose();
             } catch (e) { setSaveError(e instanceof Error ? e.message : "Could not save card."); }
             finally { setSaving(false); }
           }}>{saving ? "Saving…" : "Save"}</button>
         </div>
+        </fieldset>
       </div>
     </div>
   );
@@ -850,7 +849,20 @@ export default function BoardWorkspace() {
   const [boards, setBoards] = useState<BoardData[]>([]);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
-  const [allBoards, setAllBoards] = useState(false);
+  const [allBoards, setAllBoards] = useState(true);
+  const [timelineBoardId,setTimelineBoardId]=useState<string|undefined>();
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [stageBoard,setStageBoard]=useState<BoardData|null|undefined>(undefined);
+  const [search,setSearch]=useState('');
+  const [actionDialog,setActionDialog]=useState<PlanningAction|null>(null);
+  const [categoryManager,setCategoryManager]=useState(false);
+  const [ownerFilter,setOwnerFilter]=useState('');
+  const canEdit=!!session&&session.role!=='viewer';
+  const [scheduleResult,setScheduleResult]=useState<ScheduleResult|null>(null);
+  const [boardActionError,setBoardActionError]=useState('');
+  const [shareCopied,setShareCopied]=useState(false);
+  const [undoBusy,setUndoBusy]=useState(false);
+  const [ganttBoardRequest,setGanttBoardRequest]=useState<{id:string;sequence:number}|null>(null);
   const combined = isGantt && allBoards;
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
@@ -861,11 +873,9 @@ export default function BoardWorkspace() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
-  const dragCol = useRef<string | null>(null);
-  const [colDragOver, setColDragOver] = useState<string | null>(null);
   const wsRef = useRef<string | null>(null);
 
-  // ---- initial load: session -> seed -> boards + members ----
+  // ---- initial load: session -> boards + members ----
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -876,7 +886,7 @@ export default function BoardWorkspace() {
         if (!s.onboarded) { router.replace("/onboarding"); return; }
         setSession(s);
         wsRef.current = s.workspaceId;
-        await seedBoardsIfEmpty(s.workspaceId);
+
         const [loaded, members, cats] = await Promise.all([
           loadBoards(s.workspaceId),
           listMembers(s.workspaceId),
@@ -886,7 +896,8 @@ export default function BoardWorkspace() {
         setBoards(loaded);
         let remembered: string | null = null;
         try { remembered = localStorage.getItem(`gd-board:${s.workspaceId}`); } catch { /* optional preference */ }
-        setActiveBoardId(loaded.find(b => b.id === remembered)?.id ?? loaded[0]?.id ?? null);
+        const requested=new URLSearchParams(window.location.search).get('board');
+        setActiveBoardId(loaded.find(b => b.id === (requested||remembered))?.id ?? loaded[0]?.id ?? null);
         setPeople(members);
         setCategories(cats);
         setLoading(false);
@@ -946,6 +957,15 @@ export default function BoardWorkspace() {
   }, [session, activeBoardId]);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
+  // Topbar crumb: the gantt reports its own selection (undefined = all boards).
+  const topbarBoard = isGantt ? boards.find((b) => b.id === timelineBoardId) : activeBoard;
+  // Same presence fallback as the doc/canvas pages: show yourself when alone.
+  const onlineList: PresenceUser[] =
+    online.length > 0
+      ? online
+      : session
+        ? [{ key: session.userId, name: session.name, initials: session.initials, color: session.color }]
+        : [];
   const cols = activeBoard?.cols ?? [];
   const visibleCols = combined
     ? boards.flatMap(board => board.cols.map(col => ({ ...col, boardName: board.name })))
@@ -974,20 +994,12 @@ export default function BoardWorkspace() {
     router.push(`/doc/canvas?${params}`);
   }
 
-  async function handleAddBoard() {
-    const name = window.prompt("New board name");
-    if (!name?.trim() || !wsRef.current) return;
-    try {
-      const board = await createBoard(wsRef.current, name.trim());
-      setBoards((prev) => prev.some((b) => b.id === board.id) ? prev : [...prev, board]);
-      setActiveBoardId(board.id);
-    } catch (e) {
-      console.error("create board failed", e);
-    }
-  }
+  function handleAddBoard() { if(canEdit)setStageBoard(null); }
+  function handleManageStages(board:BoardData) { if(canEdit)setStageBoard(board); }
 
   /* drag handlers */
   function handleDragStart(e: DragEvent<HTMLDivElement>, cardId: string) {
+    if(!canEdit){e.preventDefault();return;}
     const srcCol = cols.find((c) => c.cards.some((k) => k.id === cardId));
     drag.current = { cardId, srcColId: srcCol?.id ?? null };
     setCols((prev) => prev.map((c) => ({
@@ -1041,7 +1053,8 @@ export default function BoardWorkspace() {
     const destCol = next.find((c) => c.id === colId);
     if (destCol) {
       moveCard(cardId, colId, destCol.cards.map((k) => k.id))
-        .catch((err) => console.error("move card failed", err));
+        .then(async()=>{if(wsRef.current)setBoards(await loadBoards(wsRef.current));})
+        .catch(async(err) => {setBoardActionError(err.message);if(wsRef.current)setBoards(await loadBoards(wsRef.current));});
     }
   }
   function handleDragLeave() { /* keep state for cross-card sub-regions */ }
@@ -1060,152 +1073,23 @@ export default function BoardWorkspace() {
   }
 
   /* save card from modal */
-  async function handleSaveCard(updated: CardData) {
+  async function handleSaveCard(updated: CardData, snapshot: ScheduleSnapshot) {
     if (session?.role === "viewer") throw new Error("You need editor access to change cards.");
-    await updateCard(updated);
-    setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({
-      ...c, cards: c.cards.map(k => k.id === updated.id ? updated : k)
-    })) })));
+    if (!session) return;
+    setScheduleResult(await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId,start_date:updated.startDate??null,deadline:updated.deadline??null,firm_deadline:updated.firmDeadline??null}}));
+    setBoards(await loadBoards(session.workspaceId));
   }
 
-  async function handleSchedule(id: string, start: string | null, end: string | null) {
-    if (!session || session.role === "viewer") throw new Error("You need editor access to schedule cards.");
-    await updateCardSchedule(id, start, end);
-    setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({
-      ...c, cards: c.cards.map(k => k.id === id ? { ...k, startDate: start, deadline: end } : k)
-    })) })));
-  }
-
-  /* delete card */
-  function handleDeleteCard(card: CardData) {
-    if (!window.confirm(`Delete card "${card.title}"?`)) return;
-    setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({ ...c, cards: c.cards.filter(k => k.id !== card.id) })) })));
-    deleteCard(card.id).catch((e) => console.error("delete card failed", e));
-  }
-
-  /* delete column (and its cards) */
-  function handleDeleteCol(colId: string) {
-    const col = cols.find((c) => c.id === colId);
-    if (!col) return;
-    const suffix = col.cards.length > 0 ? ` and its ${col.cards.length} card${col.cards.length === 1 ? "" : "s"}` : "";
-    if (!window.confirm(`Delete column "${col.name}"${suffix}?`)) return;
-    setCols((prev) => prev.filter((c) => c.id !== colId));
-    deleteColumn(colId).catch((e) => console.error("delete column failed", e));
-  }
-
-  /* delete board (and everything on it) */
-  function handleDeleteBoard(board: BoardData) {
-    if (!window.confirm(`Delete board "${board.name}" and everything on it? This can't be undone.`)) return;
-    setBoards((prev) => {
-      const next = prev.filter((b) => b.id !== board.id);
-      setActiveBoardId((cur) => (cur === board.id ? (next[0]?.id ?? null) : cur));
-      return next;
-    });
-    deleteBoard(board.id).catch((e) => console.error("delete board failed", e));
-  }
-
-  /* add new column */
-  async function handleAddCol() {
-    const name = window.prompt("New column name");
-    if (!name?.trim() || !wsRef.current || !activeBoard) return;
-    try {
-      const col = await createColumn(wsRef.current, activeBoard.id, name.trim());
-      setCols((prev) => prev.some((c) => c.id === col.id) ? prev : [...prev, col]);
-    } catch (e) {
-      console.error("create column failed", e);
-    }
-  }
-
-  /* ── categories ── */
-  async function handleAddCategory() {
-    const name = window.prompt("New category name");
-    if (!name?.trim() || !wsRef.current) return;
-    try {
-      const cat = await createCategory(wsRef.current, name.trim());
-      setCategories((prev) => prev.some((c) => c.id === cat.id) ? prev : [...prev, cat]);
-    } catch (e) {
-      console.error("create category failed", e);
-    }
-  }
-
-  function handleRenameCategory(cat: BoardCategory) {
-    const name = window.prompt(`Rename category "${cat.name}"`, cat.name);
-    if (!name?.trim() || name.trim() === cat.name || !wsRef.current) return;
-    const clean = name.trim();
-    setCategories((prev) => prev.map((c) => (c.id === cat.id ? { ...c, name: clean } : c)));
-    setBoards((prev) => prev.map((b) => ({
-      ...b,
-      cols: b.cols.map((c) => ({
-        ...c, cards: c.cards.map((k) => (k.kind === cat.name ? { ...k, kind: clean } : k)),
-      })),
-    })));
-    setFilterKind((cur) => (cur === cat.name ? clean : cur));
-    renameCategory(wsRef.current, cat.id, cat.name, clean)
-      .catch((e) => console.error("rename category failed", e));
-  }
-
-  function handleDeleteCategory(cat: BoardCategory) {
-    if (!wsRef.current) return;
-    if (!window.confirm(`Delete category "${cat.name}"? Cards keep their other details but lose this label.`)) return;
-    setCategories((prev) => prev.filter((c) => c.id !== cat.id));
-    setBoards((prev) => prev.map((b) => ({
-      ...b,
-      cols: b.cols.map((c) => ({
-        ...c, cards: c.cards.map((k) => (k.kind === cat.name ? { ...k, kind: "" } : k)),
-      })),
-    })));
-    setFilterKind((cur) => (cur === cat.name ? null : cur));
-    deleteCategory(wsRef.current, cat.id, cat.name)
-      .catch((e) => console.error("delete category failed", e));
-  }
-
-  /* ── move a column left/right within the board ── */
-  function handleMoveCol(colId: string, dir: -1 | 1) {
-    const idx = cols.findIndex((c) => c.id === colId);
-    const target = idx + dir;
-    if (idx < 0 || target < 0 || target >= cols.length) return;
-    const next = [...cols];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    setCols(next);
-    reorderColumns(next.map((c) => c.id))
-      .catch((e) => console.error("reorder columns failed", e));
-  }
-
-  /* ── drag a column header to reorder ── */
-  function handleColDragStart(e: DragEvent<HTMLDivElement>, colId: string) {
-    dragCol.current = colId;
-    e.dataTransfer.effectAllowed = "move";
-  }
-  function handleColDragOver(e: DragEvent<HTMLDivElement>, colId: string) {
-    if (!dragCol.current || dragCol.current === colId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setColDragOver(colId);
-  }
-  function handleColDrop(e: DragEvent<HTMLDivElement>, colId: string) {
-    const from = dragCol.current;
-    dragCol.current = null;
-    setColDragOver(null);
-    if (!from || from === colId) return;
-    e.preventDefault();
-    const fromIdx = cols.findIndex((c) => c.id === from);
-    const toIdx = cols.findIndex((c) => c.id === colId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const next = [...cols];
-    const [moved] = next.splice(fromIdx, 1);
-    next.splice(toIdx, 0, moved);
-    setCols(next);
-    reorderColumns(next.map((c) => c.id))
-      .catch((err) => console.error("reorder columns failed", err));
-  }
-  function handleColDragEnd() {
-    dragCol.current = null;
-    setColDragOver(null);
-  }
+  async function refreshPlanning(){if(!session)return;const [fresh,cats]=await Promise.all([loadBoards(session.workspaceId),listCategories(session.workspaceId)]);setBoards(fresh);setCategories(cats);}
+  function handleDeleteCard(card:CardData){if(!canEdit)return;setActionDialog({title:'Delete task?',description:`“${card.title}” and its scheduling relationships will be removed. Its linked canvas is kept.`,submit:async()=>{await deleteCard(card.id);await refreshPlanning();}});}
+  function handleDeleteBoard(board:BoardData){if(!canEdit)return;setActionDialog({title:'Delete board?',description:`“${board.name}” and all its tasks and board milestones will be removed. This cannot be undone.`,submit:async()=>{await deleteBoard(board.id);await refreshPlanning();}});}
+  function handleAddCol(){if(activeBoard)handleManageStages(activeBoard);}
 
   const displayCols = visibleCols.map((c) => ({
     ...c,
     cards: c.cards.filter((k) =>
+      k.title.toLowerCase().includes(search.toLowerCase()) &&
+      (!ownerFilter || k.ownerIds.includes(ownerFilter)) &&
       (!filterKind || k.kind === filterKind) &&
       (!selectedDate || k.deadline === selectedDate)
     ),
@@ -1273,27 +1157,35 @@ export default function BoardWorkspace() {
   return (
     <>
       <style>{css}</style>
-      <div className={`board-app${isGantt ? " gantt-mode" : ""}`}>
+      <div className={`board-app planning-app${isGantt ? " gantt-mode" : ""}${navigationOpen ? " navigation-open" : ""}`}>
 
         {/* topbar (global chrome) */}
         <TopBar
-          crumbs={["Design", isGantt ? "Gantt" : "Board"]}
-          online={online.map((p) => ({
-            key: p.key,
-            name: p.name,
-            initials: p.initials,
-            color: p.color,
-          }))}
+          crumbs={topbarBoard ? [isGantt ? "Gantt" : "Board", topbarBoard.name] : [isGantt ? "Gantt" : "Board"]}
+          online={onlineList}
         >
-          <button className="share-btn">Share</button>
-          <SettingsButton />
+          <button
+            className="share-btn"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(window.location.href);
+                setShareCopied(true);
+                setTimeout(() => setShareCopied(false), 1500);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+          >
+            {shareCopied ? "Copied!" : "Share"}
+          </button>
+          <SettingsButton session={session} onSessionChange={setSession} />
         </TopBar>
 
         <div className="body-row">
           {/* sidebar: board list */}
           <aside className="sidebar">
             <div className="sidebar-label">Boards</div>
-            {isGantt && <button className={`sidebar-item${combined ? " active" : ""}`} onClick={() => setAllBoards(true)} title="All boards">
+            {isGantt && <button className={`sidebar-item${combined ? " active" : ""}`} onClick={() => {setAllBoards(true);setGanttBoardRequest({id:'all',sequence:Date.now()});}} title="All boards">
               <span className="sidebar-dot" style={{ background: "var(--ember)" }} />
               <span className="sidebar-name">All boards</span>
             </button>}
@@ -1301,31 +1193,36 @@ export default function BoardWorkspace() {
               <button
                 key={b.id}
                 className={`sidebar-item${!combined && b.id === activeBoardId ? " active" : ""}`}
-                onClick={() => { setAllBoards(false); setActiveBoardId(b.id); }}
+                onClick={() => { setAllBoards(false); setActiveBoardId(b.id);setGanttBoardRequest({id:b.id,sequence:Date.now()}); }}
                 title={b.name}
               >
                 <span className="sidebar-dot" style={{ background: b.color }} />
                 <span className="sidebar-name">{b.name}</span>
-                <span
-                  className="sidebar-del"
-                  role="button"
-                  title={`Delete board "${b.name}"`}
-                  onClick={(e) => { e.stopPropagation(); handleDeleteBoard(b); }}
-                >
-                  <Trash style={{ width: 12, height: 12 }} />
-                </span>
               </button>
             ))}
             <div className="sidebar-divider" />
-            <button className="sidebar-item sidebar-new" onClick={handleAddBoard} title="New board">
+            {canEdit&&<button className="sidebar-item sidebar-new" onClick={handleAddBoard} title="New board">
               <Plus />
               <span className="sidebar-name">New board</span>
-            </button>
+            </button>}
 
             <div className="sidebar-divider" />
 
-            {/* deadline calendar */}
-            <div className="sidebar-cal">
+          </aside>
+
+          <div className="main-col">
+            {boardActionError&&<div role="alert" className="gantt-error">{boardActionError}<button onClick={()=>setBoardActionError('')}>Dismiss</button></div>}
+            {!isGantt&&scheduleResult&&<div role="status" className="gantt-caption">{scheduleResult.moved} tasks moved. Changes saved.<button disabled={undoBusy} onClick={async()=>{
+              if(!session)return;setUndoBusy(true);
+              try{await mutateSchedule(session.workspaceId,scheduleResult.snapshot,{op:'undo',dates:scheduleResult.before});setScheduleResult(null);setBoards(await loadBoards(session.workspaceId));}
+              catch(e){setBoardActionError((e as Error).message);}finally{setUndoBusy(false);}
+            }}>Undo dates</button></div>}
+            {!isGantt&&<PlanningHeader title={activeBoard?.name??'Your boards'} mode="board" boardId={activeBoardId??undefined} canEdit={canEdit} onCreate={handleAddBoard} onNavigation={()=>setNavigationOpen(v=>!v)}>
+              <select aria-label="Choose board" value={activeBoardId??''} onChange={e=>setActiveBoardId(e.target.value)}>{!boards.length&&<option value="">No boards yet</option>}{boards.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+              <label className="planning-search"><PlanningIcon name="search"/><input aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+              <details className="planning-menu"><summary>Filters{filterKind||ownerFilter?' · Active':''}</summary><div><label>Category<select value={filterKind??''} onChange={e=>setFilterKind(e.target.value||null)}><option value="">All categories</option>{categories.map(c=><option key={c.id}>{c.name}</option>)}</select></label><label>Owner<select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}><option value="">Everyone</option>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div></details>
+              <details className="planning-menu"><summary>Scheduled date{selectedDate?' · Active':''}</summary><div>{/* deadline calendar */}
+            <div className="sidebar-cal planning-calendar">
               <div className="cal-head">
                 <button className="cal-nav-btn" onClick={() => shiftMonth(-1)} title="Previous month">
                   <ChevronLeft />
@@ -1354,7 +1251,7 @@ export default function BoardWorkspace() {
               {selectedDate && (
                 <div className="cal-due">
                   <div className="cal-due-head">
-                    <span>Due {formatDeadline(selectedDate)}</span>
+                    <span>Scheduled end {formatDeadline(selectedDate)}</span>
                     <button className="cal-due-clear" onClick={() => setSelectedDate(null)}>Clear</button>
                   </div>
                   <div className="cal-due-list">
@@ -1372,76 +1269,22 @@ export default function BoardWorkspace() {
                   </div>
                 </div>
               )}
-            </div>
-          </aside>
-
-          <div className="main-col">
-            {isGantt && <select className="gantt-board-select" aria-label="Choose board" value={combined ? "all" : activeBoardId ?? ""} onChange={e => { setAllBoards(e.target.value === "all"); if (e.target.value !== "all") setActiveBoardId(e.target.value); }}>
-              <option value="all">All boards</option>
-              {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>}
-            {/* toolbar */}
-            <div className="board-toolbar">
-              <div>
-                <div className="board-label">Design Workspace · {isGantt ? "Gantt" : "Board"}</div>
-                <div className="board-heading">{combined ? "All boards" : activeBoard?.name ?? "No boards yet"}</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <div className="filter-row">
-                  <button
-                    className={`filter-chip${!filterKind ? " active" : ""}`}
-                    onClick={() => setFilterKind(null)}
-                  >
-                    <Filter style={{ width: 13, height: 13 }} /> All
-                  </button>
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      className={`filter-chip${filterKind === cat.name ? " active" : ""}`}
-                      onClick={() => setFilterKind(filterKind === cat.name ? null : cat.name)}
-                      onDoubleClick={() => handleRenameCategory(cat)}
-                      title="Click to filter · double-click to rename"
-                    >
-                      {cat.name}
-                      <span
-                        className="chip-del"
-                        role="button"
-                        title={`Delete category "${cat.name}"`}
-                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
-                      >
-                        ×
-                      </span>
-                    </button>
-                  ))}
-                  <button className="filter-chip filter-chip-add" onClick={handleAddCategory} title="Add category">
-                    <Plus style={{ width: 12, height: 12 }} /> Category
-                  </button>
-                </div>
-                <button className="add-col-btn" disabled={combined} title={combined ? "Select a board to add a column" : "Add column"} onClick={handleAddCol}>
-                  <Plus style={{ width: 15, height: 15 }} /> Column
-                </button>
-              </div>
-            </div>
-
-            {isGantt ? <GanttChart key={combined ? "all" : activeBoardId} columns={displayCols} people={people}
-              canEdit={!!session && session.role !== "viewer"} onOpen={setEditingCard} onSchedule={handleSchedule} /> :
+            </div></div></details>
+              {canEdit&&activeBoard&&<details className="planning-menu planning-overflow"><summary><PlanningIcon name="more"/>More</summary><div><button onClick={()=>handleManageStages(activeBoard)}>Manage stages</button><button onClick={()=>setCategoryManager(true)}>Manage categories</button><button onClick={()=>handleDeleteBoard(activeBoard)}>Delete board</button></div></details>}
+            </PlanningHeader>}
+            {!boards.length&&<div className="planning-empty"><PlanningIcon name="board"/><h2>A place for your next idea</h2><p>Create a board with the stages that fit your team's workflow.</p>{canEdit&&<button className="planning-primary" onClick={handleAddBoard}>Create your first board</button>}</div>}
+            {isGantt ? <GanttChart boards={boards} people={people} project={session?.workspaceId ?? ''} user={session?.userId ?? ''} externalResult={scheduleResult} boardRequest={ganttBoardRequest} onCreate={handleAddBoard} onManageStages={handleManageStages} onManageCategories={()=>setCategoryManager(true)} onBoardSelection={setTimelineBoardId}
+              canEdit={!!session && session.role !== "viewer"} onOpen={setEditingCard} onNavigation={()=>setNavigationOpen(v=>!v)} onRefresh={async()=>{if(session)setBoards(await loadBoards(session.workspaceId));}} /> :
             <div className="board-scroll">
               <div className="board-cols">
-                {displayCols.map((col, i) => (
+                {displayCols.map((col) => (
                   <Column
                     key={col.id}
                     col={col}
                     people={people}
-                    canMoveLeft={i > 0}
-                    canMoveRight={i < displayCols.length - 1}
-                    isColDragOver={colDragOver === col.id}
-                    onMoveCol={handleMoveCol}
-                    onColDragStart={handleColDragStart}
-                    onColDragOver={handleColDragOver}
-                    onColDrop={handleColDrop}
-                    onColDragEnd={handleColDragEnd}
+                    canEdit={canEdit}
+                    onManageStages={()=>activeBoard&&handleManageStages(activeBoard)}
                     onAddCard={handleAddCard}
-                    onDeleteCol={handleDeleteCol}
                     onCardClick={setEditingCard}
                     dragState={dragState}
                     onDragStart={handleDragStart}
@@ -1451,21 +1294,28 @@ export default function BoardWorkspace() {
                     onDragLeave={handleDragLeave}
                   />
                 ))}
-                <button className="add-col-ghost" onClick={handleAddCol}>
+                {canEdit&&activeBoard&&<button className="add-col-ghost" onClick={handleAddCol}>
                   <Plus style={{ width: 16, height: 16 }} />
-                  Add column
-                </button>
+                  <span>Add a stage</span>
+                </button>}
               </div>
             </div>}
           </div>
         </div>
 
-        {/* floating dock (global chrome) */}
-        <Dock onNew={handleAddBoard} />
+        {/* Compact app navigation stays outside the task scroll area. */}
+        <Dock planningBoardId={isGantt?timelineBoardId:activeBoardId??undefined} />
 
+        {stageBoard!==undefined&&session&&<StageDialog project={session.workspaceId} board={stageBoard} onClose={()=>setStageBoard(undefined)} onSaved={async id=>{setBoards(await loadBoards(session.workspaceId));setActiveBoardId(id);setGanttBoardRequest({id,sequence:Date.now()});setAllBoards(false);}}/>}
+        {actionDialog&&<PlanningDialog action={actionDialog} onClose={()=>setActionDialog(null)}/>}
+        {categoryManager&&session&&<CategoryManager project={session.workspaceId} categories={categories} onClose={()=>setCategoryManager(false)} onRefresh={refreshPlanning}/>}
         {/* card edit modal */}
         {editingCard && (
           <CardModal
+            key={editingCard.id}
+            panel={isGantt}
+            canEdit={!!session && session.role !== 'viewer'}
+            columns={boards.flatMap(b=>b.cols.map(c=>({id:c.id,name:`${b.name} · ${c.name}`})))}
             card={editingCard}
             workspaceId={session?.workspaceId ?? ""}
             people={people}

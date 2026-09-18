@@ -55,6 +55,7 @@ function activeFromPath(path: string): string {
 }
 
 interface DockProps {
+  planningBoardId?: string;
   /** Extra leading content before the nav items (e.g. the ⌘K search). */
   leading?: ReactNode;
   /** "New" action; the button is hidden when omitted. */
@@ -65,7 +66,7 @@ interface DockProps {
   tools?: ReactNode;
 }
 
-export default function Dock({ leading, onNew, newLabel = "New", tools }: DockProps) {
+export default function Dock({ leading, onNew, newLabel = "New", tools, planningBoardId }: DockProps) {
   const router = useRouter();
   const pathname = usePathname();
   const active = activeFromPath(pathname);
@@ -102,7 +103,7 @@ export default function Dock({ leading, onNew, newLabel = "New", tools }: DockPr
               <button
                 key={id}
                 className={"dock-item" + (id === active ? " is-active" : "")}
-                onClick={href && id !== active ? () => router.push(href) : undefined}
+                onClick={href && id !== active ? () => router.push(href + (planningBoardId && (id==='board'||id==='table') ? `?board=${encodeURIComponent(planningBoardId)}` : '')) : undefined}
               >
                 <Icon className="dock-icon" /> {label}
               </button>

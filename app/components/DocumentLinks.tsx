@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
+import { driveFileUrls, type DriveFile } from "@/lib/googleDriveFile";
+import { isDrivePickerConfigured, pickDriveFile, prepareDrivePicker } from "@/lib/googleDrivePicker";
 import { documentProvider, documentUrl, type DocumentLink } from "@/lib/documentLinks";
 import "./document-links.css";
 
@@ -13,7 +15,21 @@ export default function DocumentLinks({ links, onChange, disabled = false }: {
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pickerReady, setPickerReady] = useState(isDrivePickerConfigured());
+  const [pickerError, setPickerError] = useState("");
   disabled = disabled || busy;
+  async function chooseFromDrive() {
+    setBusy(true); setPickerError("");
+    try {
+      await prepareDrivePicker(); setPickerReady(true);
+      pickDriveFile(async (file: DriveFile) => {
+        try {
+          const urls = driveFileUrls(file);
+          await onChange?.([...links, { id: crypto.randomUUID(), title: file.name, url: urls.original }]);
+        } catch (e) { setPickerError(e instanceof Error ? e.message : "Could not attach the Drive document."); }
+      }, error => { setBusy(false); if (error) setPickerError(error.message); });
+    } catch (e) { setBusy(false); setPickerError(e instanceof Error ? e.message : "Could not open Google Drive."); }
+  }
   async function add() {
     setBusy(true);
     try {
@@ -31,7 +47,7 @@ export default function DocumentLinks({ links, onChange, disabled = false }: {
     finally { setBusy(false); }
   }
   return <section className="document-links" aria-label="Attached documents">
-    <div className="document-links-head"><strong>Documents & links</strong>{onChange && <button type="button" disabled={disabled} onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "+ Add link"}</button>}</div>
+    <div className="document-links-head"><strong>Documents & links</strong>{onChange && isDrivePickerConfigured() && <button type="button" disabled={disabled} onClick={chooseFromDrive}>{busy ? "Opening…" : "+ Google Drive"}</button>}{onChange && <button type="button" disabled={disabled} onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "+ Add link"}</button>}</div>
     {links.map(link => <div className="document-link" key={link.id}>
       <a href={(() => { try { return documentUrl(link.url); } catch { return undefined; } })()} target="_blank" rel="noopener noreferrer"><span>{link.title}</span><small>{documentProvider(link.url)} ↗</small></a>
       {onChange && <button type="button" disabled={disabled} aria-label={`Remove ${link.title}`} onClick={() => remove(link)}>×</button>}
@@ -45,6 +61,6 @@ export default function DocumentLinks({ links, onChange, disabled = false }: {
       <p>Opens in a new tab. Access follows the document’s sharing settings.</p>
       <button type="button" disabled={disabled || !url.trim()} onClick={add}>Attach link</button>
     </div>}
-    {error && <p role="alert" className="document-link-error">{error}</p>}
+    {(error || pickerError) && <p role="alert" className="document-link-error">{error || pickerError}</p>}
   </section>;
 }

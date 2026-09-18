@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { loadSchedule, mutateSchedule } from './ganttRepo';
 import { cleanText, LIMITS } from "./validate";
 
 /* ---------------------------------------------------------------------------
@@ -19,10 +20,13 @@ export interface BoardCard {
   canvasId?: string | null;
   startDate?: string | null;
   deadline?: string | null;
+  firmDeadline?: string | null;
+  columnId?: string;
   dragging?: boolean;
 }
 
 export interface BoardColumn {
+  isCompleted?: boolean;
   id: string;
   name: string;
   color: string;
@@ -48,15 +52,9 @@ interface CardRow {
   canvas_id?: string | null;
   start_date?: string | null;
   deadline: string | null;
+  firm_deadline?: string | null;
   position: number;
 }
-
-const DEFAULT_COLUMNS = [
-  { name: "To Do", color: "#a59a8c" },
-  { name: "In Progress", color: "#cf6a2c" },
-  { name: "Review", color: "#d9a441" },
-  { name: "Done", color: "#4caf7d" },
-];
 
 /** Load every board in the workspace, columns and cards nested and ordered. */
 export async function loadBoards(workspaceId: string): Promise<Board[]> {
@@ -68,7 +66,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       .order("position", { ascending: true }),
     supabase
       .from("board_columns")
-      .select("id, board_id, name, color, position")
+      .select("*")
       .eq("project_id", workspaceId)
       .order("position", { ascending: true }),
     supabase
@@ -95,13 +93,15 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       canvasId: r.canvas_id,
       startDate: r.start_date,
       deadline: r.deadline,
+      firmDeadline: r.firm_deadline,
+      columnId: r.column_id,
     };
     (cardsByCol.get(r.column_id) ?? cardsByCol.set(r.column_id, []).get(r.column_id)!).push(card);
   }
 
   const colsByBoard = new Map<string, BoardColumn[]>();
-  for (const r of (colsRes.data ?? []) as { id: string; board_id: string; name: string; color: string }[]) {
-    const col: BoardColumn = { id: r.id, name: r.name, color: r.color, cards: cardsByCol.get(r.id) ?? [] };
+  for (const r of (colsRes.data ?? []) as { id: string; board_id: string; name: string; color: string; is_completed?: boolean }[]) {
+    const col: BoardColumn = { id: r.id, name: r.name, color: r.color, isCompleted: r.is_completed, cards: cardsByCol.get(r.id) ?? [] };
     (colsByBoard.get(r.board_id) ?? colsByBoard.set(r.board_id, []).get(r.board_id)!).push(col);
   }
 
@@ -113,49 +113,13 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
   }));
 }
 
-/** Create a board with the four default columns; returns the nested board. */
-export async function createBoard(
-  workspaceId: string,
-  name: string,
-  color = "#cf6a2c",
-): Promise<Board> {
-  const clean = cleanText(name, LIMITS.name, "Board name") || "Untitled board";
-  const { data: maxRow } = await supabase
-    .from("boards")
-    .select("position")
-    .eq("project_id", workspaceId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const position = ((maxRow?.position as number | undefined) ?? -1) + 1;
-
-  const { data: board, error } = await supabase
-    .from("boards")
-    .insert({ project_id: workspaceId, name: clean, color, position })
-    .select("id, name, color")
-    .single();
-  if (error || !board) throw new Error(`createBoard failed: ${error?.message}`);
-
-  const { data: cols, error: colErr } = await supabase
-    .from("board_columns")
-    .insert(DEFAULT_COLUMNS.map((c, i) => ({
-      board_id: board.id,
-      project_id: workspaceId,
-      name: c.name,
-      color: c.color,
-      position: i,
-    })))
-    .select("id, name, color, position");
-  if (colErr) throw new Error(`createBoard columns failed: ${colErr.message}`);
-
-  return {
-    id: board.id,
-    name: board.name,
-    color: board.color,
-    cols: (cols ?? [])
-      .sort((a, b) => a.position - b.position)
-      .map((c) => ({ id: c.id, name: c.name, color: c.color, cards: [] })),
-  };
+/** Create a board only with an explicitly supplied workflow. */
+export async function createBoard(workspaceId:string,name:string,stages:import('./stagesRepo').StageDraft[]):Promise<Board>{
+  const {saveBoardStages}=await import('./stagesRepo');
+  const id=await saveBoardStages(workspaceId,null,null,name,stages);
+  const board=(await loadBoards(workspaceId)).find(b=>b.id===id);
+  if(!board)throw new Error('Board was created but could not be loaded. Refresh to retry.');
+  return board;
 }
 
 /** Append a column to a board. */
@@ -216,15 +180,18 @@ export async function createCard(
     priority: data.priority,
     ownerIds: data.owners ?? [],
     deadline: data.deadline,
+    columnId,
+    firmDeadline: null,
   };
 }
 
 /** Persist edits from the card modal. */
 export async function updateCard(card: BoardCard): Promise<void> {
   validateSchedule(card.startDate, card.deadline);
-  const { error } = await supabase
-    .from("board_cards")
-    .update({
+  const { data, error } = await supabase.from('board_cards').select('project_id').eq('id',card.id).single();
+  if(error) throw new Error(error.message);
+  await mutateSchedule(data.project_id, await loadSchedule(data.project_id), {op:'card',card:{
+      id:card.id,
       title: cleanText(card.title, LIMITS.title, "Card title") || "Untitled card",
       sub: cleanText(card.sub ?? "", LIMITS.summary, "Card description"),
       kind: card.kind ?? "",
@@ -232,10 +199,9 @@ export async function updateCard(card: BoardCard): Promise<void> {
       priority: card.priority,
       owners: card.ownerIds ?? [],
       deadline: card.deadline || null,
-      ...(card.startDate !== undefined ? { start_date: card.startDate || null } : {}),
-    })
-    .eq("id", card.id);
-  if (error) throw new Error(`updateCard failed: ${error.message}`);
+      start_date: card.startDate || null,
+      firm_deadline: card.firmDeadline || null,
+    }});
 }
 
 /**
@@ -248,11 +214,12 @@ export async function moveCard(
   toColumnId: string,
   orderedCardIds: string[],
 ): Promise<void> {
-  const { error } = await supabase
-    .from("board_cards")
-    .update({ column_id: toColumnId })
-    .eq("id", cardId);
+  const {data, error} = await supabase.from('board_cards').select('project_id').eq('id',cardId).single();
   if (error) throw new Error(`moveCard failed: ${error.message}`);
+  const snapshot = await loadSchedule(data.project_id);
+  const card = snapshot.cards.find(c=>c.id===cardId);
+  if(!card) throw new Error('Task unavailable');
+  await mutateSchedule(data.project_id,snapshot,{op:'card',card:{id:card.id,start_date:card.start_date,deadline:card.deadline,firm_deadline:card.firm_deadline,column_id:toColumnId}});
   await Promise.all(
     orderedCardIds.map((id, i) =>
       supabase.from("board_cards").update({ position: i }).eq("id", id),
@@ -368,71 +335,13 @@ export async function deleteBoard(id: string): Promise<void> {
   if (error) throw new Error(`deleteBoard failed: ${error.message}`);
 }
 
-/* ── seeding ──────────────────────────────────────────────────────────────── */
-
-const SEED_BOARDS: { name: string; color: string; cards: Record<string, Omit<BoardCard, "id" | "ownerIds">[]> }[] = [
-  {
-    name: "Core Gameplay", color: "#cf6a2c",
-    cards: {
-      "To Do": [
-        { title: "Loot table balancing pass", sub: "Review drop rates across all tier-3 zones and normalise rare item frequency.", kind: "economy", tags: ["v2.3", "balance"], priority: "high", deadline: null },
-        { title: "Stealth system rework", sub: "Replace line-of-sight cone with radius + alertness model.", kind: "mechanic", tags: ["gameplay"], priority: "medium", deadline: null },
-        { title: "Companion dialogue trees", sub: "Branch 4 new NPC threads off the merchant questline.", kind: "lore", tags: ["narrative"], priority: null, deadline: null },
-      ],
-      "In Progress": [
-        { title: "World map fog of war", sub: "Implement per-tile discovery states with save persistence.", kind: "mechanic", tags: ["exploration", "save"], priority: "high", deadline: null },
-        { title: "Seasonal economy events", sub: "Festival price swings and limited-time vendor stock.", kind: "economy", tags: ["events"], priority: "medium", deadline: null },
-      ],
-      "Review": [
-        { title: "Core vision statement", sub: "Align team on the 3-pillar design philosophy doc.", kind: "vision", tags: ["design"], priority: null, deadline: null },
-      ],
-      "Done": [
-        { title: "Save/load system", sub: "Slot-based save with autosave at checkpoints.", kind: "mechanic", tags: ["core", "done"], priority: null, deadline: null },
-      ],
-    },
-  },
-  { name: "Economy & Items", color: "#4caf7d", cards: {} },
-  { name: "World & Narrative", color: "#8a54b5", cards: {} },
-];
-
-/** First visit: give an empty workspace its starter boards. */
-export async function seedBoardsIfEmpty(workspaceId: string): Promise<void> {
-  const { count } = await supabase
-    .from("boards")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", workspaceId);
-  if ((count ?? 0) > 0) return;
-
-  for (const seed of SEED_BOARDS) {
-    const board = await createBoard(workspaceId, seed.name, seed.color);
-    for (const col of board.cols) {
-      const cards = seed.cards[col.name] ?? [];
-      for (let i = 0; i < cards.length; i++) {
-        const c = cards[i];
-        const { error } = await supabase.from("board_cards").insert({
-          column_id: col.id,
-          project_id: workspaceId,
-          title: c.title,
-          sub: c.sub,
-          kind: c.kind,
-          tags: c.tags,
-          priority: c.priority,
-          position: i,
-        });
-        if (error) throw new Error(`seed card failed: ${error.message}`);
-      }
-    }
-  }
-}
-
 /** Date-only writes avoid overwriting concurrent edits to titles or owners. */
 export async function updateCardSchedule(id: string, startDate: string | null, deadline: string | null): Promise<void> {
   validateSchedule(startDate, deadline);
-  const { error } = await supabase.from("board_cards")
-    .update({ start_date: startDate, deadline }).eq("id", id).select("id").single();
-  if (error) throw new Error(error.message.includes("start_date")
-    ? "Start dates are not set up yet. Run supabase/migrate-board-gantt.sql in Supabase, then retry."
-    : `Could not save schedule: ${error.message}`);
+  const {data,error}=await supabase.from('board_cards').select('project_id').eq('id',id).single();
+  if(error) throw new Error(error.message);
+  const snapshot=await loadSchedule(data.project_id);
+  await mutateSchedule(data.project_id,snapshot,{op:'card',card:{id,start_date:startDate,deadline,firm_deadline:snapshot.cards.find(c=>c.id===id)?.firm_deadline??null}});
 }
 
 function validateSchedule(start?: string | null, end?: string | null) {
