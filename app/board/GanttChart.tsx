@@ -22,6 +22,8 @@ import {
 } from "@/lib/ganttRepo";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import "./gantt.css";
+import { taskRows, entryIndex, TIMELINE_ROW_HEIGHT, TIMELINE_ENTRY_HEIGHT, type TaskRow } from "@/lib/taskHierarchy";
+import TaskQuickAdd from "./TaskQuickAdd";
 import PlanningHeader from "./PlanningHeader";
 import { PlanningIcon } from "./PlanningIcons";
 type Person = { id: string; name: string; initials: string; color: string };
@@ -74,10 +76,14 @@ export default function GanttChart({
   onRefresh,
   onNavigation,
 }: Props) {
+  const [createBoardId, setCreateBoardId] = useState("");
+  const [rowDrag, setRowDrag] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [createTarget, setCreateTarget] = useState<BoardCard | null | undefined>(undefined);
   const [view, setView] = useState(defaults),
     [ready, setReady] = useState(false),
     [first, setFirst] = useState(dayNumber(localToday()) - 3),
-    [width, setWidth] = useState(260);
+    [width, setWidth] = useState(340);
   const [snapshot, setSnapshot] = useState<ScheduleSnapshot | null>(null),
     [views, setViews] = useState<SavedView[]>([]),
     [error, setError] = useState(""),
@@ -85,7 +91,6 @@ export default function GanttChart({
     [busy, setBusy] = useState(false),
     [undo, setUndo] = useState<ScheduleResult | null>(null);
   const [selected, setSelected] = useState(""),
-    [tray, setTray] = useState(false),
     [settings, setSettings] = useState(false),
     [viewName, setViewName] = useState("");
   useEffect(() => {
@@ -236,7 +241,7 @@ export default function GanttChart({
     try {
       const result = await mutateSchedule(project, expected, action);
       setSnapshot(result.snapshot);
-      setNotice(`${result.moved} tasks moved. Changes saved.`);
+      setNotice(action.op === "reorder_tasks" ? "Task order saved." : `${result.moved} ${result.moved === 1 ? "task" : "tasks"} moved. Changes saved.`);
       setUndo(allowUndo ? result : null);
       await onRefresh();
       return true;
@@ -391,36 +396,72 @@ export default function GanttChart({
   const visibleBoards = boards.filter(
     (b) => !view.boards.length || view.boards.includes(b.id),
   );
-  const unscheduled = cards.filter(
-    (t) =>
-      (!view.boards.length || view.boards.includes(t.board.id)) &&
-      !t.card.startDate &&
-      !t.card.deadline &&
-      matches(t.card) &&
-      (view.completed || !t.col.isCompleted),
-  );
   const visibleMilestones =
     snapshot?.milestones.filter(
       (m) => !m.board_id || visibleBoards.some((b) => b.id === m.board_id),
     ) ?? [];
+  const rowsByBoard = new Map(visibleBoards.map(board => [board.id, taskRows(board, {
+    collapsed: view.collapsed, completed: view.completed, matches,
+    filtering: !!(view.query || view.owner || view.category || !view.completed),
+  })]));
+  const filtering = !!(view.query || view.owner || view.category || !view.completed);
+  const reorderDisabled = filtering || busy || !canEdit || !snapshot;
+  function openEntry(boardId: string, parent: BoardCard | null) {
+    const reveal = new Set([boardId]);
+    let ancestor = parent;
+    while (ancestor && !reveal.has(ancestor.id)) {
+      reveal.add(ancestor.id);
+      ancestor = cardMap.get(ancestor.parentId ?? '')?.card ?? null;
+    }
+    setCreateBoardId(boardId);
+    setCreateTarget(parent);
+    setView(v => ({ ...v, query: '', owner: '', category: '', completed: true,
+      collapsed: v.collapsed.filter(id => !reveal.has(id)) }));
+  }
+  const siblingGroups = new Map<string, BoardCard[]>();
+  for (const board of visibleBoards) {
+    for (const { card } of taskRows(board, { collapsed: [], completed: true, matches: () => true, filtering: false })) {
+      const key = `${board.id}:${card.parentId ?? 'root'}`;
+      const group = siblingGroups.get(key) ?? [];
+      group.push(card);
+      siblingGroups.set(key, group);
+    }
+  }
+  function siblings(card: BoardCard) {
+    return siblingGroups.get(`${cardMap.get(card.id)?.board.id}:${card.parentId ?? 'root'}`) ?? [];
+  }
+  async function reorder(card: BoardCard, targetId: string) {
+    if (reorderDisabled) return;
+    const group = [...siblings(card)];
+    const from = group.findIndex(task => task.id === card.id);
+    const to = group.findIndex(task => task.id === targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    group.splice(to, 0, ...group.splice(from, 1));
+    await mutate({ op: 'reorder_tasks', board_id: cardMap.get(card.id)!.board.id,
+      parent_id: card.parentId ?? null, ids: group.map(task => task.id) });
+  }
+  type LayoutRow = { kind: 'task'; row: TaskRow } | { kind: 'entry' } | { kind: 'add' };
+  const layoutByBoard = new Map<string, LayoutRow[]>();
+  for (const board of visibleBoards) {
+    const rows = rowsByBoard.get(board.id) ?? [];
+    const layout: LayoutRow[] = rows.map(row => ({ kind: 'task', row }));
+    if (createTarget !== undefined && createBoardId === board.id) {
+      const index = entryIndex(rows, createTarget?.id ?? null);
+      if (index >= 0) layout.splice(index, 0, { kind: 'entry' });
+    }
+    if (canEdit) layout.push({ kind: 'add' });
+    layoutByBoard.set(board.id, layout);
+  }
   const rowY = new Map<string, number>();
   let gridHeight = 64 + visibleMilestones.length * 35;
   for (const board of visibleBoards) {
     if (visibleBoards.length > 1) {
       gridHeight += 38;
-      if (view.collapsed.includes(board.id)) continue;
+      if (view.collapsed.includes(board.id) && !filtering) continue;
     }
-    for (const col of board.cols) {
-      for (const card of col.cards) {
-        if (
-          (card.startDate || card.deadline) &&
-          matches(card) &&
-          (view.completed || !col.isCompleted)
-        ) {
-          rowY.set(card.id, gridHeight + 32);
-          gridHeight += 64;
-        }
-      }
+    for (const item of layoutByBoard.get(board.id) ?? []) {
+      if (item.kind === 'task') rowY.set(item.row.card.id, gridHeight + TIMELINE_ROW_HEIGHT / 2);
+      gridHeight += item.kind === 'entry' ? TIMELINE_ENTRY_HEIGHT : TIMELINE_ROW_HEIGHT;
     }
   }
   const endpoint = (id: string, end: boolean) => {
@@ -452,7 +493,8 @@ export default function GanttChart({
         mode="timeline"
         boardId={view.boards.length === 1 ? view.boards[0] : undefined}
         canEdit={canEdit}
-        onCreate={onCreate}
+        createLabel={boards.length ? "New task" : "New board"}
+        onCreate={() => boards.length ? openEntry(visibleBoards[0]?.id ?? boards[0].id, null) : onCreate()}
         onNavigation={onNavigation}
       >
         <details className="gantt-menu">
@@ -463,6 +505,7 @@ export default function GanttChart({
           </summary>
           <div>
             <button onClick={() => update({ boards: [] })}>All boards</button>
+            {canEdit && <button onClick={onCreate}>New board</button>}
             {boards.map((b) => (
               <label key={b.id}>
                 <input
@@ -628,11 +671,13 @@ export default function GanttChart({
           </div>
         </details>
       </PlanningHeader>
+
       <div className="gantt-caption">
         <span>
           {label(first)} — {label(first + view.days - 1)} ·{" "}
           {visibleBoards.length}{" "}
           {visibleBoards.length === 1 ? "board" : "boards"}
+          {filtering && " · Clear filters to reorder tasks"}
         </span>
         <span role="status">
           {busy ? "Saving…" : notice}
@@ -951,7 +996,7 @@ export default function GanttChart({
               );
             })}
           </svg>
-          {drag && unscheduled.some((t) => t.card.id === drag.id) && (
+          {drag && cards.some((t) => t.card.id === drag.id && !t.card.startDate && !t.card.deadline) && (
             <div
               className="gantt-drop-preview"
               style={{
@@ -1026,9 +1071,9 @@ export default function GanttChart({
               {visibleBoards.length > 1 && <div className="gantt-group board-group">
                 <button
                   onClick={() => toggle(b.id)}
-                  aria-expanded={!view.collapsed.includes(b.id)}
+                  aria-expanded={!view.collapsed.includes(b.id) || filtering}
                 >
-                  {view.collapsed.includes(b.id) ? "▸" : "▾"} {b.name}
+                  {view.collapsed.includes(b.id) && !filtering ? "▸" : "▾"} {b.name}
                   <small>
                     {b.cols.reduce((n, c) => n + c.cards.length, 0)} tasks
                   </small>
@@ -1043,17 +1088,16 @@ export default function GanttChart({
                   </button>
                 )}
               </div>}
-              {(visibleBoards.length === 1 || !view.collapsed.includes(b.id)) &&
-                b.cols.map((c) => (
-                  <Fragment key={c.id}>
-                    {c.cards
-                      .filter(
-                        (card) =>
-                          (card.startDate || card.deadline) &&
-                          matches(card) &&
-                          (view.completed || !c.isCompleted),
-                      )
-                      .map((card) => {
+              {(visibleBoards.length === 1 || !view.collapsed.includes(b.id) || filtering) &&
+                (layoutByBoard.get(b.id) ?? []).map((item) => {
+                        if (item.kind === 'entry') return <div className="timeline-entry-row" key="entry" style={{ height: TIMELINE_ENTRY_HEIGHT }}>
+                          <TaskQuickAdd key={createTarget?.id ?? b.id} boards={[b]} parent={createTarget ?? null} initialBoardId={b.id} project={project}
+                            onClose={() => setCreateTarget(undefined)} onSaved={async () => { await onRefresh(); setSnapshot(await loadSchedule(project)); }} />
+                        </div>;
+                        if (item.kind === 'add') return <div className="gantt-row" key="add"><button className="gantt-task-label timeline-add" onClick={() => openEntry(b.id, null)}>+ New task</button><div className="gantt-track" /></div>;
+                        const { card, col: c, depth, children, completedChildren } = item.row;
+                        const group = siblings(card);
+                        const siblingIndex = group.findIndex(task => task.id === card.id);
                         const owner = people.find((person) => card.ownerIds.includes(person.id));
                         const ownerNames = people.filter((person) => card.ownerIds.includes(person.id)).map((person) => person.name).join(", ");
                         const preview = drag?.id === card.id ? drag : null,
@@ -1072,23 +1116,34 @@ export default function GanttChart({
                             ) ?? [];
                         return (
                           <div
-                            className={`gantt-row${c.isCompleted ? " completed" : ""}${selected === card.id ? " selected" : ""}`}
+                            className={`gantt-row${dropTarget === card.id ? " row-drop-target" : ""}${c.isCompleted ? " completed" : ""}${selected === card.id ? " selected" : ""}`}
                             key={card.id}
+                            onDragOver={e => { if (!reorderDisabled && rowDrag && group.some(t => t.id === rowDrag) && rowDrag !== card.id) { e.preventDefault(); setDropTarget(card.id); } }}
+                            onDragLeave={() => setDropTarget(null)}
+                            onDrop={e => { e.preventDefault(); const source = cardMap.get(rowDrag ?? '')?.card; setRowDrag(null); setDropTarget(null); if (source) void reorder(source, card.id); }}
                           >
-                            <button
-                              className="gantt-task-label"
-                              onClick={() => {
-                                setSelected(card.id);
-                                onOpen(card);
-                              }}
-                            >
-                              <i className="gantt-task-dot" style={{ background: c.color }} />
-                              <span className="gantt-task-copy">
-                                <strong>{card.title}</strong>
-                                <small>{overdue ? "Overdue" : card.kind || "Task"}{links.length ? ` · ${links.length} links` : ""}</small>
-                              </span>
-                              {owner && <span className="planning-avatar" style={{ background: owner.color }} title={ownerNames}>{owner.initials}</span>}
-                            </button>
+                            <div className="gantt-task-label hierarchy-label" style={{ '--task-depth': Math.min(depth, 8) } as CSSProperties}>
+                              {canEdit && <button className="timeline-drag-handle" draggable={!reorderDisabled} disabled={reorderDisabled}
+                                title={filtering ? 'Clear filters to reorder tasks' : 'Drag to reorder siblings; use Alt + Up/Down to move'} aria-label={`Reorder ${card.title}`}
+                                onDragStart={e => { e.dataTransfer.setData('text/plain', card.id); e.dataTransfer.effectAllowed = 'move'; setRowDrag(card.id); }}
+                                onDragEnd={() => { setRowDrag(null); setDropTarget(null); }}
+                                onKeyDown={e => { if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); const target = group[siblingIndex + (e.key === 'ArrowUp' ? -1 : 1)]; if (target) void reorder(card, target.id); } }}>⠿</button>}
+                              {children.length > 0 ? <button className="task-disclosure" aria-label={`Toggle subtasks for ${card.title}`} aria-expanded={!view.collapsed.includes(card.id) || filtering} onClick={() => toggle(card.id)}>{view.collapsed.includes(card.id) && !filtering ? "▸" : "▾"}</button> : <span className="task-branch">{depth ? "└" : ""}</span>}
+                              <button className="gantt-task-open" onClick={() => { setSelected(card.id); onOpen(card); }}>
+                                <i className="gantt-task-dot" style={{ background: c.color }} />
+                                <span className="gantt-task-copy">
+                                  <strong>{card.title}</strong>
+                                  <small>{children.length ? `${completedChildren}/${children.length} complete` : overdue ? "Overdue" : card.kind || "Task"}{links.length ? ` · ${links.length} links` : ""}</small>
+                                </span>
+                              </button>
+                              {owner && <span className="planning-avatar timeline-owner" style={{ background: owner.color }} title={ownerNames}>{owner.initials}</span>}
+                              {canEdit && <details className="timeline-row-menu"><summary aria-label={`Actions for ${card.title}`}>⋯</summary><div>
+                                <button disabled={reorderDisabled || siblingIndex === 0} onClick={() => void reorder(card, group[siblingIndex - 1].id)}>Move up</button>
+                                <button disabled={reorderDisabled || siblingIndex === group.length - 1} onClick={() => void reorder(card, group[siblingIndex + 1].id)}>Move down</button>
+                                {filtering && <small>Clear filters to reorder tasks</small>}
+                              </div></details>}
+                              {canEdit && <button className="task-add-child" aria-label={`Add subtasks to ${card.title}`} title="Add subtasks" onClick={() => openEntry(b.id, card)}>+</button>}
+                            </div>
                             <div
                               className="gantt-track"
                               style={{
@@ -1182,26 +1237,30 @@ export default function GanttChart({
                                     </>
                                   )}
                                 </div>
+                              ) : !card.startDate && !card.deadline ? (
+                                <div className="timeline-empty-days" aria-label={`Schedule ${card.title}`}>
+                                  {Array.from({ length: view.days }, (_, i) => <button key={i} disabled={!canEdit || busy || !snapshot}
+                                    aria-label={`Schedule ${card.title} on ${dayKey(first + i)}`} title={`Schedule on ${label(first + i)}`}
+                                    onClick={() => void schedule(card, first + i, first + i)}><span>+</span></button>)}
+                                </div>
                               ) : (
                                 <button
                                   className="gantt-outside"
                                   onClick={() =>
-                                    setFirst(
+                                    card.startDate || card.deadline ? setFirst(
                                       dayNumber(
                                         card.startDate || card.deadline!,
                                       ) - 3,
-                                    )
+                                    ) : onOpen(card)
                                   }
                                 >
-                                  Show task →
+                                  {card.startDate || card.deadline ? "Show task →" : "Set dates"}
                                 </button>
                               )}
                             </div>
                           </div>
                         );
                       })}
-                  </Fragment>
-                ))}
             </Fragment>
           ))}
           {!cards.length && (
@@ -1211,39 +1270,12 @@ export default function GanttChart({
           )}
           {!!cards.length && !rowY.size && (
             <p className="gantt-empty">
-              No scheduled tasks are visible. Expand a board, adjust filters, or
-              schedule a task below.
+              No tasks are visible. Expand a board or adjust your filters.
             </p>
           )}
         </div>
       </div>
-      <section className="gantt-tray">
-        <button onClick={() => setTray(!tray)} aria-expanded={tray}>
-          {tray ? "▾" : "▸"} Unscheduled <small>{unscheduled.length}</small>
-        </button>
-        {tray && (
-          <div>
-            {unscheduled.map((t) => (
-              <button
-                key={t.card.id}
-                onPointerDown={(e) => begin(e, t.card, "new")}
-                onClick={() => {
-                  if (!suppressClick.current) onOpen(t.card);
-                }}
-                title="Drag onto a day, or click to set dates"
-              >
-                <strong>{t.card.title}</strong>
-                <small>
-                  {t.board.name}
-                </small>
-              </button>
-            ))}
-            {!unscheduled.length && (
-              <span>No unscheduled tasks in this view.</span>
-            )}
-          </div>
-        )}
-      </section>
+
     </section>
   );
 }

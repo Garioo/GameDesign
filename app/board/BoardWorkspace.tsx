@@ -1,4 +1,5 @@
 "use client";
+import { parentChoices as hierarchyParentChoices } from "@/lib/taskHierarchy";
 import { loadSchedule, mutateSchedule, type ScheduleSnapshot, type ScheduleResult } from '@/lib/ganttRepo';
 
 import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
@@ -580,7 +581,7 @@ function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, 
   people: Person[];
   canEdit:boolean;
   onManageStages:()=>void;
-  onAddCard: (colId: string, title: string) => void;
+  onAddCard: (colId: string, title: string) => Promise<void>;
   onCardClick: (card: CardData) => void;
   dragState: DragInfo | null;
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
@@ -592,9 +593,24 @@ function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, 
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
 
-  function commitAdd() {
-    if (draft.trim()) onAddCard(col.id, draft.trim());
-    setDraft(""); setAdding(false);
+  const [addError, setAddError] = useState("");
+  const [savingTask, setSavingTask] = useState(false);
+  const addLock = useRef(false);
+  const entryRef = useRef<HTMLTextAreaElement>(null);
+  async function commitAdd() {
+    if (addLock.current || !draft.trim()) return;
+    const remaining = draft.split("\n").map(title => title.trim()).filter(Boolean);
+    addLock.current = true; setSavingTask(true); setAddError(""); setDraft("");
+    entryRef.current?.focus();
+    try {
+      while (remaining.length) {
+        await onAddCard(col.id, remaining[0]);
+        remaining.shift();
+      }
+    } catch (e) {
+      setDraft(current => remaining.join("\n") + (current ? "\n" + current : ""));
+      setAddError(e instanceof Error ? e.message : "Could not add task.");
+    } finally { addLock.current = false; setSavingTask(false); }
   }
 
   return (
@@ -644,17 +660,21 @@ function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, 
         {canEdit&&(adding ? (
           <div className="new-card-form">
             <textarea
+              ref={entryRef}
+              aria-label={`New task in ${col.name}`}
               className="new-card-input"
               rows={2}
               placeholder="Task title…"
               autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitAdd(); } if (e.key === "Escape") { setAdding(false); setDraft(""); } }}
+              onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitAdd(); } if (e.key === "Escape" && !savingTask) { setAdding(false); setDraft(""); } }}
             />
+            <small>Enter to add · Paste several lines to add a list</small>
+            {addError && <p role="alert">{addError}</p>}
             <div className="new-card-actions">
-              <button className="btn-save" onClick={commitAdd}>Add task</button>
-              <button className="btn-cancel" onClick={() => { setAdding(false); setDraft(""); }}>Cancel</button>
+              <button className="btn-save" disabled={savingTask || !draft.trim()} onClick={commitAdd}>{savingTask ? "Adding…" : "Add task"}</button>
+              <button className="btn-cancel" disabled={savingTask} onClick={() => { setAdding(false); setDraft(""); }}>Close</button>
             </div>
           </div>
         ) : (
@@ -668,7 +688,8 @@ function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, 
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, panel, canEdit, columns }: {
+function CardModal({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, panel, canEdit, columns, boards }: {
+  boards: BoardData[];
   panel: boolean; canEdit: boolean; columns: {id:string;name:string}[];
   card: CardData;
   workspaceId: string;
@@ -687,7 +708,10 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   const [deadline, setDeadline] = useState(card.deadline ?? "");
   const [startDate, setStartDate] = useState(card.startDate ?? "");
   const [firmDeadline, setFirmDeadline] = useState(card.firmDeadline ?? "");
+  const [parentId, setParentId] = useState(card.parentId ?? "");
+  const childTasks = boards.flatMap(b => b.cols.flatMap(c => c.cards)).filter(t => t.parentId === card.id);
   const [columnId, setColumnId] = useState(card.columnId ?? "");
+  const parentChoices = hierarchyParentChoices(boards.find(b => b.cols.some(c => c.id === columnId)), card.id);
   const [baseline, setBaseline] = useState<ScheduleSnapshot | null>(null);
   const [expanded, setExpanded] = useState(false);
   const dialogRef=useRef<HTMLDivElement>(null);
@@ -738,6 +762,15 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
         <div className="gantt-inspector-heading"><h2>Task details</h2><button onClick={onClose} aria-label="Close task details">×</button></div>
         {panel && <button className="gantt-sheet-toggle" onClick={()=>setExpanded(!expanded)}>{expanded ? "Reduce panel" : "Expand panel"}</button>}
         <fieldset disabled={!canEdit || saving} className="gantt-card-fields">
+        <div className="modal-field">
+          <label className="modal-label" htmlFor="task-parent">Parent task</label>
+          <select id="task-parent" className="modal-select" value={parentId} onChange={e => setParentId(e.target.value)}>
+            <option value="">None — main task</option>
+            {parentChoices.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+            {parentId && !parentChoices.some(t => t.id === parentId) && <option value={parentId}>Parent in another board — choose None to move</option>}
+          </select>
+          {childTasks.length > 0 && <small>This task contains {childTasks.length} direct subtasks. Dates and completion are independent.</small>}
+        </div>
         <div className="modal-field">
           <label className="modal-label">Title</label>
           <input className="modal-input" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -824,7 +857,7 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
             setSaving(true); setSaveError("");
             try {
               if (!baseline) return;
-              await onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, columnId,
+              await onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, columnId, parentId: parentId || null,
                 startDate: startDate || null, deadline: deadline || null, firmDeadline: firmDeadline || null }, baseline);
               onClose();
             } catch (e) { setSaveError(e instanceof Error ? e.message : "Could not save card."); }
@@ -1061,14 +1094,14 @@ export default function BoardWorkspace() {
 
   /* add card */
   async function handleAddCard(colId: string, title: string) {
-    if (!wsRef.current) return;
+    if (!wsRef.current) throw new Error("Workspace is not ready yet.");
     try {
       const card = await createCard(wsRef.current, colId, title, selectedDate ?? null);
       setCols((prev) => prev.map((c) =>
         c.id !== colId ? c : c.cards.some((k) => k.id === card.id) ? c : { ...c, cards: [...c.cards, card] }
       ));
     } catch (e) {
-      console.error("create card failed", e);
+      throw e;
     }
   }
 
@@ -1076,12 +1109,12 @@ export default function BoardWorkspace() {
   async function handleSaveCard(updated: CardData, snapshot: ScheduleSnapshot) {
     if (session?.role === "viewer") throw new Error("You need editor access to change cards.");
     if (!session) return;
-    setScheduleResult(await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId,start_date:updated.startDate??null,deadline:updated.deadline??null,firm_deadline:updated.firmDeadline??null}}));
+    setScheduleResult(await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{...((snapshot.cards.find(c=>c.id===updated.id)?.parent_id??null)!==(updated.parentId??null)?{parent_id:updated.parentId??null}:{}),id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId,start_date:updated.startDate??null,deadline:updated.deadline??null,firm_deadline:updated.firmDeadline??null}}));
     setBoards(await loadBoards(session.workspaceId));
   }
 
   async function refreshPlanning(){if(!session)return;const [fresh,cats]=await Promise.all([loadBoards(session.workspaceId),listCategories(session.workspaceId)]);setBoards(fresh);setCategories(cats);}
-  function handleDeleteCard(card:CardData){if(!canEdit)return;setActionDialog({title:'Delete task?',description:`“${card.title}” and its scheduling relationships will be removed. Its linked canvas is kept.`,submit:async()=>{await deleteCard(card.id);await refreshPlanning();}});}
+  function handleDeleteCard(card:CardData){if(!canEdit)return;setActionDialog({title:'Delete task?',description:`“${card.title}” and its scheduling relationships will be removed. Its subtasks become main tasks. Its linked canvas is kept.`,submit:async()=>{await deleteCard(card.id);await refreshPlanning();}});}
   function handleDeleteBoard(board:BoardData){if(!canEdit)return;setActionDialog({title:'Delete board?',description:`“${board.name}” and all its tasks and board milestones will be removed. This cannot be undone.`,submit:async()=>{await deleteBoard(board.id);await refreshPlanning();}});}
   function handleAddCol(){if(activeBoard)handleManageStages(activeBoard);}
 
@@ -1315,6 +1348,7 @@ export default function BoardWorkspace() {
             key={editingCard.id}
             panel={isGantt}
             canEdit={!!session && session.role !== 'viewer'}
+            boards={boards}
             columns={boards.flatMap(b=>b.cols.map(c=>({id:c.id,name:`${b.name} · ${c.name}`})))}
             card={editingCard}
             workspaceId={session?.workspaceId ?? ""}

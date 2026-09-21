@@ -4,7 +4,7 @@
 boards and a month of work, with tasks listed directly under each board. The neutral, compact layout
 has a resizable task list, collapsible navigation, white task cards with subtle
 stage-color accents, category labels and assignees, dependency
-connectors, fixed milestones, an unscheduled tray, and personal saved views.
+connectors, fixed milestones, inline undated rows, and personal saved views.
 
 ## Rollout
 
@@ -17,7 +17,13 @@ connectors, fixed milestones, an unscheduled tray, and personal saved views.
 3. Apply `supabase/migrate-custom-stages.sql` before deploying the custom-stage UI.
    It adds atomic board creation and stage editing; existing stages keep their IDs,
    names, completion settings, and task links. No sample boards or stages are added.
-4. Deploy the updated application and reload existing browser sessions. Coordinate
+4. Apply `supabase/migrate-task-hierarchy.sql` to enable parent tasks and subtasks.
+   It is safe to rerun and leaves existing tasks at the top level.
+5. Apply `supabase/migrate-nested-timeline.sql` as the database owner to enable
+   nested subtasks, independent completion, and persistent timeline ordering.
+   Run it after the hierarchy migration, before deploying this client. It is
+   safe to rerun and preserves existing dates, relationships, and saved views.
+6. Deploy the updated application and reload existing browser sessions. Coordinate
    these steps: older clients cannot change dates/status after the migration,
    because those writes must now use the scheduling RPC.
 
@@ -38,8 +44,9 @@ and remain horizontally scrollable when space is limited.
   remain available in the full task editor.
 - On touch screens, swipe to scroll and hold a task for 400 ms before dragging.
   Selected tasks expose resize handles. Task details use an expandable bottom sheet.
-- Drag an undated task from the tray onto the timeline to create a one-day schedule,
-  or open it and set dates. Existing cards with one date remain one-day bars.
+- Undated tasks stay in the task table with an empty date grid. Click a date cell
+  to create a one-day schedule, or open the task to set a date range. Existing
+  cards with one date remain one-day bars.
 - More → Dependencies & milestones manages scheduling relationships and fixed dates.
   More → Manage stages controls stage names, colors, order, and completion settings.
   Completed tasks are faded and can be filtered out.
@@ -54,8 +61,7 @@ and remain horizontally scrollable when space is limited.
   task titles. Old collapsed-stage preferences no longer hide tasks; board
   collapsing applies when multiple boards are visible; a single board shows its
   tasks directly without a duplicate heading. Completion filters still apply.
-- Saved views and the task-list width control are in More. The unscheduled tray starts collapsed
-  and displays its task count.
+- Saved views and the task-list width control are in More.
 - Saved views belong to the signed-in user. They store board selections, filters,
   zoom and collapsed groups. Last-used settings are remembered on this device.
 
@@ -108,7 +114,62 @@ completion, task transfers, preserved links, permissions, and concurrent edits.
 
 Browser verification uses intercepted Supabase requests backed by the same SQL
 fixture, avoiding changes to production data. Verified interactions include drag,
-resize, whole-operation undo, tray scheduling, dependency creation, saved views,
+resize, whole-operation undo, date-cell scheduling, dependency creation, saved views,
 board-to-timeline refresh in a second tab, mobile hold-to-drag, swipe without writes,
 and the expandable mobile editor. Hosted Supabase realtime transport
 and production rollout still require verification after the migration is applied.
+
+## Parent tasks and subtasks
+
+Use **New task** to open inline entry at the end of the selected board. Use **+**
+beside any task to add children directly after its visible subtree. Enter saves
+and keeps entry open; Shift+Enter or a pasted list adds multiple names. Escape
+closes entry, and failed saves preserve the draft. New timeline tasks have no
+dates until scheduled; existing board/calendar creation keeps its date defaults.
+
+Tasks can nest at any depth within the same board. **Task details → Parent task**
+shows full ancestor paths and excludes the current task and all its descendants.
+Choose **None — main task** to promote a task. Removing a parent promotes its
+direct children to top-level tasks while keeping their descendants attached.
+Cycles, self-parenting, and cross-board hierarchies are rejected by the database.
+
+Each task has its own dates and status. Completing or moving a parent does not
+complete or schedule its descendants. Explicit dependencies still enforce the
+existing scheduling rules. Parent progress counts completed/direct children,
+including children hidden by filters.
+
+Disclosure arrows collapse complete subtrees. Filters retain the ancestor paths
+of matching tasks and temporarily expand those paths without changing saved
+collapse preferences. Clearing the filters restores the previous collapse state.
+
+Drag a row handle onto a sibling to move it to that sibling's position, including
+its subtree. Use **⋯ → Move up/down**, or Alt+Up/Down on the focused handle, for
+keyboard ordering. Reordering is disabled while filters are active. Change the
+parent in task details rather than through row dragging.
+
+`board_cards.timeline_position` stores order within each board/parent group,
+independently of the board-column `position`. The migration backfills the existing
+stage/card order once. Inserts, reparenting and promotion append to their new
+sibling group. The hierarchy RPC's `reorder_tasks` operation requires `board_id`,
+`parent_id` (null for roots), and the complete ordered `ids` array. It checks editor
+access, the expected snapshot, and exact sibling membership before writing under
+the workspace lock. Reordering does not alter dates or board stages.
+
+The `create_tasks` operation accepts explicit `day: null` for undated creation;
+omitting `day` retains the legacy database-day default. A supplied date remains a
+one-day schedule. Snapshots include `timeline_position`, so concurrent ordering
+invalidates stale mutations and date undo just like other metadata changes.
+
+Verification covers nested traversal, ancestor filtering, inline-entry offsets,
+parent choices, SQL cycle checks, independent completion, undated creation,
+ordering, stale writes, viewer permissions, and rerunnable migration. Browser
+verification uses intercepted requests backed by PGlite; production database
+migration and hosted realtime transport must be checked during deployment.
+
+For the browser regression, start the local application, then run
+`node tests/browser-timeline.cjs` with Playwright and Chrome available. If using a
+bundled Playwright installation, set `PLAYWRIGHT_MODULE` to its module path.
+`APP_URL` defaults to `http://localhost:3000`. The test reads the public Supabase
+URL from `.env.local` to intercept its HTTP requests and uses only an isolated
+PGlite database for writes. Screenshots are saved to `/tmp/nested-timeline-desktop.png`
+and `/tmp/nested-timeline-mobile.png`.

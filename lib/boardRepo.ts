@@ -1,3 +1,4 @@
+import { localToday } from "./gantt";
 import { supabase } from "./supabase";
 import { loadSchedule, mutateSchedule } from './ganttRepo';
 import { cleanText, LIMITS } from "./validate";
@@ -22,6 +23,8 @@ export interface BoardCard {
   deadline?: string | null;
   firmDeadline?: string | null;
   columnId?: string;
+  parentId?: string | null;
+  timelinePosition?: number;
   dragging?: boolean;
 }
 
@@ -43,6 +46,8 @@ export interface Board {
 interface CardRow {
   id: string;
   column_id: string;
+  parent_id?: string | null;
+  timeline_position?: number;
   title: string;
   sub: string;
   kind: string;
@@ -95,6 +100,8 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       deadline: r.deadline,
       firmDeadline: r.firm_deadline,
       columnId: r.column_id,
+      parentId: r.parent_id ?? null,
+      timelinePosition: r.timeline_position,
     };
     (cardsByCol.get(r.column_id) ?? cardsByCol.set(r.column_id, []).get(r.column_id)!).push(card);
   }
@@ -148,13 +155,14 @@ export async function createColumn(
   return { id: data.id, name: data.name, color: data.color, cards: [] };
 }
 
-/** Append a card to a column. Only id/title/deadline vary at creation time. */
+/** New tasks start on their selected calendar day, or today by default. */
 export async function createCard(
   workspaceId: string,
   columnId: string,
   title: string,
   deadline: string | null,
 ): Promise<BoardCard> {
+  const scheduledDay = deadline ?? localToday();
   const clean = cleanText(title, LIMITS.title, "Card title") || "Untitled card";
   const { data: maxRow } = await supabase
     .from("board_cards")
@@ -167,8 +175,8 @@ export async function createCard(
 
   const { data, error } = await supabase
     .from("board_cards")
-    .insert({ column_id: columnId, project_id: workspaceId, title: clean, deadline, position })
-    .select("id, title, sub, kind, tags, priority, owners, deadline")
+    .insert({ column_id: columnId, project_id: workspaceId, title: clean, start_date: scheduledDay, deadline: scheduledDay, position })
+    .select("id, title, sub, kind, tags, priority, owners, start_date, deadline")
     .single();
   if (error || !data) throw new Error(`createCard failed: ${error?.message}`);
   return {
@@ -179,6 +187,7 @@ export async function createCard(
     tags: data.tags ?? [],
     priority: data.priority,
     ownerIds: data.owners ?? [],
+    startDate: data.start_date,
     deadline: data.deadline,
     columnId,
     firmDeadline: null,

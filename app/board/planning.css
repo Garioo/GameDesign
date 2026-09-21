@@ -1236,3 +1236,60 @@
   .planning-heading .planning-view-switch { margin-left: 0; }
   .planning-app .planning-controls { margin-top: 4px; }
 }
+
+/* Task sections and their indented subtasks share the same timeline grid. */
+.planning-app .gantt-row > .hierarchy-label { gap: 6px; padding-left: 10px !important; }
+.planning-app .gantt-row > .hierarchy-label.subtask-label { padding-left: 30px !important; }
+.planning-app .gantt-task-open { display:flex; align-items:center; gap:9px; flex:1; min-width:0; text-align:left; background:none; border:0; padding:0; color:inherit; font:inherit; cursor:pointer; }
+.planning-app .task-disclosure,.planning-app .task-add-child { flex:0 0 22px; width:22px; height:28px; border:0; border-radius:4px; background:none; color:var(--muted); cursor:pointer; }
+.planning-app .task-disclosure:hover,.planning-app .task-add-child:hover { background:var(--surface); color:var(--text); }
+.planning-app .task-branch { flex:0 0 22px; color:var(--muted); font-size:13px; }
+ .planning-app .task-quick-add { flex-shrink:0; padding:12px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
+.planning-app .quick-add-heading { display:flex; align-items:center; gap:12px; margin-bottom:8px; font-size:12px; }
+.planning-app .quick-add-heading > button { margin-left:auto; border:0; background:none; font-size:20px; cursor:pointer; }
+.planning-app .quick-add-entry { display:flex; align-items:flex-start; gap:8px; }
+.planning-app .quick-add-entry textarea { flex:1; min-width:0; max-height:120px; resize:vertical; border:1px solid var(--line); border-radius:6px; padding:9px 12px; font:inherit; font-size:13px; background:var(--bg); color:var(--ink); }
+.planning-app .task-quick-add small,.planning-app .new-card-form small { display:block; margin-top:6px; font-size:11px; color:var(--ink-soft); }
+.planning-app .task-quick-add p { margin:4px 0 0; font-size:12px; }
+.planning-app .task-quick-add [role=alert],.planning-app .new-card-form [role=alert] { color:#a43c2c; }
+
+/* The timeline shares one compact row rhythm across labels, bars and connectors. */
+.planning-app .gantt-row { height: 44px; border-bottom: 1px solid var(--line-soft); }
+.planning-app .gantt-row.gantt-milestone { height: 35px; }
+.planning-app .gantt-bar { top: 7px; height: 29px; border-radius: 4px; box-shadow: none; border-left: 3px solid var(--bar-color); }
+.planning-app .gantt-bar .gantt-bar-copy small { display: none; }
+.planning-app .gantt-bar .gantt-bar-copy strong { font-size: 12px; font-weight: 500; }
+.planning-app .gantt-bar .planning-avatar { display: none; }
+.planning-app .gantt-task-label.hierarchy-label { padding: 4px 8px 4px calc(6px + var(--task-depth, 0) * 14px) !important; overflow: visible; gap: 3px; flex-direction: row; align-items: center; }
+.planning-app .hierarchy-label .gantt-task-open { min-width: 0; flex: 1; }
+.planning-app .hierarchy-label .gantt-task-copy { min-width: 0; }
+.planning-app .hierarchy-label .gantt-task-copy strong { font-size: 12px; }
+.planning-app .hierarchy-label .gantt-task-copy small { font-size: 10px; }
+.planning-app .timeline-drag-handle { padding: 0; width: 15px; flex: none; border: 0; background: transparent; cursor: grab; color: var(--ink-faint); opacity: 0; }
+.planning-app .gantt-row:hover .timeline-drag-handle, .planning-app .gantt-row:focus-within .timeline-drag-handle { opacity: 1; }
+.planning-app .timeline-owner { width: 20px; height: 20px; flex: none; font-size: 9px; }
+.planning-app .timeline-row-menu { position: relative; flex: none; }
+.planning-app .timeline-row-menu summary { border: 0; padding: 2px; background: transparent; list-style: none; }
+.planning-app .timeline-row-menu > div { position: absolute; right: 0; top: 24px; width: 170px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; box-shadow: var(--shadow-card); display: grid; z-index: 12; }
+.planning-app .gantt-row:has(.timeline-row-menu[open]) .gantt-task-label { z-index: 6; }
+.planning-app .row-drop-target { box-shadow: inset 0 2px var(--ember); }
+.planning-app .timeline-add { color: var(--ink-soft); font-weight: 400; }
+.planning-app .timeline-entry-row { box-sizing: border-box; position: relative; border-bottom: 1px solid var(--line-soft); }
+.planning-app .timeline-entry-row .task-quick-add { position: sticky; left: 0; width: min(560px, calc(100vw - 32px)); max-width: 100%; height: 100%; box-sizing: border-box; margin: 0; border: 0; border-radius: 0; padding: 8px 12px; overflow: auto; background: var(--surface); }
+.planning-app .timeline-entry-row .quick-add-heading { font-size: 11px; margin-bottom: 4px; }
+.planning-app .timeline-entry-row .task-quick-add textarea { min-height: 30px; max-height: 40px; }
+.planning-app .timeline-empty-days { display: flex; height: 100%; }
+.planning-app .timeline-empty-days button { flex: none; width: var(--day-width); height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink-faint); }
+.planning-app .timeline-empty-days button span { opacity: 0; }
+.planning-app .timeline-empty-days button:hover, .planning-app .timeline-empty-days button:focus-visible { background: var(--line-soft); }
+.planning-app .timeline-empty-days button:hover span, .planning-app .timeline-empty-days button:focus-visible span { opacity: 1; }
+@media (max-width: 700px) {
+  .planning-app .gantt-scroll { --task-width: 220px !important; }
+  .planning-app .gantt-task-label { width: var(--task-width); }
+  .planning-app .timeline-owner { display: none; }
+  .planning-app .timeline-drag-handle { opacity: 1; }
+}
+.planning-app .timeline-add { justify-content: flex-start; }
+@media (max-width: 700px) {
+  .planning-app .gantt-task-label.hierarchy-label { padding-left: calc(6px + min(var(--task-depth, 0) * 14px, 42px)) !important; }
+}

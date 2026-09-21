@@ -9,7 +9,9 @@ export default function PlanningHeader({
   onCreate,
   canEdit,
   children,
+  createLabel = "New board",
 }: {
+  createLabel?: string;
   title: string;
   mode: "board" | "timeline";
   boardId?: string;
@@ -51,7 +53,7 @@ export default function PlanningHeader({
         {canEdit && (
           <button className="planning-primary" onClick={onCreate}>
             <PlanningIcon name="plus" />
-            New board
+            {createLabel}
           </button>
         )}
       </div>

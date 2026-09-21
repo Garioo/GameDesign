@@ -4,6 +4,8 @@ export interface ScheduleCard {
   id: string;
   title: string;
   column_id: string;
+  parent_id?: string | null;
+  timeline_position?: number;
   start_date: string | null;
   deadline: string | null;
   firm_deadline: string | null;
@@ -63,12 +65,16 @@ export async function mutateSchedule(
   snapshot: ScheduleSnapshot,
   action: Record<string, unknown>,
 ): Promise<ScheduleResult> {
-  const { data, error } = await supabase.rpc("gantt_mutate", {
+  const card = action.card as Record<string, unknown> | undefined;
+  const hierarchy = action.op === 'create_tasks' || action.op === 'reorder_tasks' || (action.op === 'card' && card && 'parent_id' in card);
+  const { data, error } = await supabase.rpc(hierarchy ? "gantt_mutate_hierarchy" : "gantt_mutate", {
     p_project: project,
     p_expected: snapshot,
     p_action: action,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(hierarchy && error.code === 'PGRST202'
+    ? 'Subtasks need the task-hierarchy database update. Run migrate-task-hierarchy.sql in Supabase first.'
+    : error.message);
   return data;
 }
 export async function loadViews(project: string): Promise<SavedView[]> {
