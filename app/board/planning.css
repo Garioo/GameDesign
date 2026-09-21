@@ -316,6 +316,60 @@
   min-height: 0;
   overflow: auto;
 }
+/* All boards: each board is its own card, tinted by the board's color, so sections read as
+   separate containers instead of a thin rule between rows of columns.
+   Named kanban-group, not board-group, because .board-group is already the Gantt chart's
+   row-flex class (see below) — reusing it made this section a flex row too. */
+.planning-app .kanban-group {
+  --board-color: var(--ember);
+  display: block;
+  background: color-mix(in srgb, var(--board-color) 4%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--board-color) 22%, var(--line));
+  border-left: 4px solid var(--board-color);
+  border-radius: 12px;
+  padding: 4px 14px 14px;
+}
+.planning-app .kanban-group + .kanban-group {
+  margin-top: 18px;
+}
+.planning-app .board-group-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 2px 12px;
+}
+.planning-app .board-group-head h2 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.2px;
+  margin: 0;
+  color: var(--ink);
+}
+.planning-app .board-group-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.planning-app .board-group-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  margin-right: auto;
+}
+.planning-app .board-group-head .planning-overflow summary {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.planning-app .board-group-head .planning-overflow summary:hover {
+  background: color-mix(in srgb, var(--board-color) 14%, var(--surface));
+  color: var(--ink);
+  border-color: var(--board-color);
+}
 .planning-app .board-cols {
   gap: 12px;
   align-items: flex-start;
@@ -601,6 +655,12 @@
 .planning-app .gantt-group {
   background: var(--surface);
   border-color: var(--line);
+}
+.planning-app .gantt-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 .planning-app .gantt-group button {
   font-size: 12px;
@@ -901,12 +961,85 @@
   overflow: auto;
   min-height: 0;
 }
+.stage-name-color {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 24px;
+}
 .stage-board-name {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.stage-board-color {
   display: grid;
   gap: 8px;
   font-size: 12px;
   font-weight: 500;
+}
+.stage-end-date {
+  display: grid;
+  gap: 8px;
   margin-bottom: 24px;
+}
+.stage-end-date-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.stage-end-date-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.stage-end-date-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--ember);
+}
+.stage-end-date-option small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.stage-end-date-input {
+  display: block;
+  margin-top: 7px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  padding: 7px 9px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+}
+.modal-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.modal-check input {
+  margin-top: 2px;
+  accent-color: var(--ember);
+}
+.modal-check small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-soft);
 }
 .stage-dialog fieldset {
   border: 0;
@@ -1243,7 +1376,17 @@
 .planning-app .gantt-task-open { display:flex; align-items:center; gap:9px; flex:1; min-width:0; text-align:left; background:none; border:0; padding:0; color:inherit; font:inherit; cursor:pointer; }
 .planning-app .task-disclosure,.planning-app .task-add-child { flex:0 0 22px; width:22px; height:28px; border:0; border-radius:4px; background:none; color:var(--muted); cursor:pointer; }
 .planning-app .task-disclosure:hover,.planning-app .task-add-child:hover { background:var(--surface); color:var(--text); }
-.planning-app .task-branch { flex:0 0 22px; color:var(--muted); font-size:13px; }
+/* A drawn connector instead of a plain "└" glyph: a vertical line down to the row's middle,
+   then a horizontal stub over to the title. branch-mid (more siblings follow) continues the
+   vertical line the full row height, like a "├"; branch-last (this is the final sibling) stops
+   it at the middle, like a "└". */
+.planning-app .task-branch { flex:0 0 22px; position: relative; align-self: stretch; }
+.planning-app .task-branch::before { content: ""; position: absolute; left: 10px; top: 0; width: 1px; background: var(--line); }
+.planning-app .task-branch.branch-last::before { height: 50%; }
+.planning-app .task-branch.branch-mid::before { height: 100%; }
+.planning-app .task-branch.branch-last::after, .planning-app .task-branch.branch-mid::after {
+  content: ""; position: absolute; left: 10px; top: 50%; width: 11px; height: 1px; background: var(--line);
+}
  .planning-app .task-quick-add { flex-shrink:0; padding:12px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
 .planning-app .quick-add-heading { display:flex; align-items:center; gap:12px; margin-bottom:8px; font-size:12px; }
 .planning-app .quick-add-heading > button { margin-left:auto; border:0; background:none; font-size:20px; cursor:pointer; }
@@ -1260,6 +1403,11 @@
 .planning-app .gantt-bar .gantt-bar-copy small { display: none; }
 .planning-app .gantt-bar .gantt-bar-copy strong { font-size: 12px; font-weight: 500; }
 .planning-app .gantt-bar .planning-avatar { display: none; }
+/* Same size and fill as a plain bar everywhere (title stays readable) — depth in the timeline
+   comes only from the left border: a parent (has subtasks) gets a thicker solid border, a
+   subtask gets a dashed one, so the two never look like a plain top-level task or each other. */
+.planning-app .gantt-bar.parent-bar { border-left-width: 6px; }
+.planning-app .gantt-bar.subtask-bar { border-left-width: 2px; border-left-style: dashed; }
 .planning-app .gantt-task-label.hierarchy-label { padding: 4px 8px 4px calc(6px + var(--task-depth, 0) * 14px) !important; overflow: visible; gap: 3px; flex-direction: row; align-items: center; }
 .planning-app .hierarchy-label .gantt-task-open { min-width: 0; flex: 1; }
 .planning-app .hierarchy-label .gantt-task-copy { min-width: 0; }

@@ -131,6 +131,16 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  await page.screenshot({path:'/tmp/nested-timeline-mobile.png',fullPage:true});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
  const priorWrites=writes;await page.locator('.gantt-scroll').evaluate(el=>el.scrollLeft=300);await page.waitForTimeout(100);assert.equal(writes,priorWrites);
+ // All boards: each board gets its own group header, colored to match the sidebar, with its
+ // automatic end date (the latest deadline among its tasks).
+ await page.getByRole('button',{name:'All boards',exact:true}).click();
+ const gameplayGroup=page.locator('.gantt-group').filter({hasText:'Gameplay'});
+ await gameplayGroup.waitFor();
+ assert.equal(await gameplayGroup.locator('.gantt-group-dot').count(),1,'Gameplay group header shows a board-color dot');
+ assert.ok((await gameplayGroup.innerText()).includes('Ends'),'Gameplay group header shows its automatic end date');
+ const artGroup=page.locator('.gantt-group').filter({hasText:'Art'});
+ await artGroup.waitFor();
+ assert.equal(await artGroup.locator('.gantt-group-dot').count(),1,'Art group header also shows a board-color dot');
  assert.deepEqual(errors,[]);
  console.log('PASS inline creation, retry, nested hierarchy, cell scheduling, keyboard dates/undo, drag/resize, parent selector, filtering, drag reorder, reload, keyboard reorder, alignment, narrow-screen scrolling');
  await browser.close();await db.close();

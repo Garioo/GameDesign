@@ -1,0 +1,127 @@
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; padding: 24px 28px 110px; overflow: auto; min-height: 0; }
+.calendar { min-width: 0; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+.toolbar h2 { font-size: 26px; letter-spacing: -.8px; font-weight: 600; margin: 0 0 5px; }
+.toolbar p, .unscheduled > p { color: var(--ink-faint); font-size: 12px; margin: 0; }
+.navigation { display: flex; align-items: center; gap: 5px; }
+.navigation button { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-height: 34px; padding: 7px 10px; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; }
+.navigation button:hover { background: var(--ember-tint); }
+.monthScroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.weekdays, .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-width: 560px; }
+.weekdays { background: var(--line-soft); border-bottom: 1px solid var(--line); }
+.weekdays span { padding: 12px; font-size: 11px; font-weight: 600; color: var(--ink-soft); }
+.day { min-height: 118px; padding: 7px; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); min-width: 0; }
+.day:nth-child(7n) { border-right: 0; }
+.day:nth-last-child(-n+7) { border-bottom: 0; }
+.outside { background: var(--line-soft); }
+.outside .date { color: var(--ink-faint); }
+.selected { background: var(--ember-tint); box-shadow: inset 0 0 0 1px var(--ember); }
+.date { border: 0; background: transparent; color: var(--ink); border-radius: 50%; width: 27px; height: 27px; font-size: 12px; margin-bottom: 5px; cursor: pointer; }
+.date:hover { background: var(--line); }
+.date.today { background: var(--ember); color: white; font-weight: 700; }
+.event { display: flex; align-items: center; gap: 5px; width: 100%; text-align: left; padding: 4px 5px; margin: 2px 0; border: 1px solid var(--line-soft); background: var(--bg); border-radius: 4px; color: var(--ink); cursor: pointer; font-size: 11px; }
+.event > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event:hover, .agendaTask:hover { border-color: var(--ember); background: var(--ember-tint); }
+.completed { color: var(--ink-faint); }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.more { border: 0; background: none; font-size: 10px; color: var(--ember-deep); cursor: pointer; padding: 4px; }
+.agenda { border-left: 1px solid var(--line); padding-left: 24px; }
+.agendaHeading > span { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ember-deep); font-weight: 600; }
+.agendaHeading h2 { font-size: 16px; font-weight: 600; margin: 8px 0 20px; }
+.agendaTask { display: flex; width: 100%; gap: 10px; align-items: center; padding: 13px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; text-align: left; margin-bottom: 8px; color: var(--ink); cursor: pointer; }
+.agendaTask > span:nth-child(2) { flex: 1; min-width: 0; }
+.agendaTask strong { display: block; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.agendaTask small { display: block; margin-top: 5px; font-size: 10px; color: var(--ink-faint); }
+.agendaTask svg { flex-shrink: 0; color: var(--ink-faint); }
+.empty { font-size: 12px; line-height: 1.7; color: var(--ink-faint); padding: 16px 0; }
+.unscheduled { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 20px; }
+.unscheduled h3 { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.unscheduled h3 span { color: var(--ink-faint); }
+.unscheduled > p { margin-bottom: 18px; }
+.checkbox { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-soft); }
+.checkbox input { accent-color: var(--ember); }
+.layout button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+@media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } .agenda { border-left: 0; padding-left: 0; } }
+@media (max-width: 600px) { .layout { padding: 18px 12px 110px; } .toolbar h2 { font-size: 22px; } .toolbar { gap: 8px; } }
+
+@media (max-width: 600px) {
+  .weekdays, .grid { min-width: 0; }
+  .weekdays span { padding: 10px 5px; font-size: 10px; }
+  .day { padding: 4px 2px; min-height: 95px; }
+  .event { padding: 4px 2px; gap: 3px; font-size: 9px; }
+  .event .dot { width: 4px; height: 4px; }
+  .more { font-size: 9px; }
+}
+
+.standaloneEvent { background: #eaf0ec; border-color: #d1dfd5; color: #385a47; }
+.standaloneEvent svg { flex-shrink: 0; width: 12px; height: 12px; }
+.agendaTask > svg:first-child { color: #527461; }
+.addEvent { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ember-deep); padding: 10px; margin-bottom: 16px; cursor: pointer; }
+.eventNotice, .eventError { margin: 12px 28px; font-size: 13px; }
+.eventError { color: #a13923; }
+.eventDialog { position: fixed; inset: 0; margin: auto; box-sizing: border-box; width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--line); border-radius: 14px; padding: 26px; color: var(--ink); background: var(--surface); box-shadow: 0 20px 80px #241e1833; }
+.eventDialog::backdrop { background: #241e1855; }
+.dialogHeading { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; margin-bottom: 24px; }
+.dialogHeading h2 { font-size: 22px; margin: 0 0 8px; }
+.dialogHeading p, .timeNote { font-size: 12px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
+.eventDialog fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 16px; }
+.eventDialog label:not(.checkbox) { display: grid; gap: 7px; font-size: 12px; font-weight: 600; }
+.eventDialog input:not([type=checkbox]), .eventDialog textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 10px 12px; border-radius: 6px; font: inherit; }
+.eventDialog textarea { resize: vertical; }
+.eventDialog input:focus-visible, .eventDialog textarea:focus-visible, .eventDialog button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.timeFields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.eventDialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.eventDialog button:not(.planning-primary) { background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 9px 12px; border-radius: 6px; cursor: pointer; }
+.eventDialog button:disabled { opacity: .5; cursor: default; }
+.eventDialog .eventError { margin: 14px 0; }
+
+.clickableDay { position: relative; }
+.dateTarget { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; cursor: pointer; border-radius: 0; }
+.dateTarget:hover { background: var(--ember-tint); }
+.clickableDay .date, .clickableDay .event, .clickableDay .more { position: relative; }
+
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); position: relative; min-width: 560px; border-bottom: 1px solid var(--line-soft); }
+.week:last-child { border-bottom: 0; }
+.week .day { border-bottom: 0; }
+.weekEvents { position: absolute; top: 39px; left: 0; right: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: 26px; pointer-events: none; }
+.spanEvent { pointer-events: auto; min-width: 0; margin: 2px 3px; padding: 3px 7px; border: 1px solid #c5d8cc; border-radius: 5px; background: #e1ece5; color: #385a47; text-align: left; display: flex; gap: 5px; align-items: center; font-size: 11px; cursor: pointer; }
+.spanEvent span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spanEvent svg { flex-shrink: 0; width: 12px; height: 12px; }
+.spanEvent:hover { background: #cedfd4; border-color: #789c86; }
+.continuesBefore { margin-left: 0; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.continuesAfter { margin-right: 0; border-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+@media (max-width: 600px) {
+  .week { min-width: 0; }
+  .weekEvents { top: 36px; }
+  .spanEvent { padding: 3px; gap: 3px; font-size: 9px; }
+  .spanEvent svg { width: 10px; height: 10px; }
+}
+
+.viewSwitch { display: flex; margin-right: 10px; border: 1px solid var(--line); border-radius: 7px; padding: 3px; }
+.viewSwitch button { border: 0; background: transparent; min-height: 28px; }
+.viewSwitch button[aria-pressed="true"] { background: var(--ember-tint); color: var(--ember-deep); }
+.toolbar { flex-wrap: wrap; }
+.weekView .day { min-height: 400px; }
+.dayLayout { grid-template-columns: minmax(0, 1fr); }
+.daySchedule { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 24px; min-height: 400px; }
+.daySchedule h3 { font-size: 13px; margin: 12px 0 18px; }
+.daySectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.daySectionHead .addEvent { margin: 0; }
+.dayEventRow { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: start; gap: 20px; }
+.dayEventRow time { font-size: 12px; color: var(--ink-soft); padding-top: 15px; }
+@media (max-width: 600px) {
+  .navigation { flex-wrap: wrap; }
+  .viewSwitch { margin-right: 4px; }
+  .daySchedule { padding: 14px; }
+  .dayEventRow { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
+}
+
+/* Task bars: a tint of the board color behind dark text keeps every board readable and distinct. */
+.spanTask { --board-color: var(--ink-faint); background: color-mix(in srgb, var(--board-color) 16%, var(--surface)); border-color: color-mix(in srgb, var(--board-color) 45%, var(--surface)); border-left: 3px solid var(--board-color); color: var(--ink); font-weight: 500; }
+.spanTask:hover { background: color-mix(in srgb, var(--board-color) 28%, var(--surface)); border-color: var(--board-color); }
+.spanTask.completed { color: var(--ink-faint); background: color-mix(in srgb, var(--board-color) 7%, var(--surface)); text-decoration: line-through; }
+.spanTask.continuesBefore { border-left: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: -12px 0 14px; padding: 0; font-size: 11px; color: var(--ink-soft); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend .dot { width: 9px; height: 9px; }
+.legendEvent { background: #789c86; }

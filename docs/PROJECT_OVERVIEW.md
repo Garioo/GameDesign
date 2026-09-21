@@ -106,8 +106,29 @@ trade-off between "feels instant" and "doesn't hammer the database."
 ## Running locally
 
 1. **Install:** `npm install`
-2. **Supabase project:** create one, then apply the schema in `supabase/schema.sql` to its
-   database (SQL editor or `supabase db push`).
+2. **Supabase project:** create one, then apply `supabase/schema.sql` to its database (SQL editor
+   or `supabase db push`), followed by **every** `supabase/migrate-*.sql` file — the base schema
+   alone is missing most features (e.g. it can't create a board at all, since that RPC only
+   exists in `migrate-custom-stages.sql`). Apply them in this order — later ones depend on
+   earlier ones, per each file's own header comment:
+   1. `migrate-board-gantt.sql`
+   2. `migrate-gantt-planning.sql`
+   3. `migrate-custom-stages.sql`
+   4. `migrate-task-hierarchy.sql`
+   5. `migrate-nested-timeline.sql`
+   6. `migrate-board-canvas-link.sql`
+   7. `migrate-canvas-folders.sql`
+   8. `migrate-document-links.sql`
+   9. `migrate-sidebar-realtime.sql`
+   10. `migrate-calendar-events.sql`
+   11. `migrate-calendar-event-ranges.sql`
+   12. `migrate-card-calendar-mode.sql`
+   13. `migrate-board-end-date.sql`
+   14. `migrate-board-color.sql`
+   15. `migrate-board-copy.sql`
+
+   All of them are written to be safe to rerun, so applying the whole list again after a new one
+   is added won't touch existing data.
 3. **Auth providers:** enable Google and/or GitHub OAuth in Supabase Auth, with the production
    redirect URL set to `https://game-design-two.vercel.app/auth/callback`.
 4. **Environment:** create `.env.local` in the repo root:

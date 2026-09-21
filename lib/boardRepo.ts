@@ -22,6 +22,8 @@ export interface BoardCard {
   startDate?: string | null;
   deadline?: string | null;
   firmDeadline?: string | null;
+  /** Calendar shows this task on its end date only instead of spanning start → end. */
+  calendarEndOnly?: boolean;
   columnId?: string;
   parentId?: string | null;
   timelinePosition?: number;
@@ -40,7 +42,20 @@ export interface Board {
   id: string;
   name: string;
   color: string;
+  /** Manual override for the board's end date; null means "automatic" (see boardEndDate). */
+  endDateOverride: string | null;
   cols: BoardColumn[];
+}
+
+/** The board's own inferred finish date: the latest deadline among its tasks, or null with none set. */
+export function automaticBoardEndDate(board: Pick<Board, "cols">): string | null {
+  const deadlines = board.cols.flatMap((col) => col.cards.map((card) => card.deadline)).filter((d): d is string => !!d);
+  return deadlines.length ? deadlines.reduce((latest, d) => (d > latest ? d : latest)) : null;
+}
+
+/** The end date to show for a board: its manual override if set, otherwise the automatic one. */
+export function boardEndDate(board: Board): string | null {
+  return board.endDateOverride ?? automaticBoardEndDate(board);
 }
 
 interface CardRow {
@@ -58,6 +73,7 @@ interface CardRow {
   start_date?: string | null;
   deadline: string | null;
   firm_deadline?: string | null;
+  calendar_end_only?: boolean;
   position: number;
 }
 
@@ -66,7 +82,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
   const [boardsRes, colsRes, cardsRes] = await Promise.all([
     supabase
       .from("boards")
-      .select("id, name, color, position")
+      .select("*")
       .eq("project_id", workspaceId)
       .order("position", { ascending: true }),
     supabase
@@ -99,6 +115,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       startDate: r.start_date,
       deadline: r.deadline,
       firmDeadline: r.firm_deadline,
+      calendarEndOnly: !!r.calendar_end_only,
       columnId: r.column_id,
       parentId: r.parent_id ?? null,
       timelinePosition: r.timeline_position,
@@ -112,10 +129,11 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
     (colsByBoard.get(r.board_id) ?? colsByBoard.set(r.board_id, []).get(r.board_id)!).push(col);
   }
 
-  return ((boardsRes.data ?? []) as { id: string; name: string; color: string }[]).map((b) => ({
+  return ((boardsRes.data ?? []) as { id: string; name: string; color: string; end_date?: string | null }[]).map((b) => ({
     id: b.id,
     name: b.name,
     color: b.color,
+    endDateOverride: b.end_date ?? null,
     cols: colsByBoard.get(b.id) ?? [],
   }));
 }
@@ -129,7 +147,36 @@ export async function createBoard(workspaceId:string,name:string,stages:import('
   return board;
 }
 
-/** Append a column to a board. */
+/** Duplicate a board: its stages and every task (hierarchy and internal dependencies included).
+ *  Canvas links and milestones are intentionally not copied — see migrate-board-copy.sql. */
+export async function copyBoard(workspaceId: string, boardId: string): Promise<Board> {
+  const { data, error } = await supabase.rpc("copy_board", { p_project: workspaceId, p_board: boardId });
+  if (error) throw new Error(error.code === "PGRST202"
+    ? "Copying boards needs a database update. Apply the board-copy migration in Supabase."
+    : error.message);
+  const board = (await loadBoards(workspaceId)).find(b => b.id === data);
+  if (!board) throw new Error("Board was copied but could not be loaded. Refresh to retry.");
+  return board;
+}
+
+/** Set (or, with null, clear) a manual override for the board's end date; clearing reverts to the automatic latest-deadline date. */
+export async function updateBoardEndDate(id: string, date: string | null): Promise<void> {
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid end date.");
+  const { error } = await supabase.from("boards").update({ end_date: date }).eq("id", id).select("id").single();
+  if (error) throw new Error(error.code === "PGRST204" || error.code === "42703"
+    ? "The board end date needs a database update. Apply the board-end-date migration in Supabase."
+    : error.message);
+}
+
+/** Choose whether the calendar pins a multi-day task to its end date. Dates and status stay with the scheduling operation. */
+export async function updateCardCalendarMode(id: string, endOnly: boolean): Promise<void> {
+  const { error } = await supabase.from("board_cards").update({ calendar_end_only: endOnly }).eq("id", id).select("id").single();
+  if (error) throw new Error(error.code === "PGRST204" || error.code === "42703"
+    ? "The calendar setting needs a database update. Apply the card-calendar-mode migration in Supabase."
+    : error.message);
+}
+
+/** Append a column to a board. 
 export async function createColumn(
   workspaceId: string,
   boardId: string,
@@ -211,6 +258,7 @@ export async function updateCard(card: BoardCard): Promise<void> {
       start_date: card.startDate || null,
       firm_deadline: card.firmDeadline || null,
     }});
+  if (card.calendarEndOnly !== undefined) await updateCardCalendarMode(card.id, card.calendarEndOnly);
 }
 
 /**

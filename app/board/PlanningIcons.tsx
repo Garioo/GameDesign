@@ -7,6 +7,7 @@ type Name =
   | "close"
   | "grip"
   | "board"
+  | "calendar"
   | "timeline"
   | "arrowLeft"
   | "arrowRight";
@@ -18,6 +19,7 @@ const paths: Record<Name, string> = {
   close: "m6 6 12 12M6 18 18 6",
   grip: "M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01",
   board: "M4 4h6v16H4zM14 4h6v11h-6z",
+  calendar: "M3 5h18v16H3zM7 3v4M17 3v4M3 11h18M7 15h2M15 15h2",
   timeline: "M3 6h12v4H3zM9 14h12v4H9z",
   arrowLeft: "m14 6-6 6 6 6",
   arrowRight: "m10 6 6 6-6 6",

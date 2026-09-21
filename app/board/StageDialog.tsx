@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Board } from "@/lib/boardRepo";
+import { automaticBoardEndDate, updateBoardEndDate, type Board } from "@/lib/boardRepo";
+import { boardColor, BOARD_PALETTE } from "@/lib/boardColors";
 import {
   loadStageSnapshot,
   saveBoardStages,
@@ -29,11 +30,15 @@ function addBasicStages(existing: StageDraft[] = []): StageDraft[] {
 export default function StageDialog({
   project,
   board,
+  boards,
   onClose,
   onSaved,
 }: {
   project: string;
   board: Board | null;
+  /** Every board in the workspace, so the board-color picker can preview/compare against the
+   *  same auto-assigned palette color shown elsewhere (sidebar, calendar, kanban, gantt). */
+  boards: Board[];
   onClose: () => void;
   onSaved: (id: string) => Promise<void>;
 }) {
@@ -53,6 +58,16 @@ export default function StageDialog({
     [transfers, setTransfers] = useState<Record<string, string>>({}),
     [conflict, setConflict] = useState(false);
   const [original, setOriginal] = useState<StageDraft[]>(board ? stages : []);
+  const [endDateMode, setEndDateMode] = useState<"auto" | "custom">(board?.endDateOverride ? "custom" : "auto");
+  const [endDate, setEndDate] = useState(board?.endDateOverride ?? "");
+  const [savedEndDateOverride, setSavedEndDateOverride] = useState<string | null>(board?.endDateOverride ?? null);
+  // Preview the swatch with the same effective color shown elsewhere (sidebar/calendar/gantt) —
+  // the board's own custom color if it has one, otherwise its auto-assigned palette color (or,
+  // for a brand-new board, the palette color it would get once created).
+  const [boardColorValue, setBoardColorValue] = useState(() =>
+    board ? boardColor(board, boards) : BOARD_PALETTE[boards.length % BOARD_PALETTE.length],
+  );
+  const [savedColor, setSavedColor] = useState(boardColorValue);
   const dialog = useRef<HTMLDialogElement>(null),
     dragged = useRef<string | null>(null);
   const closeRef = useRef(onClose);
@@ -80,6 +95,14 @@ export default function StageDialog({
       setOriginal(next);
       setTransfers({});
       setConflict(false);
+      setEndDateMode(s.board.end_date ? "custom" : "auto");
+      setEndDate(s.board.end_date ?? "");
+      setSavedEndDateOverride(s.board.end_date ?? null);
+      if (s.board.color) {
+        const effective = boardColor({ id: board.id, color: s.board.color }, boards);
+        setBoardColorValue(effective);
+        setSavedColor(effective);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -107,6 +130,16 @@ export default function StageDialog({
     });
   }
   const removed = original.filter((s) => !stages.some((n) => n.id === s.id));
+  // The freshest deadlines available: the just-loaded snapshot's cards for this board, falling back
+  // to the board prop (e.g. while creating, or before the snapshot has loaded).
+  const automaticEnd = baseline && board
+    ? (() => {
+        const colIds = new Set(baseline.schedule.columns.filter((c) => c.board_id === board.id).map((c) => c.id));
+        const deadlines = baseline.schedule.cards.filter((c) => colIds.has(c.column_id)).map((c) => c.deadline).filter((d): d is string => !!d);
+        return deadlines.length ? deadlines.reduce((latest, d) => (d > latest ? d : latest)) : null;
+      })()
+    : board ? automaticBoardEndDate(board) : null;
+  const formatEnd = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
   const count = (id: string) =>
     baseline?.schedule.cards.filter((c) => c.column_id === id).length ??
     board?.cols.find((c) => c.id === id)?.cards.length ??
@@ -132,6 +165,10 @@ export default function StageDialog({
       setError("Choose where to move the tasks from each removed stage.");
       return;
     }
+    if (endDateMode === "custom" && !endDate) {
+      setError("Choose an end date, or switch back to Automatic.");
+      return;
+    }
     setSaving(true);
     try {
       const id = await saveBoardStages(
@@ -141,7 +178,11 @@ export default function StageDialog({
         name,
         stages,
         transfers,
+        boardColorValue !== savedColor ? boardColorValue : undefined,
       );
+      // The end date lives outside the stage snapshot, so only write it when it changed.
+      const nextOverride = endDateMode === "custom" ? endDate : null;
+      if (nextOverride !== savedEndDateOverride) await updateBoardEndDate(id, nextOverride);
       await onSaved(id);
       closeRef.current();
     } catch (e) {
@@ -191,18 +232,68 @@ export default function StageDialog({
           </button>
         </header>
         <div className="stage-dialog-content">
-          <label className="stage-board-name">
-            Board name
-            <input
-              required
-              maxLength={120}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={loading || saving}
-              placeholder="Name your board"
-              autoFocus
-            />
-          </label>
+          <div className="stage-name-color">
+            <label className="stage-board-name">
+              Board name
+              <input
+                required
+                maxLength={120}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={loading || saving}
+                placeholder="Name your board"
+                autoFocus
+              />
+            </label>
+            <label className="stage-board-color">
+              Color
+              <input
+                type="color"
+                aria-label="Board color"
+                value={boardColorValue}
+                disabled={saving}
+                onChange={(e) => setBoardColorValue(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="stage-end-date">
+            <span className="stage-end-date-label">End date</span>
+            <label className="stage-end-date-option">
+              <input
+                type="radio"
+                name="end-date-mode"
+                checked={endDateMode === "auto"}
+                disabled={saving}
+                onChange={() => setEndDateMode("auto")}
+              />
+              <span>
+                Automatic — last task&apos;s deadline
+                <small>{loading ? "Loading…" : automaticEnd ? formatEnd(automaticEnd) : "No dated tasks yet"}</small>
+              </span>
+            </label>
+            <label className="stage-end-date-option">
+              <input
+                type="radio"
+                name="end-date-mode"
+                checked={endDateMode === "custom"}
+                disabled={saving}
+                onChange={() => setEndDateMode("custom")}
+              />
+              <span>
+                Custom date
+                {endDateMode === "custom" && (
+                  <input
+                    type="date"
+                    className="stage-end-date-input"
+                    aria-label="Board end date"
+                    value={endDate}
+                    disabled={saving}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                )}
+              </span>
+            </label>
+          </div>
           {loading ? (
             <p role="status">Loading stages…</p>
           ) : (

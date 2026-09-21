@@ -712,8 +712,12 @@ create table if not exists public.boards (
   id         uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
   name       text not null default 'Untitled board',
-  color      text not null default '#cf6a2c',
+  -- Matches the literal save_board_stages() actually inserts (and lib/boardColors.ts's
+  -- DEFAULT_BOARD_COLOR), so a board created via any path is recognized as "still unset" and
+  -- gets an auto-assigned palette color instead of being treated as deliberately gray.
+  color      text not null default '#64748b',
   position   int  not null default 0,
+  end_date   date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

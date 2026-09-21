@@ -201,3 +201,9 @@
 @media (prefers-reduced-motion: no-preference) {
   .topbar { animation: fadeIn .5s ease both; }
 }
+
+@media (max-width: 600px) {
+  .dock { overflow-x: auto; }
+  .dock-nav { gap: 0; }
+  .dock-nav .dock-item { flex-direction: column; gap: 4px; padding: 6px 8px; font-size: 10px; flex-shrink: 0; }
+}

@@ -13,7 +13,7 @@ export default function PlanningHeader({
 }: {
   createLabel?: string;
   title: string;
-  mode: "board" | "timeline";
+  mode: "board" | "timeline" | "calendar";
   boardId?: string;
   onNavigation: () => void;
   onCreate: () => void;
@@ -48,6 +48,9 @@ export default function PlanningHeader({
           >
             <PlanningIcon name="timeline" />
             Timeline
+          </Link>
+          <Link href={`/calendar${suffix}`} aria-current={mode === "calendar" ? "page" : undefined}>
+            <PlanningIcon name="calendar" />Calendar
           </Link>
         </nav>
         {canEdit && (

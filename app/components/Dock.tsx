@@ -31,6 +31,11 @@ const TableIcon = ({ className }: IconProps) => (
     <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 7h5M10 12h7M7 17h7" />
   </svg>
 );
+const CalendarIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 11h18M7 15h2M15 15h2" />
+  </svg>
+);
 const Plus = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M12 5v14M5 12h14" />
@@ -42,12 +47,14 @@ const ITEMS: { id: string; label: string; href?: string; Icon: ComponentType<Ico
   { id: "pages", label: "Pages", href: "/doc", Icon: Doc },
   { id: "canvas", label: "Canvas", href: "/doc/canvas", Icon: Grid },
   { id: "board", label: "Board", href: "/board", Icon: Columns },
+  { id: "calendar", label: "Calendar", href: "/calendar", Icon: CalendarIcon },
   { id: "table", label: "Gantt", href: "/table", Icon: TableIcon },
 ];
 
 function activeFromPath(path: string): string {
   if (path.startsWith("/doc/canvas")) return "canvas";
   if (path.startsWith("/doc")) return "pages";
+  if (path.startsWith("/calendar")) return "calendar";
   if (path.startsWith("/table")) return "table";
   if (path.startsWith("/board")) return "board";
   if (path.startsWith("/home")) return "home";
@@ -96,14 +103,14 @@ export default function Dock({ leading, onNew, newLabel = "New", tools, planning
     >
       <nav className="dock">
         {showNav ? (
-          <div key="nav" className="dock-row">
+          <div key="nav" className="dock-row dock-nav">
             {leading}
             {leading && <span className="dock-divider" />}
             {ITEMS.map(({ id, label, href, Icon }) => (
               <button
                 key={id}
                 className={"dock-item" + (id === active ? " is-active" : "")}
-                onClick={href && id !== active ? () => router.push(href + (planningBoardId && (id==='board'||id==='table') ? `?board=${encodeURIComponent(planningBoardId)}` : '')) : undefined}
+                onClick={href && id !== active ? () => router.push(href + (planningBoardId && (id==='board'||id==='table'||id==='calendar') ? `?board=${encodeURIComponent(planningBoardId)}` : '')) : undefined}
               >
                 <Icon className="dock-icon" /> {label}
               </button>

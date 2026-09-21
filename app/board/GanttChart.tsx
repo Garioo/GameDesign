@@ -7,7 +7,8 @@ import {
   type CSSProperties,
   type PointerEvent as PE,
 } from "react";
-import type { Board, BoardCard } from "@/lib/boardRepo";
+import { boardEndDate, type Board, type BoardCard } from "@/lib/boardRepo";
+import { boardColor } from "@/lib/boardColors";
 import { dayKey, dayNumber, localToday, barRange } from "@/lib/gantt";
 import {
   loadSchedule,
@@ -1073,9 +1074,12 @@ export default function GanttChart({
                   onClick={() => toggle(b.id)}
                   aria-expanded={!view.collapsed.includes(b.id) || filtering}
                 >
-                  {view.collapsed.includes(b.id) && !filtering ? "▸" : "▾"} {b.name}
+                  {view.collapsed.includes(b.id) && !filtering ? "▸" : "▾"}
+                  <i className="gantt-group-dot" style={{ background: boardColor(b, boards) }} />
+                  {b.name}
                   <small>
                     {b.cols.reduce((n, c) => n + c.cards.length, 0)} tasks
+                    {boardEndDate(b) ? ` · Ends ${label(dayNumber(boardEndDate(b)!))}` : ""}
                   </small>
                 </button>
                 {canEdit && (
@@ -1128,7 +1132,7 @@ export default function GanttChart({
                                 onDragStart={e => { e.dataTransfer.setData('text/plain', card.id); e.dataTransfer.effectAllowed = 'move'; setRowDrag(card.id); }}
                                 onDragEnd={() => { setRowDrag(null); setDropTarget(null); }}
                                 onKeyDown={e => { if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); const target = group[siblingIndex + (e.key === 'ArrowUp' ? -1 : 1)]; if (target) void reorder(card, target.id); } }}>⠿</button>}
-                              {children.length > 0 ? <button className="task-disclosure" aria-label={`Toggle subtasks for ${card.title}`} aria-expanded={!view.collapsed.includes(card.id) || filtering} onClick={() => toggle(card.id)}>{view.collapsed.includes(card.id) && !filtering ? "▸" : "▾"}</button> : <span className="task-branch">{depth ? "└" : ""}</span>}
+                              {children.length > 0 ? <button className="task-disclosure" aria-label={`Toggle subtasks for ${card.title}`} aria-expanded={!view.collapsed.includes(card.id) || filtering} onClick={() => toggle(card.id)}>{view.collapsed.includes(card.id) && !filtering ? "▸" : "▾"}</button> : depth > 0 ? <span className={`task-branch${siblingIndex === group.length - 1 ? " branch-last" : " branch-mid"}`} aria-hidden="true" /> : <span className="task-branch" />}
                               <button className="gantt-task-open" onClick={() => { setSelected(card.id); onOpen(card); }}>
                                 <i className="gantt-task-dot" style={{ background: c.color }} />
                                 <span className="gantt-task-copy">
@@ -1165,7 +1169,7 @@ export default function GanttChart({
                                 )}
                               {range ? (
                                 <div
-                                  className={`gantt-bar${preview ? " dragging" : ""}`}
+                                  className={`gantt-bar${preview ? " dragging" : ""}${children.length ? " parent-bar" : ""}${depth ? " subtask-bar" : ""}`}
                                   style={
                                     {
                                       left: `${range.left}%`,
