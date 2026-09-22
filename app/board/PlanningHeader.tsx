@@ -47,7 +47,7 @@ export default function PlanningHeader({
             aria-current={mode === "timeline" ? "page" : undefined}
           >
             <PlanningIcon name="timeline" />
-            Timeline
+            Gantt
           </Link>
           <Link href={`/calendar${suffix}`} aria-current={mode === "calendar" ? "page" : undefined}>
             <PlanningIcon name="calendar" />Calendar

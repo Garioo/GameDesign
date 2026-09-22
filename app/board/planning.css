@@ -292,24 +292,6 @@
 .planning-menu button {
   text-align: left;
 }
-.planning-app .planning-calendar {
-  display: block !important;
-  padding: 8px;
-  width: 240px;
-}
-.planning-calendar button.cal-day {
-  min-height: 28px;
-  border: 0;
-  background: none;
-  padding: 0;
-}
-.planning-calendar .cal-title {
-  font-size: 13px;
-}
-.planning-calendar .cal-head button {
-  border: 0;
-  min-height: 30px;
-}
 .planning-app .board-scroll {
   padding: 4px 12px 12px;
   flex: 1;
@@ -542,13 +524,6 @@
   height: 24px;
   border-radius: 50%;
   font-size: 9px;
-}
-.planning-app .card-deadline:not(.overdue):not(.soon) {
-  font-size: 11px;
-  padding: 3px 5px;
-  background: var(--bg);
-  color: var(--ink-soft);
-  border-radius: 4px;
 }
 .planning-app .card-priority {
   font-size: 10px;
@@ -1331,8 +1306,7 @@
     margin: auto;
   }
 }
-.planning-app .card-priority,
-.planning-app .card-deadline:not(.overdue):not(.soon) {
+.planning-app .card-priority {
   font-size: 12px;
 }
 .planning-app .card-tags .card-priority {
@@ -1346,10 +1320,6 @@
 .planning-app .card-tags .card-priority.high { background: #fbe6dc; color: #934b32; }
 .planning-app .card-tags .card-priority.medium { background: #f7ecd2; color: #7a5614; }
 .planning-app .card-tags .card-priority.low { background: #e6f1e8; color: #285c38; }
-.planning-app .card-deadline.overdue {
-  color: #a84436;
-  background: #fff0ed;
-}
 
 .timeline-period-controls { display: flex; align-items: center; gap: 3px; margin-left: auto; }
 .planning-app .planning-controls .planning-overflow { margin-left: 4px; }
@@ -1441,3 +1411,8 @@
 @media (max-width: 700px) {
   .planning-app .gantt-task-label.hierarchy-label { padding-left: calc(6px + min(var(--task-depth, 0) * 14px, 42px)) !important; }
 }
+
+.board-phase-summary {font-size:12px;color:var(--ink-soft);line-height:1.6;padding:0 24px 12px}
+.board-phase-summary a,a.board-phase-summary {color:var(--ink-soft);text-decoration:none}
+a.board-phase-summary {display:block;padding:4px 0 0}
+.board-phase-summary a:hover,a.board-phase-summary:hover {color:var(--ember);text-decoration:underline}

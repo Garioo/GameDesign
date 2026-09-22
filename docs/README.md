@@ -65,21 +65,18 @@ events; multi-day events span each covered date and wrap at week boundaries. Wor
 and editors can create, edit, and delete them. Event times are shared wall-clock
 times, displayed as entered (no attendee time-zone conversion).
 
-Board tasks appear on the same grid. The **All boards** option (default) shows tasks from every
-board, each colored by its board (`lib/boardColors.ts` assigns a palette color to boards still on
-the default gray, and the sidebar dots use the same colors). In the default **Scheduled period**
-mode a task spans from its start date to its deadline; the other date modes pin it to one date.
-A task can opt out of spanning: apply `supabase/migrate-card-calendar-mode.sql`, then tick
-**Calendar: show on end date only** in the task's edit dialog and the calendar pins that task
-to its scheduled end instead.
+Board tasks don't appear on the Calendar: a task carries only a priority (High/Medium/Low), not
+dates — scheduling lives at the phase level instead (see **Phase planning** below). The
+`board_cards.start_date`/`deadline`/`firm_deadline`/`calendar_end_only` columns and their RPC
+support still exist for backward compatibility, but the app no longer reads or writes them for
+tasks.
 
-Each board also has an end date, shown next to its task count in All boards (Board page) and
-in the Gantt's per-board group header (`lib/boardRepo.ts`'s `boardEndDate`). By default it's
-automatic — the latest deadline among the board's tasks — or it can be pinned to a specific
-date from **End date** in the board's Manage stages dialog. Apply
-`supabase/migrate-board-end-date.sql` first; the board group headers in both the kanban and
-Gantt All boards views also carry each board's color (`boardColor` from `lib/boardColors.ts`),
-matching the sidebar and calendar.
+Each board also has an end date, shown next to its task count in All boards (Board page). By
+default it's automatic — the latest of any legacy task deadline still on the board, which is
+null once a board's tasks have all been created or edited since this change — or it can be
+pinned to a specific date from **End date** in the board's Manage stages dialog. Apply
+`supabase/migrate-board-end-date.sql` first; the board group headers in the kanban view carry
+each board's color (`boardColor` from `lib/boardColors.ts`), matching the sidebar.
 
 A board's own color can be set (not just auto-assigned) from the same dialog — apply
 `supabase/migrate-board-color.sql` for this.
@@ -88,3 +85,41 @@ A board's own color can be set (not just auto-assigned) from the same dialog —
 a board: its stages and every task, including subtask hierarchy and any dependency that's
 fully internal to the board. Canvas links and milestones are deliberately not copied — see the
 comment at the top of `supabase/migrate-board-copy.sql`, which this needs applied first.
+
+
+## Phase planning
+
+Apply `supabase/migrate-phase-planning.sql` **once, before deploying this client**,
+following the existing board-end-date, card-calendar-mode, nested-timeline, and
+board-copy migrations. It runs in one transaction and preserves task dates,
+legacy task dependencies, milestones, and calendar data. Take the usual database
+backup before applying a production migration. Do not rerun the older Gantt or
+board-copy migrations afterward: phase planning wraps their RPCs.
+
+`/table` is an independent Gantt workspace. Each board has one main phase; each
+category used on that board automatically creates a subphase. Board links include
+`?board=<id>&category=<id>` to show the matching tasks. Shared category names are
+workspace-wide; scheduling is per board/category pair. Progress counts every card
+(including subtasks) equally, based on completed workflow stages.
+
+`planning_phases` holds the board's independent baseline dates and category date
+windows. `phase_snapshot` returns effective parent ranges, task counts, and links;
+`phase_mutate` handles date edits, movement, renaming, dependencies, and undo under
+a workspace lock with snapshot conflict detection. Only editor-authorized RPCs can
+write phase schedules. Parent ranges expand around active subphases. Whole-phase
+movement also shifts retained inactive subphase windows so they remain aligned
+when tasks return. Phase changes never move task dates.
+
+The initial migration seeds dates from existing tasks and honors the board end-date
+override. New category subphases seed dates when first used; later task date changes
+do not change their schedule. Empty subphases retain their dates and suspend links.
+Returning links are validated individually; conflicts stay suspended with a reason
+and a **Retry link** action. Deleting a category removes its subphases and links;
+tasks remain uncategorized. Copy board includes phase dates and only dependencies
+whose endpoints both belong to that board.
+
+Verification: `node --test tests/*.test.cjs`, `npx tsc --noEmit`, and `npm run build`.
+With a local server and Playwright installed, run `tests/browser-timeline.cjs`,
+`tests/browser-board.cjs`, and `tests/browser-calendar.cjs` using `APP_URL` and,
+if needed, `PLAYWRIGHT_MODULE`. These browser checks intercept Supabase HTTP
+requests and execute mutations only in an isolated PGlite database.

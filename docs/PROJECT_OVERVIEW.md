@@ -126,6 +126,7 @@ trade-off between "feels instant" and "doesn't hammer the database."
    13. `migrate-board-end-date.sql`
    14. `migrate-board-color.sql`
    15. `migrate-board-copy.sql`
+   16. `migrate-phase-planning.sql` — apply once before deploying the phase-only Gantt client; keep last because it wraps the task and board-copy RPCs.
 
    All of them are written to be safe to rerun, so applying the whole list again after a new one
    is added won't touch existing data.

@@ -8,7 +8,8 @@ import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { useCloseDetailsOnOutsideClick } from "@/lib/useCloseDetailsOnOutsideClick";
 import CalendarView from "../calendar/CalendarView";
 import { boardColor } from "@/lib/boardColors";
-import GanttChart from "./GanttChart";
+import Link from "next/link";
+import { loadPhases, phaseRangeLabel, type PhaseSnapshot } from "@/lib/phaseRepo";
 import PlanningHeader from "./PlanningHeader";
 import StageDialog from "./StageDialog";
 import {PlanningIcon} from "./PlanningIcons";
@@ -30,7 +31,6 @@ import {
   deleteCard,
   listCategories,
   loadBoards,
-  updateCardCalendarMode,
   moveCard,
   openBoardCardCanvas,
   type Board as BoardData,
@@ -96,77 +96,7 @@ const css = `
   .sidebar-new:hover { color: var(--ember); background: var(--ember-tint); }
   .sidebar-new svg { width: 13px; height: 13px; }
 
-  /* ── sidebar calendar ── */
-  .sidebar-cal { padding: 4px 8px 0; }
-  .cal-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 4px 2px 8px;
-  }
-  .cal-title { font-size: 12.5px; font-weight: 700; color: var(--ink); }
-  .cal-nav-btn {
-    display: grid; place-items: center;
-    width: 22px; height: 22px; border-radius: 6px;
-    border: none; background: none; color: var(--ink-faint); cursor: pointer;
-    transition: background .12s, color .12s;
-  }
-  .cal-nav-btn:hover { background: var(--line-soft); color: var(--ink); }
-  .cal-nav-btn svg { width: 13px; height: 13px; }
-  .cal-weekdays, .cal-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr);
-  }
-  .cal-weekday {
-    font-size: 10px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase;
-    text-align: center; padding-bottom: 4px;
-  }
-  .cal-day {
-    position: relative;
-    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-    font-size: 11.5px; color: var(--ink-soft); border-radius: 8px;
-    border: none; background: none; cursor: pointer;
-    transition: background .12s, color .12s;
-  }
-  .cal-day:hover { background: var(--line-soft); color: var(--ink); }
-  .cal-day.other-month { color: var(--ink-faint); opacity: 0.45; }
-  .cal-day.today { font-weight: 700; color: var(--ember-deep); }
-  .cal-day.selected { background: var(--ember); color: #fff; font-weight: 600; }
-  .cal-day.selected:hover { background: var(--ember); color: #fff; }
-  .cal-day-dot {
-    position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
-    width: 4px; height: 4px; border-radius: 50%; background: var(--ember);
-  }
-  .cal-day.selected .cal-day-dot { background: #fff; }
-
-  .cal-due { margin-top: 10px; padding: 0 2px; }
-  .cal-due-head {
-    display: flex; align-items: center; justify-content: space-between;
-    font-size: 11px; font-weight: 700; color: var(--ink-soft);
-    text-transform: uppercase; letter-spacing: 0.06em;
-    padding: 0 0 6px;
-  }
-  .cal-due-clear {
-    font: inherit; font-size: 11px; color: var(--ink-faint);
-    background: none; border: none; cursor: pointer; text-transform: none; letter-spacing: normal;
-  }
-  .cal-due-clear:hover { color: var(--ember); }
-  .cal-due-list { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
-  .cal-due-item {
-    display: block; width: 100%; text-align: left; font: inherit; font-size: 12px;
-    color: var(--ink); background: var(--surface); border: 1px solid var(--line);
-    border-radius: 7px; padding: 6px 8px; cursor: pointer;
-    transition: border-color .12s, background .12s;
-  }
-  .cal-due-item:hover { border-color: var(--ember-tint2); background: var(--ember-tint); }
   .cal-due-empty { font-size: 12px; color: var(--ink-faint); padding: 4px 0; }
-
-  /* ── card deadline badge ── */
-  .card-deadline {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
-    background: var(--line-soft); color: var(--ink-faint);
-  }
-  .card-deadline svg { width: 11px; height: 11px; }
-  .card-deadline.overdue { background: #fbe2dc; color: #b9421f; }
-  .card-deadline.soon { background: #f7ecd2; color: #7a5614; }
 
   .main-col {
     flex: 1; min-width: 0;
@@ -445,7 +375,6 @@ const css = `
     .sidebar-name, .sidebar-label { display: none; }
     .sidebar-item { justify-content: center; padding: 9px; }
     .sidebar-new svg { width: 14px; height: 14px; }
-    .sidebar-cal { display: none; }
   }
 `;
 
@@ -467,24 +396,9 @@ const Filter = ({ className, style }: IconProps) => (
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
   </svg>
 );
-const ChevronLeft = ({ className, style }: IconProps) => (
-  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m15 18-6-6 6-6" />
-  </svg>
-);
-const ChevronRight = ({ className, style }: IconProps) => (
-  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m9 18 6-6-6-6" />
-  </svg>
-);
 const Trash = ({ className, style }: IconProps) => (
   <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M10 11v6M14 11v6" />
-  </svg>
-);
-const Flag = ({ className, style }: IconProps) => (
-  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 22V4a1 1 0 0 1 1-1h11.5a.5.5 0 0 1 .4.8L13 9l3.9 5.2a.5.5 0 0 1-.4.8H5" />
   </svg>
 );
 
@@ -509,15 +423,8 @@ function ownersByIds(people: Person[], ids: string[] | undefined): Person[] {
     .filter((p): p is Person => p !== null);
 }
 
-const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function pad2(n: number) { return String(n).padStart(2, "0"); }
-function dateKey(y: number, m: number, d: number) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
-function todayKey() {
-  const d = new Date();
-  return dateKey(d.getFullYear(), d.getMonth(), d.getDate());
-}
 function formatDeadline(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return `${MONTH_NAMES[m - 1].slice(0, 3)} ${d}`;
@@ -567,14 +474,6 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
           ) : (
             <span className="card-owner-name" style={{ color: "var(--ink-faint)" }}>Unassigned</span>
           )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          {card.deadline && (
-            <span className={`card-deadline${card.deadline < todayKey() ? " overdue" : ""}`}>
-              <Flag /> {formatDeadline(card.deadline)}
-            </span>
-          )}
-
         </div>
       </div>
     </div>
@@ -709,12 +608,9 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
+  const [categoryId, setCategoryId] = useState(card.categoryId ?? "");
   const [priority, setPriority] = useState(card.priority ?? "");
   const [ownerIds, setOwnerIds] = useState<string[]>(card.ownerIds ?? []);
-  const [deadline, setDeadline] = useState(card.deadline ?? "");
-  const [startDate, setStartDate] = useState(card.startDate ?? "");
-  const [firmDeadline, setFirmDeadline] = useState(card.firmDeadline ?? "");
-  const [calendarEndOnly, setCalendarEndOnly] = useState(!!card.calendarEndOnly);
   const [parentId, setParentId] = useState(card.parentId ?? "");
   const childTasks = boards.flatMap(b => b.cols.flatMap(c => c.cards)).filter(t => t.parentId === card.id);
   const [columnId, setColumnId] = useState(card.columnId ?? "");
@@ -789,11 +685,9 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="modal-field">
             <label className="modal-label">Category</label>
-            <select className="modal-select" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <select aria-label="Task category" className="modal-select" value={categoryId} onChange={(e) => {setCategoryId(e.target.value);setKind(categories.find(c=>c.id===e.target.value)?.name??'');}}>
               <option value="">—</option>
-              {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-              {/* a card may carry a category that was since deleted/renamed */}
-              {kind && !categories.some((c) => c.name === kind) && <option value={kind}>{kind}</option>}
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="modal-field">
@@ -823,16 +717,6 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
             ))}
           </div>
         </div>
-        <div className="modal-field">
-          <label className="modal-label" htmlFor="card-start">Start date</label>
-          <input id="card-start" type="date" className="modal-input" value={startDate} max={deadline || undefined} onChange={(e) => setStartDate(e.target.value)} />
-        </div>
-        <div className="modal-field">
-          <label className="modal-label" htmlFor="card-deadline">Scheduled end</label>
-          <input id="card-deadline" min={startDate || undefined} type="date" className="modal-input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-        </div>
-        <div className="modal-field"><label className="modal-label" htmlFor="card-firm">Firm deadline (optional)</label><input id="card-firm" type="date" className="modal-input" value={firmDeadline} onChange={e=>setFirmDeadline(e.target.value)}/></div>
-        {startDate && deadline && startDate !== deadline && <div className="modal-field"><label className="modal-check"><input type="checkbox" checked={calendarEndOnly} onChange={e=>setCalendarEndOnly(e.target.checked)}/><span>Calendar: show on end date only<small>When this task runs over several days, the calendar pins it to its scheduled end instead of spanning the whole period.</small></span></label></div>}
         <div className="modal-field"><label className="modal-label" htmlFor="card-status">Stage</label><select id="card-status" className="modal-select" value={columnId} onChange={e=>setColumnId(e.target.value)}>{columns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         <div className="modal-field">
           <button className="modal-cancel" disabled={canvasBusy || saving} onClick={chooseCanvas}>
@@ -865,9 +749,7 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
             setSaving(true); setSaveError("");
             try {
               if (!baseline) return;
-              await onSave({ ...card, title, sub, kind, priority: priority || null, ownerIds, columnId, parentId: parentId || null,
-                startDate: startDate || null, deadline: deadline || null, firmDeadline: firmDeadline || null,
-                calendarEndOnly: !!(startDate && deadline && startDate !== deadline) && calendarEndOnly }, baseline);
+              await onSave({ ...card, title, sub, kind, categoryId: categoryId || null, priority: priority || null, ownerIds, columnId, parentId: parentId || null }, baseline);
               onClose();
             } catch (e) { setSaveError(e instanceof Error ? e.message : "Could not save card."); }
             finally { setSaving(false); }
@@ -883,7 +765,6 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
 export default function BoardWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
-  const isGantt = pathname.startsWith("/table");
   const isCalendar = pathname.startsWith("/calendar");
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -894,7 +775,7 @@ export default function BoardWorkspace() {
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [allBoards, setAllBoards] = useState(true);
-  const [timelineBoardId,setTimelineBoardId]=useState<string|undefined>();
+  const [phaseSnapshot,setPhaseSnapshot]=useState<PhaseSnapshot|null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [stageBoard,setStageBoard]=useState<BoardData|null|undefined>(undefined);
   const [search,setSearch]=useState('');
@@ -906,16 +787,10 @@ export default function BoardWorkspace() {
   const [boardActionError,setBoardActionError]=useState('');
   const [shareCopied,setShareCopied]=useState(false);
   const [undoBusy,setUndoBusy]=useState(false);
-  const [ganttBoardRequest,setGanttBoardRequest]=useState<{id:string;sequence:number}|null>(null);
   // One board has nothing to combine, so the grouped view needs at least two.
   const combined = allBoards && boards.length > 1;
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
-  const [calMonth, setCalMonth] = useState(() => {
-    const d = new Date();
-    return { y: d.getFullYear(), m: d.getMonth() };
-  });
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
   const wsRef = useRef<string | null>(null);
@@ -932,16 +807,21 @@ export default function BoardWorkspace() {
         setSession(s);
         wsRef.current = s.workspaceId;
 
-        const [loaded, members, cats] = await Promise.all([
+        const [loaded, members, cats, phases] = await Promise.all([
           loadBoards(s.workspaceId),
           listMembers(s.workspaceId),
           listCategories(s.workspaceId),
+          loadPhases(s.workspaceId),
         ]);
         if (cancelled) return;
         setBoards(loaded);
+        setPhaseSnapshot(phases);
         let remembered: string | null = null;
         try { remembered = localStorage.getItem(`gd-board:${s.workspaceId}`); } catch { /* optional preference */ }
-        const requested=new URLSearchParams(window.location.search).get('board');
+        const params=new URLSearchParams(window.location.search);
+        const requested=params.get('board');
+        if(requested)setAllBoards(false);
+        setFilterKind(params.get('category'));
         setActiveBoardId(loaded.find(b => b.id === (requested||remembered))?.id ?? loaded[0]?.id ?? null);
         setPeople(members);
         setCategories(cats);
@@ -959,10 +839,10 @@ export default function BoardWorkspace() {
   useCloseDetailsOnOutsideClick();
 
   useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null,
-    ["boards", "board_columns", "board_cards", "board_categories"], async () => {
+    ["boards", "board_columns", "board_cards", "board_categories", "planning_phases", "phase_dependencies"], async () => {
       if (!session) return;
-      const [fresh, cats] = await Promise.all([loadBoards(session.workspaceId), listCategories(session.workspaceId)]);
-      setBoards(fresh); setCategories(cats);
+      const [fresh, cats, phases] = await Promise.all([loadBoards(session.workspaceId), listCategories(session.workspaceId), loadPhases(session.workspaceId)]);
+      setBoards(fresh); setCategories(cats); setPhaseSnapshot(phases);
       setActiveBoardId(cur => cur && fresh.some(b => b.id === cur) ? cur : fresh[0]?.id ?? null);
     });
 
@@ -1004,8 +884,7 @@ export default function BoardWorkspace() {
   }, [session, activeBoardId]);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
-  // Topbar crumb: the gantt reports its own selection (undefined = all boards).
-  const topbarBoard = isGantt ? boards.find((b) => b.id === timelineBoardId) : combined ? undefined : activeBoard;
+  const topbarBoard = combined ? undefined : activeBoard;
   // Same presence fallback as the doc/canvas pages: show yourself when alone.
   const onlineList: PresenceUser[] =
     online.length > 0
@@ -1117,7 +996,7 @@ export default function BoardWorkspace() {
   async function handleAddCard(colId: string, title: string) {
     if (!wsRef.current) throw new Error("Workspace is not ready yet.");
     try {
-      const card = await createCard(wsRef.current, colId, title, selectedDate ?? null);
+      const card = await createCard(wsRef.current, colId, title);
       setCols((prev) => prev.map((c) =>
         c.id !== colId ? c : c.cards.some((k) => k.id === card.id) ? c : { ...c, cards: [...c.cards, card] }
       ));
@@ -1130,16 +1009,13 @@ export default function BoardWorkspace() {
   async function handleSaveCard(updated: CardData, snapshot: ScheduleSnapshot) {
     if (session?.role === "viewer") throw new Error("You need editor access to change cards.");
     if (!session) return;
-    setScheduleResult(await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{...((snapshot.cards.find(c=>c.id===updated.id)?.parent_id??null)!==(updated.parentId??null)?{parent_id:updated.parentId??null}:{}),id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId,start_date:updated.startDate??null,deadline:updated.deadline??null,firm_deadline:updated.firmDeadline??null}}));
-    // The calendar flag is plain card metadata outside the schedule snapshot; only write it when it changed.
-    const previous = boards.flatMap(b => b.cols.flatMap(c => c.cards)).find(c => c.id === updated.id);
-    if (!!updated.calendarEndOnly !== !!previous?.calendarEndOnly) await updateCardCalendarMode(updated.id, !!updated.calendarEndOnly);
+    setScheduleResult(await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{...((snapshot.cards.find(c=>c.id===updated.id)?.parent_id??null)!==(updated.parentId??null)?{parent_id:updated.parentId??null}:{}),id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,category_id:updated.categoryId??null,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId}}));
     setBoards(await loadBoards(session.workspaceId));
   }
 
-  async function refreshPlanning(){if(!session)return;const [fresh,cats]=await Promise.all([loadBoards(session.workspaceId),listCategories(session.workspaceId)]);setBoards(fresh);setCategories(cats);}
+  async function refreshPlanning(){if(!session)return;const [fresh,cats,phases]=await Promise.all([loadBoards(session.workspaceId),listCategories(session.workspaceId),loadPhases(session.workspaceId)]);setBoards(fresh);setCategories(cats);setPhaseSnapshot(phases);}
   function handleDeleteCard(card:CardData){if(!canEdit)return;setActionDialog({title:'Delete task?',description:`“${card.title}” and its scheduling relationships will be removed. Its subtasks become main tasks. Its linked canvas is kept.`,submit:async()=>{await deleteCard(card.id);await refreshPlanning();}});}
-  function handleDeleteBoard(board:BoardData){if(!canEdit)return;setActionDialog({title:'Delete board?',description:`“${board.name}” and all its tasks and board milestones will be removed. This cannot be undone.`,submit:async()=>{await deleteBoard(board.id);await refreshPlanning();}});}
+  function handleDeleteBoard(board:BoardData){if(!canEdit)return;setActionDialog({title:'Delete board?',description:`“${board.name}” and all its tasks, phase schedules, dependencies, and board milestones will be removed. This cannot be undone.`,submit:async()=>{await deleteBoard(board.id);await refreshPlanning();}});}
   async function handleCopyBoard(board:BoardData){
     if(!canEdit||!session)return;
     setBoardActionError('');
@@ -1148,7 +1024,6 @@ export default function BoardWorkspace() {
       setBoards(await loadBoards(session.workspaceId));
       setAllBoards(false);
       setActiveBoardId(copy.id);
-      setGanttBoardRequest({id:copy.id,sequence:Date.now()});
     }catch(e){setBoardActionError((e as Error).message);}
   }
 
@@ -1157,56 +1032,9 @@ export default function BoardWorkspace() {
     cards: c.cards.filter((k) =>
       k.title.toLowerCase().includes(search.toLowerCase()) &&
       (!ownerFilter || k.ownerIds.includes(ownerFilter)) &&
-      (!filterKind || k.kind === filterKind) &&
-      (!selectedDate || k.deadline === selectedDate)
+      (!filterKind || k.categoryId === filterKind)
     ),
   }));
-
-  /* ── calendar data ── */
-  const dueMap: Record<string, (CardData & { colId: string; colName: string })[]> = {};
-  for (const c of visibleCols) {
-    for (const k of c.cards) {
-      if (!k.deadline) continue;
-      (dueMap[k.deadline] ??= []).push({ ...k, colId: c.id, colName: c.name });
-    }
-  }
-
-  function shiftMonth(delta: number) {
-    setCalMonth((prev) => {
-      let m = prev.m + delta, y = prev.y;
-      if (m < 0) { m = 11; y -= 1; }
-      if (m > 11) { m = 0; y += 1; }
-      return { y, m };
-    });
-  }
-
-  function buildCalendarCells() {
-    const { y, m } = calMonth;
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const daysInPrevMonth = new Date(y, m, 0).getDate();
-    let firstWeekday = new Date(y, m, 1).getDay();
-    firstWeekday = (firstWeekday + 6) % 7; // Monday = 0
-
-    const cells: { key: string; day: number; otherMonth: boolean }[] = [];
-    for (let i = 0; i < firstWeekday; i++) {
-      const d = daysInPrevMonth - firstWeekday + 1 + i;
-      const pm = m === 0 ? 11 : m - 1, py = m === 0 ? y - 1 : y;
-      cells.push({ key: dateKey(py, pm, d), day: d, otherMonth: true });
-    }
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({ key: dateKey(y, m, d), day: d, otherMonth: false });
-    }
-    while (cells.length % 7 !== 0) {
-      const d = cells.length - (firstWeekday + daysInMonth) + 1;
-      const nm = m === 11 ? 0 : m + 1, ny = m === 11 ? y + 1 : y;
-      cells.push({ key: dateKey(ny, nm, d), day: d, otherMonth: true });
-    }
-    return cells;
-  }
-
-  const calCells = buildCalendarCells();
-  const today = todayKey();
-  const selectedDue = selectedDate ? (dueMap[selectedDate] ?? []) : [];
 
   if (loading || error) {
     return (
@@ -1224,11 +1052,11 @@ export default function BoardWorkspace() {
   return (
     <>
       <style>{css}</style>
-      <div className={`board-app planning-app${isGantt ? " gantt-mode" : ""}${navigationOpen ? " navigation-open" : ""}`}>
+      <div className={`board-app planning-app${navigationOpen ? " navigation-open" : ""}`}>
 
         {/* topbar (global chrome) */}
         <TopBar
-          crumbs={topbarBoard ? [isGantt ? "Gantt" : isCalendar ? "Calendar" : "Board", topbarBoard.name] : [isGantt ? "Gantt" : isCalendar ? "Calendar" : "Board"]}
+          crumbs={topbarBoard ? [isCalendar ? "Calendar" : "Board", topbarBoard.name] : [isCalendar ? "Calendar" : "Board"]}
           online={onlineList}
         >
           <button
@@ -1252,7 +1080,7 @@ export default function BoardWorkspace() {
           {/* sidebar: board list */}
           <aside className="sidebar">
             <div className="sidebar-label">Boards</div>
-            {boards.length > 1 && <button className={`sidebar-item${combined ? " active" : ""}`} onClick={() => {setAllBoards(true);setGanttBoardRequest({id:'all',sequence:Date.now()});}} title="All boards">
+            {boards.length > 1 && <button className={`sidebar-item${combined ? " active" : ""}`} onClick={() => {setAllBoards(true);}} title="All boards">
               <span className="sidebar-dot" style={{ background: "var(--ember)" }} />
               <span className="sidebar-name">All boards</span>
             </button>}
@@ -1260,7 +1088,7 @@ export default function BoardWorkspace() {
               <button
                 key={b.id}
                 className={`sidebar-item${!combined && b.id === activeBoardId ? " active" : ""}`}
-                onClick={() => { setAllBoards(false); setActiveBoardId(b.id);setGanttBoardRequest({id:b.id,sequence:Date.now()}); }}
+                onClick={() => { setAllBoards(false); setActiveBoardId(b.id); }}
                 title={b.name}
               >
                 <span className="sidebar-dot" style={{ background: boardColor(b, boards) }} />
@@ -1279,77 +1107,29 @@ export default function BoardWorkspace() {
 
           <div className="main-col">
             {boardActionError&&<div role="alert" className="gantt-error">{boardActionError}<button onClick={()=>setBoardActionError('')}>Dismiss</button></div>}
-            {!isGantt&&scheduleResult&&<div role="status" className="gantt-caption">{scheduleResult.moved} tasks moved. Changes saved.<button disabled={undoBusy} onClick={async()=>{
+            {scheduleResult&&<div role="status" className="gantt-caption">{scheduleResult.moved} tasks moved. Changes saved.<button disabled={undoBusy} onClick={async()=>{
               if(!session)return;setUndoBusy(true);
               try{await mutateSchedule(session.workspaceId,scheduleResult.snapshot,{op:'undo',dates:scheduleResult.before});setScheduleResult(null);setBoards(await loadBoards(session.workspaceId));}
               catch(e){setBoardActionError((e as Error).message);}finally{setUndoBusy(false);}
             }}>Undo dates</button></div>}
-            {!isGantt&&!isCalendar&&<PlanningHeader title={combined&&boards.length?'All boards':activeBoard?.name??'Your boards'} mode="board" boardId={combined?undefined:activeBoardId??undefined} canEdit={canEdit} onCreate={handleAddBoard} onNavigation={()=>setNavigationOpen(v=>!v)}>
-              <select aria-label="Choose board" value={combined?'all':activeBoard?.id??''} onChange={e=>{if(e.target.value==='all'){setAllBoards(true);setGanttBoardRequest({id:'all',sequence:Date.now()});}else{setAllBoards(false);setActiveBoardId(e.target.value);setGanttBoardRequest({id:e.target.value,sequence:Date.now()});}}}>{!boards.length&&<option value="">No boards yet</option>}{boards.length>1&&<option value="all">All boards</option>}{boards.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+            {!isCalendar&&<PlanningHeader title={combined&&boards.length?'All boards':activeBoard?.name??'Your boards'} mode="board" boardId={combined?undefined:activeBoardId??undefined} canEdit={canEdit} onCreate={handleAddBoard} onNavigation={()=>setNavigationOpen(v=>!v)}>
+              <select aria-label="Choose board" value={combined?'all':activeBoard?.id??''} onChange={e=>{if(e.target.value==='all'){setAllBoards(true);}else{setAllBoards(false);setActiveBoardId(e.target.value);}}}>{!boards.length&&<option value="">No boards yet</option>}{boards.length>1&&<option value="all">All boards</option>}{boards.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
               <label className="planning-search"><PlanningIcon name="search"/><input aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-              <details className="planning-menu"><summary>Filters{filterKind||ownerFilter?' · Active':''}</summary><div><label>Category<select value={filterKind??''} onChange={e=>setFilterKind(e.target.value||null)}><option value="">All categories</option>{categories.map(c=><option key={c.id}>{c.name}</option>)}</select></label><label>Owner<select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}><option value="">Everyone</option>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div></details>
-              <details className="planning-menu"><summary>Scheduled date{selectedDate?' · Active':''}</summary><div>{/* deadline calendar */}
-            <div className="sidebar-cal planning-calendar">
-              <div className="cal-head">
-                <button className="cal-nav-btn" onClick={() => shiftMonth(-1)} title="Previous month">
-                  <ChevronLeft />
-                </button>
-                <span className="cal-title">{MONTH_NAMES[calMonth.m]} {calMonth.y}</span>
-                <button className="cal-nav-btn" onClick={() => shiftMonth(1)} title="Next month">
-                  <ChevronRight />
-                </button>
-              </div>
-              <div className="cal-weekdays">
-                {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
-              </div>
-              <div className="cal-grid">
-                {calCells.map((cell) => (
-                  <button
-                    key={cell.key}
-                    className={`cal-day${cell.otherMonth ? " other-month" : ""}${cell.key === today ? " today" : ""}${cell.key === selectedDate ? " selected" : ""}`}
-                    onClick={() => setSelectedDate(selectedDate === cell.key ? null : cell.key)}
-                    title={cell.key}
-                  >
-                    {cell.day}
-                    {dueMap[cell.key] && <span className="cal-day-dot" />}
-                  </button>
-                ))}
-              </div>
-              {selectedDate && (
-                <div className="cal-due">
-                  <div className="cal-due-head">
-                    <span>Scheduled end {formatDeadline(selectedDate)}</span>
-                    <button className="cal-due-clear" onClick={() => setSelectedDate(null)}>Clear</button>
-                  </div>
-                  <div className="cal-due-list">
-                    {selectedDue.length === 0 ? (
-                      <div className="cal-due-empty">Nothing due across any board.</div>
-                    ) : selectedDue.map((k) => (
-                      <button
-                        key={k.id}
-                        className="cal-due-item"
-                        onClick={() => setEditingCard(cols.find((c) => c.id === k.colId)?.cards.find((c) => c.id === k.id) ?? k)}
-                      >
-                        {k.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div></div></details>
+              <details className="planning-menu"><summary>Filters{filterKind||ownerFilter?' · Active':''}</summary><div><label>Category<select value={filterKind??''} onChange={e=>setFilterKind(e.target.value||null)}><option value="">All categories</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Owner<select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}><option value="">Everyone</option>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div></details>
               {canEdit&&activeBoard&&<details className="planning-menu planning-overflow"><summary><PlanningIcon name="more"/>More</summary><div>{!combined&&<button onClick={()=>handleManageStages(activeBoard)}>Manage stages</button>}<button onClick={()=>setCategoryManager(true)}>Manage categories</button>{!combined&&<button onClick={()=>handleCopyBoard(activeBoard)}>Copy board</button>}{!combined&&<button onClick={()=>handleDeleteBoard(activeBoard)}>Delete board</button>}</div></details>}
             </PlanningHeader>}
+            {!isCalendar&&!combined&&activeBoard&&<div className="board-phase-summary"><Link href={`/table?board=${activeBoard.id}`}>{phaseRangeLabel(phaseSnapshot?.phases.find(p=>p.board_id===activeBoard.id&&p.category_id===(filterKind||null)))} · Open {filterKind?'subphase':'phase'} in Gantt ↗</Link></div>}
             {!isCalendar&&!boards.length&&<div className="planning-empty"><PlanningIcon name="board"/><h2>A place for your next idea</h2><p>Create a board with the stages that fit your team's workflow.</p>{canEdit&&<button className="planning-primary" onClick={handleAddBoard}>Create your first board</button>}</div>}
-            {isCalendar ? <CalendarView boards={boards} boardId={activeBoardId} onBoardChange={setActiveBoardId} allBoards={allBoards} onAllBoardsChange={setAllBoards} onOpen={setEditingCard} canEdit={canEdit} project={session?.workspaceId ?? ""} onNavigation={()=>setNavigationOpen(v=>!v)} /> : isGantt ? <GanttChart boards={boards} people={people} project={session?.workspaceId ?? ''} user={session?.userId ?? ''} externalResult={scheduleResult} boardRequest={ganttBoardRequest} onCreate={handleAddBoard} onManageStages={handleManageStages} onManageCategories={()=>setCategoryManager(true)} onBoardSelection={setTimelineBoardId}
-              canEdit={!!session && session.role !== "viewer"} onOpen={setEditingCard} onNavigation={()=>setNavigationOpen(v=>!v)} onRefresh={async()=>{if(session)setBoards(await loadBoards(session.workspaceId));}} /> :
+            {isCalendar ? <CalendarView canEdit={canEdit} project={session?.workspaceId ?? ""} onNavigation={()=>setNavigationOpen(v=>!v)} /> :
             <div className="board-scroll">
               {(combined ? boards : activeBoard ? [activeBoard] : []).map((board) => {
                 const boardCols = displayCols.filter((c) => board.cols.some((b) => b.id === c.id));
                 const count = boardCols.reduce((n, c) => n + c.cards.length, 0);
                 const end = boardEndDate(board);
+                const phase = phaseSnapshot?.phases.find(p=>p.board_id===board.id&&p.category_id===(filterKind||null));
                 return <section key={board.id} className={combined ? "kanban-group" : undefined} aria-label={board.name} style={combined ? { "--board-color": boardColor(board, boards) } as CSSProperties : undefined}>
                   {combined && <header className="board-group-head">
-                    <h2>{board.name}</h2>
+                    <div><h2>{board.name}</h2><Link className="board-phase-summary" href={`/table?board=${board.id}`}>{phaseRangeLabel(phase)} · Gantt ↗</Link></div>
                     <div className="board-group-meta">
                       <span className="board-group-count">{count} {count === 1 ? "task" : "tasks"}{end ? ` · Ends ${formatDeadline(end)}` : ""}</span>
                       <details className="planning-menu planning-overflow">
@@ -1392,16 +1172,16 @@ export default function BoardWorkspace() {
         </div>
 
         {/* Compact app navigation stays outside the task scroll area. */}
-        <Dock planningBoardId={isGantt?timelineBoardId:activeBoardId??undefined} />
+        <Dock planningBoardId={combined?undefined:activeBoardId??undefined} />
 
-        {stageBoard!==undefined&&session&&<StageDialog project={session.workspaceId} board={stageBoard} boards={boards} onClose={()=>setStageBoard(undefined)} onSaved={async id=>{setBoards(await loadBoards(session.workspaceId));setActiveBoardId(id);setGanttBoardRequest({id,sequence:Date.now()});setAllBoards(false);}}/>}
+        {stageBoard!==undefined&&session&&<StageDialog project={session.workspaceId} board={stageBoard} boards={boards} onClose={()=>setStageBoard(undefined)} onSaved={async id=>{setBoards(await loadBoards(session.workspaceId));setActiveBoardId(id);setAllBoards(false);}}/>}
         {actionDialog&&<PlanningDialog action={actionDialog} onClose={()=>setActionDialog(null)}/>}
         {categoryManager&&session&&<CategoryManager project={session.workspaceId} categories={categories} onClose={()=>setCategoryManager(false)} onRefresh={refreshPlanning}/>}
         {/* card edit modal */}
         {editingCard && (
           <CardModal
             key={editingCard.id}
-            panel={isGantt}
+            panel={false}
             canEdit={!!session && session.role !== 'viewer'}
             boards={boards}
             columns={boards.flatMap(b=>b.cols.map(c=>({id:c.id,name:`${b.name} · ${c.name}`})))}

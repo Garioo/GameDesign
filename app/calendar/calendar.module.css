@@ -2,7 +2,7 @@
 .calendar { min-width: 0; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
 .toolbar h2 { font-size: 26px; letter-spacing: -.8px; font-weight: 600; margin: 0 0 5px; }
-.toolbar p, .unscheduled > p { color: var(--ink-faint); font-size: 12px; margin: 0; }
+.toolbar p { color: var(--ink-faint); font-size: 12px; margin: 0; }
 .navigation { display: flex; align-items: center; gap: 5px; }
 .navigation button { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-height: 34px; padding: 7px 10px; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; }
 .navigation button:hover { background: var(--ember-tint); }
@@ -34,12 +34,6 @@
 .agendaTask small { display: block; margin-top: 5px; font-size: 10px; color: var(--ink-faint); }
 .agendaTask svg { flex-shrink: 0; color: var(--ink-faint); }
 .empty { font-size: 12px; line-height: 1.7; color: var(--ink-faint); padding: 16px 0; }
-.unscheduled { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 20px; }
-.unscheduled h3 { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
-.unscheduled h3 span { color: var(--ink-faint); }
-.unscheduled > p { margin-bottom: 18px; }
-.checkbox { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-soft); }
-.checkbox input { accent-color: var(--ember); }
 .layout button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } .agenda { border-left: 0; padding-left: 0; } }
 @media (max-width: 600px) { .layout { padding: 18px 12px 110px; } .toolbar h2 { font-size: 22px; } .toolbar { gap: 8px; } }
@@ -116,12 +110,3 @@
   .dayEventRow { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
 }
 
-/* Task bars: a tint of the board color behind dark text keeps every board readable and distinct. */
-.spanTask { --board-color: var(--ink-faint); background: color-mix(in srgb, var(--board-color) 16%, var(--surface)); border-color: color-mix(in srgb, var(--board-color) 45%, var(--surface)); border-left: 3px solid var(--board-color); color: var(--ink); font-weight: 500; }
-.spanTask:hover { background: color-mix(in srgb, var(--board-color) 28%, var(--surface)); border-color: var(--board-color); }
-.spanTask.completed { color: var(--ink-faint); background: color-mix(in srgb, var(--board-color) 7%, var(--surface)); text-decoration: line-through; }
-.spanTask.continuesBefore { border-left: 0; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: -12px 0 14px; padding: 0; font-size: 11px; color: var(--ink-soft); }
-.legend li { display: inline-flex; align-items: center; gap: 6px; }
-.legend .dot { width: 9px; height: 9px; }
-.legendEvent { background: #789c86; }

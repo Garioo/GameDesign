@@ -1,4 +1,3 @@
-import { localToday } from "./gantt";
 import { supabase } from "./supabase";
 import { loadSchedule, mutateSchedule } from './ganttRepo';
 import { cleanText, LIMITS } from "./validate";
@@ -15,15 +14,13 @@ export interface BoardCard {
   title: string;
   sub: string;
   kind: string;
+  categoryId?: string | null;
   tags: string[];
   priority: string | null;
   ownerIds: string[];
   canvasId?: string | null;
-  startDate?: string | null;
+  /** Legacy per-task deadline, kept only so a board's automatic end date can still be inferred from old data (see automaticBoardEndDate). Tasks no longer set or edit this. */
   deadline?: string | null;
-  firmDeadline?: string | null;
-  /** Calendar shows this task on its end date only instead of spanning start → end. */
-  calendarEndOnly?: boolean;
   columnId?: string;
   parentId?: string | null;
   timelinePosition?: number;
@@ -66,14 +63,12 @@ interface CardRow {
   title: string;
   sub: string;
   kind: string;
+  category_id?: string | null;
   tags: string[] | null;
   priority: string | null;
   owners: string[] | null;
   canvas_id?: string | null;
-  start_date?: string | null;
   deadline: string | null;
-  firm_deadline?: string | null;
-  calendar_end_only?: boolean;
   position: number;
 }
 
@@ -108,14 +103,12 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       title: r.title,
       sub: r.sub,
       kind: r.kind,
+      categoryId: r.category_id ?? null,
       tags: r.tags ?? [],
       priority: r.priority,
       ownerIds: r.owners ?? [],
       canvasId: r.canvas_id,
-      startDate: r.start_date,
       deadline: r.deadline,
-      firmDeadline: r.firm_deadline,
-      calendarEndOnly: !!r.calendar_end_only,
       columnId: r.column_id,
       parentId: r.parent_id ?? null,
       timelinePosition: r.timeline_position,
@@ -168,15 +161,7 @@ export async function updateBoardEndDate(id: string, date: string | null): Promi
     : error.message);
 }
 
-/** Choose whether the calendar pins a multi-day task to its end date. Dates and status stay with the scheduling operation. */
-export async function updateCardCalendarMode(id: string, endOnly: boolean): Promise<void> {
-  const { error } = await supabase.from("board_cards").update({ calendar_end_only: endOnly }).eq("id", id).select("id").single();
-  if (error) throw new Error(error.code === "PGRST204" || error.code === "42703"
-    ? "The calendar setting needs a database update. Apply the card-calendar-mode migration in Supabase."
-    : error.message);
-}
-
-/** Append a column to a board. 
+/** Append a column to a board.
 export async function createColumn(
   workspaceId: string,
   boardId: string,
@@ -202,14 +187,12 @@ export async function createColumn(
   return { id: data.id, name: data.name, color: data.color, cards: [] };
 }
 
-/** New tasks start on their selected calendar day, or today by default. */
+/** New tasks carry no dates — only a title, and later a priority set from the card modal. */
 export async function createCard(
   workspaceId: string,
   columnId: string,
   title: string,
-  deadline: string | null,
 ): Promise<BoardCard> {
-  const scheduledDay = deadline ?? localToday();
   const clean = cleanText(title, LIMITS.title, "Card title") || "Untitled card";
   const { data: maxRow } = await supabase
     .from("board_cards")
@@ -222,8 +205,8 @@ export async function createCard(
 
   const { data, error } = await supabase
     .from("board_cards")
-    .insert({ column_id: columnId, project_id: workspaceId, title: clean, start_date: scheduledDay, deadline: scheduledDay, position })
-    .select("id, title, sub, kind, tags, priority, owners, start_date, deadline")
+    .insert({ column_id: columnId, project_id: workspaceId, title: clean, position })
+    .select("id, title, sub, kind, tags, priority, owners")
     .single();
   if (error || !data) throw new Error(`createCard failed: ${error?.message}`);
   return {
@@ -234,31 +217,8 @@ export async function createCard(
     tags: data.tags ?? [],
     priority: data.priority,
     ownerIds: data.owners ?? [],
-    startDate: data.start_date,
-    deadline: data.deadline,
     columnId,
-    firmDeadline: null,
   };
-}
-
-/** Persist edits from the card modal. */
-export async function updateCard(card: BoardCard): Promise<void> {
-  validateSchedule(card.startDate, card.deadline);
-  const { data, error } = await supabase.from('board_cards').select('project_id').eq('id',card.id).single();
-  if(error) throw new Error(error.message);
-  await mutateSchedule(data.project_id, await loadSchedule(data.project_id), {op:'card',card:{
-      id:card.id,
-      title: cleanText(card.title, LIMITS.title, "Card title") || "Untitled card",
-      sub: cleanText(card.sub ?? "", LIMITS.summary, "Card description"),
-      kind: card.kind ?? "",
-      tags: card.tags ?? [],
-      priority: card.priority,
-      owners: card.ownerIds ?? [],
-      deadline: card.deadline || null,
-      start_date: card.startDate || null,
-      firm_deadline: card.firmDeadline || null,
-    }});
-  if (card.calendarEndOnly !== undefined) await updateCardCalendarMode(card.id, card.calendarEndOnly);
 }
 
 /**
@@ -300,23 +260,11 @@ export interface BoardCategory {
   name: string;
 }
 
-const DEFAULT_CATEGORIES = ["mechanic", "vision", "economy", "lore"];
-
-/** List the workspace's categories, seeding the defaults on first visit. */
+/** Categories are workspace records; reads never create records for viewers. */
 export async function listCategories(workspaceId: string): Promise<BoardCategory[]> {
-  const { data } = await supabase
-    .from("board_categories")
-    .select("id, name")
-    .eq("project_id", workspaceId)
-    .order("position", { ascending: true });
-  if (data && data.length > 0) return data as BoardCategory[];
-
-  const { data: seeded, error } = await supabase
-    .from("board_categories")
-    .insert(DEFAULT_CATEGORIES.map((name, i) => ({ project_id: workspaceId, name, position: i })))
-    .select("id, name");
-  if (error) throw new Error(`seed categories failed: ${error.message}`);
-  return (seeded ?? []) as BoardCategory[];
+  const {data,error}=await supabase.from("board_categories").select("id,name").eq("project_id",workspaceId).order("position",{ascending:true});
+  if(error)throw new Error(error.message);
+  return data ?? [];
 }
 
 /** Add a category. */
@@ -352,11 +300,7 @@ export async function renameCategory(
   if (!clean) return;
   const { error } = await supabase.from("board_categories").update({ name: clean }).eq("id", id);
   if (error) throw new Error(`renameCategory failed: ${error.message}`);
-  await supabase
-    .from("board_cards")
-    .update({ kind: clean })
-    .eq("project_id", workspaceId)
-    .eq("kind", oldName);
+
 }
 
 /** Delete a category; cards that used it become uncategorised. */
@@ -367,11 +311,7 @@ export async function deleteCategory(
 ): Promise<void> {
   const { error } = await supabase.from("board_categories").delete().eq("id", id);
   if (error) throw new Error(`deleteCategory failed: ${error.message}`);
-  await supabase
-    .from("board_cards")
-    .update({ kind: "" })
-    .eq("project_id", workspaceId)
-    .eq("kind", name);
+
 }
 
 /** Delete a card. */
@@ -390,24 +330,6 @@ export async function deleteColumn(id: string): Promise<void> {
 export async function deleteBoard(id: string): Promise<void> {
   const { error } = await supabase.from("boards").delete().eq("id", id);
   if (error) throw new Error(`deleteBoard failed: ${error.message}`);
-}
-
-/** Date-only writes avoid overwriting concurrent edits to titles or owners. */
-export async function updateCardSchedule(id: string, startDate: string | null, deadline: string | null): Promise<void> {
-  validateSchedule(startDate, deadline);
-  const {data,error}=await supabase.from('board_cards').select('project_id').eq('id',id).single();
-  if(error) throw new Error(error.message);
-  const snapshot=await loadSchedule(data.project_id);
-  await mutateSchedule(data.project_id,snapshot,{op:'card',card:{id,start_date:startDate,deadline,firm_deadline:snapshot.cards.find(c=>c.id===id)?.firm_deadline??null}});
-}
-
-function validateSchedule(start?: string | null, end?: string | null) {
-  for (const value of [start, end]) {
-    if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)))) {
-      throw new Error("Choose a valid date.");
-    }
-  }
-  if (start && end && start > end) throw new Error("Deadline must be on or after the start date.");
 }
 
 /** Atomically reuse, create, or explicitly link a canvas for the original card. */

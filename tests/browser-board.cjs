@@ -4,11 +4,11 @@
 // menu) and the outside-click-closes-the-dropdown fix, both of which had zero coverage before.
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const root=process.cwd();
-const {createTimelineFixture}=require('./fixtures/timeline-db.cjs');
+const {createPhaseFixture}=require('./fixtures/phase-db.cjs');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 (async()=>{
- const db=await createTimelineFixture();
+ const db=await createPhaseFixture();
  const snapshot=async()=> (await db.query('select gantt_snapshot($1) s',[id(1)])).rows[0].s;
 
  const env=fs.readFileSync(root+'/.env.local','utf8');
@@ -27,7 +27,8 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
    if(u.pathname.includes('/auth/'))data={user:profile};
    else if(u.pathname.includes('/rpc/')){
     const body=route.request().postDataJSON();
-    if(name==='gantt_snapshot')data=await snapshot();
+    if(name==='phase_snapshot')data=(await db.query('select phase_snapshot($1) s',[id(1)])).rows[0].s;
+    else if(name==='gantt_snapshot')data=await snapshot();
     else if(name==='gantt_mutate'||name==='gantt_mutate_hierarchy')data=(await db.query(`select ${name}($1,$2,$3) s`,[body.p_project,body.p_expected,body.p_action])).rows[0].s;
    }else if(['boards','board_columns','board_cards'].includes(name))data=(await db.query(`select * from ${name} order by position nulls last,id`)).rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[k,v instanceof Date?v.toISOString().slice(0,10):v])));
    else if(name==='profiles')data=u.searchParams.get('id')?profile:[profile];
@@ -38,11 +39,10 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
   }catch(e){await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({message:e.message,code:'P0001'})});}
  });
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
- await page.goto((process.env.APP_URL || 'http://localhost:3000')+'/board?board='+id(3));
+ await page.goto((process.env.APP_URL || 'http://localhost:3000')+'/board');
 
- // Clicking non-interactive text is a reliable "outside click" that can't accidentally hit
- // another control; the sidebar's "Boards" label is always present and inert.
- const clickOutside=()=>page.getByText('Boards',{exact:true}).click();
+ // The top bar remains visible even when the board sidebar is collapsed.
+ const clickOutside=()=>page.locator('.brand-name').click();
 
  // All boards is the default view (two boards in the fixture), so it renders on load with no
  // extra click — one group per board, each with its own name, task count and overflow menu.

@@ -257,7 +257,8 @@ export default function StageDialog({
             </label>
           </div>
           <div className="stage-end-date">
-            <span className="stage-end-date-label">End date</span>
+            <span className="stage-end-date-label">Task / calendar end date</span>
+            <p className="planning-caption">Phase dates are planned independently in Gantt.</p>
             <label className="stage-end-date-option">
               <input
                 type="radio"

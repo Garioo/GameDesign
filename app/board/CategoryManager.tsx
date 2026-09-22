@@ -84,7 +84,7 @@ export default function CategoryManager({
               </button>
               <button
                 onClick={() =>
-                  void run(() => deleteCategory(project, c.id, c.name))
+                  window.confirm(`Delete “${c.name}”? Its tasks will become uncategorized and its Gantt subphases and dependencies will be removed.`) && void run(() => deleteCategory(project, c.id, c.name))
                 }
               >
                 Remove label
