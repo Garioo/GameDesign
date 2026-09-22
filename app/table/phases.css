@@ -345,7 +345,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  position: relative;
+  /* Sticky so the name stays readable beside the label column while the
+     bar's start is scrolled out of view; it stops at the bar's end. */
+  position: sticky;
+  left: calc(var(--phase-label-width, 320px) + 6px);
+  width: fit-content;
   max-width: 100%;
   display: block;
   text-align: left;

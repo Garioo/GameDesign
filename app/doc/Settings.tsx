@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { initialsOf, PALETTE, PALETTE_NAMES, type SessionInfo } from "@/lib/session";
 import { getGithubToken, listRepos } from "@/lib/github";
@@ -108,7 +109,7 @@ export default function Settings({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   const setNameAndSuggest = (v: string) => {
     setName(v);
@@ -192,7 +193,9 @@ export default function Settings({
     }
   };
 
-  return (
+  // Portal to <body>: the topbar that mounts this has a backdrop-filter and its
+  // own z-index, which would trap a position: fixed overlay inside its box.
+  return createPortal(
     <div className={styles.backdrop} onMouseDown={onClose}>
       <div
         className={styles.dialog}
@@ -491,6 +494,7 @@ export default function Settings({
           </div>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
