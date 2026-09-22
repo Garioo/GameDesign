@@ -148,6 +148,7 @@ export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {
       .from("pages")
       .select("id, section_id, parent_id, owner, title, kind, status, summary, tags, links, position, updated_at")
       .eq("project_id", workspaceId)
+      .is("deleted_at", null)
       .order("position", { ascending: true }),
     listMembers(workspaceId),
   ]);
@@ -384,10 +385,62 @@ export async function fetchPageBlocks(pageId: string): Promise<Block[]> {
   return ((data ?? []) as BlockRow[]).map(rowToBlock);
 }
 
-/** Delete a page (blocks cascade via FK; child pages cascade too). */
-export async function deletePage(pageId: string): Promise<void> {
+/** Move a page and its sub-pages to the trash (restorable for 30 days). */
+export async function trashPage(pageId: string): Promise<void> {
+  const { error } = await supabase.rpc("trash_page", { p_page: pageId });
+  if (error) throw new Error(`trashPage failed: ${error.message}`);
+}
+
+/** Restore a trashed page plus the sub-pages that were trashed with it. */
+export async function restorePage(pageId: string): Promise<void> {
+  const { error } = await supabase.rpc("restore_page", { p_page: pageId });
+  if (error) throw new Error(`restorePage failed: ${error.message}`);
+}
+
+export interface TrashedPage {
+  id: string;
+  title: string;
+  deletedAt: string;
+  deletedByName: string | null;
+  /** Sub-pages that went into the trash together with this one. */
+  childCount: number;
+}
+
+/** Pages in the trash, newest first. Sub-pages trashed with their parent are folded into it. */
+export async function listTrash(workspaceId: string): Promise<TrashedPage[]> {
+  const { data, error } = await supabase
+    .from("pages")
+    .select("id, parent_id, title, deleted_at, deleted_by:deleted_by (name)")
+    .eq("project_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (error) throw new Error(`listTrash failed: ${error.message}`);
+  type Row = { id: string; parent_id: string | null; title: string; deleted_at: string; deleted_by: { name: string } | { name: string }[] | null };
+  const rows = (data ?? []) as Row[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  // A row is a trash "root" unless its parent was trashed in the same action.
+  const rootOf = (r: Row): Row => {
+    let cur = r;
+    for (let p = cur.parent_id && byId.get(cur.parent_id); p && p.deleted_at === cur.deleted_at; p = p.parent_id ? byId.get(p.parent_id) : undefined) cur = p;
+    return cur;
+  };
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const root = rootOf(r);
+    if (root !== r) counts.set(root.id, (counts.get(root.id) ?? 0) + 1);
+  }
+  return rows
+    .filter((r) => rootOf(r) === r)
+    .map((r) => {
+      const by = Array.isArray(r.deleted_by) ? r.deleted_by[0] : r.deleted_by;
+      return { id: r.id, title: r.title, deletedAt: r.deleted_at, deletedByName: by?.name ?? null, childCount: counts.get(r.id) ?? 0 };
+    });
+}
+
+/** Permanently delete a page (blocks and sub-pages cascade). Only offered from the trash. */
+export async function deletePageForever(pageId: string): Promise<void> {
   const { error } = await supabase.from("pages").delete().eq("id", pageId);
-  if (error) throw new Error(`deletePage failed: ${error.message}`);
+  if (error) throw new Error(`deletePageForever failed: ${error.message}`);
 }
 
 /** Rename a section. */

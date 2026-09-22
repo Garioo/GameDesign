@@ -1,0 +1,166 @@
+/* Team activity feed (home) and per-page / per-task history (compact). */
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dayLabel {
+  margin: 0 0 6px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+}
+.item + .item {
+  border-top: 1px solid var(--line-soft);
+}
+
+.avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+.sentence {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.sentence strong,
+.sentence b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.sentence a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.sentence a:hover {
+  color: var(--ember-deep);
+  border-bottom-color: var(--ember);
+}
+.sentence em {
+  font-style: normal;
+  color: var(--ink);
+}
+.snippet {
+  margin: 3px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  flex: none;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.more {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.more:hover:not(:disabled) {
+  color: var(--ember-deep);
+}
+
+.muted,
+.error {
+  margin: 0;
+  font-size: 13px;
+}
+.muted {
+  color: var(--ink-faint);
+}
+.error {
+  color: var(--danger);
+}
+
+/* compact history inside a page rail or task dialog */
+.compact {
+  gap: 10px;
+}
+.compact .avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 8.5px;
+}
+.compact .sentence {
+  margin-top: 1px;
+  font-size: 12.5px;
+}
+.compact .item {
+  padding: 5px 0;
+}
+
+/* collapsed History section (task dialog, page rail) */
+.history {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.historyToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.historyToggle:hover {
+  color: var(--ember-deep);
+}
+.caret {
+  width: 10px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}

@@ -24,11 +24,17 @@ import {
   type WorkspaceSummary,
 } from "@/lib/workspacesRepo";
 import { listRecentCommentMeta, type CommentMetaRow } from "@/lib/commentsRepo";
+import { loadBoards, loadCompletions, type Board } from "@/lib/boardRepo";
+import type { StatsPeriod } from "@/lib/teamStats";
+import { myTasks } from "@/lib/myWork";
 import { STATUS_LABEL, type DesignDoc, type Status } from "@/app/doc/data";
 import { stripInlineHtml } from "@/app/doc/mentions";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
+import ActivityFeed from "@/app/components/ActivityFeed";
+import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
+import TeamScoreboard from "@/app/components/TeamScoreboard";
 import styles from "./home.module.css";
 
 /* ---------- inline icon set (lucide-flavoured, no deps) ---------- */
@@ -282,6 +288,11 @@ export default function HomeDashboard() {
   const [members, setMembers] = useState<ProfileInfo[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [comments, setComments] = useState<CommentMetaRow[]>([]);
+  // Open tasks assigned to me (null until loaded; boards may be unavailable).
+  const [myOpenTasks, setMyOpenTasks] = useState<number | null>(null);
+  const [boards, setBoards] = useState<Board[] | null>(null);
+  const [completions, setCompletions] = useState<Map<string, string>>(new Map());
+  const [scorePeriod, setScorePeriod] = useState<StatsPeriod>("week");
   const [cached, setCached] = useState<Snapshot | null>(null);
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const [recentFilter, setRecentFilter] = useState<"all" | "mine" | "foryou">("all");
@@ -331,6 +342,14 @@ export default function HomeDashboard() {
         return;
       }
       setSession(s);
+      Promise.all([loadBoards(s.workspaceId), loadCompletions(s.workspaceId)])
+        .then(([b, done]) => {
+          if (cancelled) return;
+          setBoards(b);
+          setCompletions(done);
+          setMyOpenTasks(myTasks(b, s.userId).filter((t) => !t.done).length);
+        })
+        .catch(console.error);
       // The hint can point at a workspace the user has since left — drop the
       // cached paint rather than flashing someone else's data.
       if (hint && hint !== s.workspaceId) setCached(readSnapshot(s.workspaceId));
@@ -407,6 +426,15 @@ export default function HomeDashboard() {
     router.replace("/login");
   };
 
+  // A task finished or reopened anywhere (another tab, a teammate) updates the scoreboard.
+  useSidebarLiveUpdates(session?.workspaceId ?? null, ["board_cards", "board_columns"], async () => {
+    if (!session?.workspaceId) return;
+    const [b, done] = await Promise.all([loadBoards(session.workspaceId), loadCompletions(session.workspaceId)]);
+    setBoards(b);
+    setCompletions(done);
+    setMyOpenTasks(myTasks(b, session.userId).filter((t) => !t.done).length);
+  });
+
   /** Make a workspace active and reload its docs + members. */
   const switchWorkspace = async (id: string) => {
     if (!session || id === session.workspaceId) return;
@@ -415,11 +443,16 @@ export default function HomeDashboard() {
     setDocs(null);
     setCached(readSnapshot(id));
     setRecentFilter("all");
+    setBoards(null);
+    setMyOpenTasks(null);
     try {
-      const [pages, team] = await Promise.all([loadWorkspace(id), listMembers(id)]);
+      const [pages, team, b, done] = await Promise.all([loadWorkspace(id), listMembers(id), loadBoards(id), loadCompletions(id)]);
       setComments(await listRecentCommentMeta(pages.map((p) => p.id)));
       setDocs(pages);
       setMembers(team);
+      setBoards(b);
+      setCompletions(done);
+      setMyOpenTasks(myTasks(b, session.userId).filter((t) => !t.done).length);
     } catch (e) {
       console.error(e);
     }
@@ -588,6 +621,17 @@ export default function HomeDashboard() {
                   {snap.todos.length === 1 ? "open to-do" : "open to-dos"}
                 </span>
               </div>
+              {myOpenTasks !== null && (
+                <>
+                  <span className={styles.statRule} aria-hidden="true" />
+                  <Link href="/work" className={`${styles.stat} ${styles.statLink}`}>
+                    <span className={styles.statNum}>{myOpenTasks}</span>
+                    <span className={styles.statLabel}>
+                      {myOpenTasks === 1 ? "task for me" : "tasks for me"}
+                    </span>
+                  </Link>
+                </>
+              )}
             </div>
             {snap.docCount > 0 && (
               <p className={styles.statusLegend} aria-label="Pages by status">
@@ -656,6 +700,8 @@ export default function HomeDashboard() {
 
           <div className={styles.columns}>
             <div className={styles.main}>
+              {/* Pages on the left, the team on the right; one stack on narrower screens. */}
+              <div className={styles.mainCol}>
               <section className={styles.section}>
                 <div className={styles.sectionHead}>
                   <h2 className={styles.sectionTitle}>Recently edited</h2>
@@ -801,6 +847,53 @@ export default function HomeDashboard() {
                   )}
                 </div>
               </section>
+
+              </div>
+
+              <div className={styles.mainCol}>
+              {session && boards && members.length > 0 && (
+                <section className={styles.section}>
+                  <div className={styles.sectionHead}>
+                    <h2 className={styles.sectionTitle}>Team scoreboard</h2>
+                    <div className={styles.filter} role="group" aria-label="Scoreboard period">
+                      {(["week", "month", "all"] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          aria-pressed={scorePeriod === p}
+                          className={`${styles.filterBtn} ${scorePeriod === p ? styles.filterOn : ""}`}
+                          onClick={() => setScorePeriod(p)}
+                        >
+                          {p === "week" ? "This week" : p === "month" ? "This month" : "All time"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <TeamScoreboard
+                    boards={boards}
+                    completions={completions}
+                    people={members}
+                    currentUserId={session.userId}
+                    period={scorePeriod}
+                  />
+                </section>
+              )}
+
+              {session?.workspaceId && (
+                <section className={styles.section}>
+                  <div className={styles.sectionHead}>
+                    <h2 className={styles.sectionTitle}>Team activity</h2>
+                  </div>
+                  <div className={styles.activityCard}>
+                    <ActivityFeed
+                      workspaceId={session.workspaceId}
+                      limit={15}
+                      emptyText="Nothing yet — pages, tasks, comments and canvases your team creates show up here."
+                    />
+                  </div>
+                </section>
+              )}
+              </div>
             </div>
 
             <aside className={styles.rail}>

@@ -62,6 +62,8 @@ interface SidebarProps {
   onDeletePage: (id: string) => void;
   onRenameSection: (id: string, name: string) => void;
   onDeleteSection: (id: string) => void;
+  /** Opens the trash dialog; editors only. */
+  onOpenTrash?: () => void;
   onMovePage: (movedId: string, sectionId: string | null, parentId: string | null, orderedIds: string[]) => void;
   onMoveSection: (orderedIds: string[]) => void;
   /** False for viewers: navigation only, no create/rename/delete/drag. */
@@ -82,6 +84,7 @@ export default function Sidebar({
   onDeletePage,
   onRenameSection,
   onDeleteSection,
+  onOpenTrash,
   onMovePage,
   onMoveSection,
   canEdit = true,
@@ -270,7 +273,7 @@ export default function Sidebar({
                 className="danger"
                 onMouseDown={(e) => { e.preventDefault(); setMenu(null); onDeletePage(doc.id); }}
               >
-                <Trash /> Delete
+                <Trash /> Move to trash
               </button>
             </div>
           )}
@@ -450,6 +453,12 @@ export default function Sidebar({
         </button>
       )}
       <LinkedDocuments key={workspaceId} workspaceId={workspaceId} canEdit={canEdit} />
+      {canEdit && onOpenTrash && (
+        <button className="new-page sidebar-trash" onClick={onOpenTrash}>
+          <Trash className="new-page-icon" />
+          Trash
+        </button>
+      )}
     </aside>
   );
 }

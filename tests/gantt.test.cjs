@@ -7,7 +7,7 @@ const source = ts.transpileModule(fs.readFileSync(require.resolve('../lib/gantt.
 }).outputText;
 const compiled = { exports: {} };
 new Function('module', 'exports', source)(compiled, compiled.exports);
-const { dayNumber, dayKey, barRange } = compiled.exports;
+const { dayNumber, dayKey, barRange, weekday, isoWeek } = compiled.exports;
 const first = dayNumber('2026-09-08');
 
 test('calendar arithmetic is stable across DST and leap days', () => {
@@ -25,4 +25,15 @@ test('unscheduled, inverted and off-screen intervals have no bar', () => {
   assert.equal(barRange(null, null, first, 10), null);
   assert.equal(barRange('2026-09-10', '2026-09-09', first, 10), null);
   assert.equal(barRange('2026-10-01', '2026-10-02', first, 10), null);
+});
+
+test('weekdays and ISO week numbers, including year boundaries', () => {
+  assert.equal(weekday(dayNumber('2026-09-21')), 0); // Monday
+  assert.equal(weekday(dayNumber('2026-09-27')), 6); // Sunday
+  assert.equal(weekday(dayNumber('1969-12-29')), 0); // before the epoch
+  assert.equal(isoWeek(dayNumber('2026-09-23')), 39);
+  assert.equal(isoWeek(dayNumber('2026-01-01')), 1); // Thursday → week 1
+  assert.equal(isoWeek(dayNumber('2027-01-01')), 53); // Friday → last week of 2026
+  assert.equal(isoWeek(dayNumber('2027-01-04')), 1);
+  assert.equal(isoWeek(dayNumber('2024-12-30')), 1); // Monday of 2025's week 1
 });

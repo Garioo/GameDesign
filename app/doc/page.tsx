@@ -3,7 +3,7 @@
 import LinkedDocuments from "./LinkedDocuments";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor from "./BlockEditor";
 import Sidebar from "./Sidebar";
@@ -14,7 +14,8 @@ import { ensureSession, signOutAndClear, type SessionInfo } from "@/lib/session"
 import {
   createPage,
   createSection,
-  deletePage,
+  trashPage,
+  restorePage,
   deleteSection,
   fetchPageBlocks,
   listMembers,
@@ -30,7 +31,11 @@ import {
   type ProfileInfo,
   type SectionInfo,
 } from "@/lib/docsRepo";
-import CommandPalette from "./CommandPalette";
+import type { SearchConfig } from "@/app/components/GlobalSearch";
+import { pageItems } from "@/lib/searchIndex";
+import TrashDialog from "./TrashDialog";
+import UndoToast from "@/app/components/UndoToast";
+import { HistoryToggle } from "@/app/components/ActivityFeed";
 import Comments from "./Comments";
 import Settings from "./Settings";
 import {
@@ -109,11 +114,6 @@ const ChevronDown = ({ className }: IconProps) => (
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
-const Search = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-  </svg>
-);
 const PanelInfo = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -177,7 +177,6 @@ function DocPageInner() {
   const [people, setPeople] = useState<ProfileInfo[]>([]);
   const [canvases, setCanvases] = useState<CanvasInfo[]>([]);
   const [focusTitleId, setFocusTitleId] = useState<string | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
   const ownerWrapRef = useRef<HTMLSpanElement>(null);
@@ -211,6 +210,9 @@ function DocPageInner() {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; onUndo?: () => void } | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [draftRecovery, setDraftRecovery] = useState<BlockDraft & { pageId: string } | null>(null);
@@ -344,8 +346,7 @@ function DocPageInner() {
     };
   }, [router]);
 
-  useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null,
-    ["pages", "sections", "canvases"], async () => {
+  const refreshWorkspace = async () => {
       if (!session) return;
       const [fresh, secs, canvasList] = await Promise.all([
         loadWorkspace(session.workspaceId), listSections(session.workspaceId), listCanvases(session.workspaceId),
@@ -362,7 +363,9 @@ function DocPageInner() {
             parentId: doc.parentId, position: doc.position, group: doc.group };
         });
       });
-    });
+  };
+  useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null,
+    ["pages", "sections", "canvases"], refreshWorkspace);
 
   // ---- realtime: remote page/block changes + presence ----
   useEffect(() => {
@@ -453,8 +456,14 @@ function DocPageInner() {
             tags?: string[];
             links?: string[];
             updated_at?: string;
+            deleted_at?: string | null;
           };
           if (!row?.id || (suppress.current[row.id] ?? 0) > Date.now()) return;
+          if (row.deleted_at) {
+            // Trashed elsewhere: drop it; the sidebar refresh drops its sub-pages.
+            setDocs((prev) => prev.filter((d) => d.id !== row.id));
+            return;
+          }
 
           if (payload.eventType === "INSERT") {
             const blocks = await fetchPageBlocks(row.id);
@@ -730,18 +739,6 @@ function DocPageInner() {
     setFocusTitleId(null);
   }, [focusTitleId, active]);
 
-  // ⌘K / Ctrl-K toggles the command palette.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((o) => !o);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   // Viewers navigate and comment; everything that writes is hidden/disabled.
   const canEdit = session?.role !== "viewer";
 
@@ -822,6 +819,40 @@ function DocPageInner() {
     }
   };
 
+  // ⌘K: live pages from the editor (so unsaved titles/bodies match), plus page commands.
+  const livePageItems = useMemo(() => pageItems(docs), [docs]);
+  const docSearch: SearchConfig = {
+    pages: livePageItems,
+    onSelect: (item) => {
+      if (item.kind !== "page") return false;
+      openPage(item.key.slice("page:".length));
+      return true;
+    },
+    actions: [
+      ...(canEdit
+        ? [
+            {
+              key: "new-page",
+              label: "New page",
+              hint: `in ${active?.group ?? "this section"}`,
+              icon: "plus" as const,
+              run: () => void handleNewPage(activeSectionId, active?.group ?? ""),
+            },
+            {
+              key: "new-section",
+              label: "New section",
+              icon: "plus" as const,
+              run: () => {
+                const name = window.prompt("New section name");
+                if (name && name.trim()) void handleNewSection(name.trim());
+              },
+            },
+          ]
+        : []),
+      { key: "settings", label: "Settings", hint: "profile · workspace · account", icon: "settings" as const, run: () => setSettingsOpen(true) },
+    ],
+  };
+
   const handleSetOwner = (p: ProfileInfo | null) => {
     setOwnerMenuOpen(false);
     if (!canEdit) return;
@@ -900,15 +931,35 @@ function DocPageInner() {
   };
 
   const handleDeletePage = (id: string) => {
-    suppress.current[id] = Date.now() + 2500;
-    const remaining = docs.filter((d) => d.id !== id);
+    // The page and every sub-page go to the trash together.
+    const gone = new Set([id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const d of docs) if (d.parentId && gone.has(d.parentId) && !gone.has(d.id)) { gone.add(d.id); grew = true; }
+    }
+    for (const g of gone) suppress.current[g] = Date.now() + 2500;
+    const title = docs.find((d) => d.id === id)?.title || "Untitled page";
+    const remaining = docs.filter((d) => !gone.has(d.id));
     setDocs(remaining);
-    if (activeId === id) {
+    if (activeId && gone.has(activeId)) {
       const fallback = remaining[0]?.id ?? null;
       setActiveId(fallback);
       router.replace(fallback ? `/doc?page=${fallback}` : "/doc", { scroll: false });
     }
-    deletePage(id).catch(console.error);
+    trashPage(id)
+      .then(() =>
+        setToast({
+          message: `“${title}” moved to trash`,
+          onUndo: () => {
+            restorePage(id).then(refreshWorkspace).catch(console.error);
+          },
+        }),
+      )
+      .catch((e) => {
+        console.error(e);
+        setToast({ message: "Couldn’t delete the page — it has been put back." });
+        refreshWorkspace().catch(console.error);
+      });
   };
 
   const handleRenameSection = (id: string, name: string) => {
@@ -1090,6 +1141,7 @@ function DocPageInner() {
           onDeleteSection={handleDeleteSection}
           onMovePage={handleMovePage}
           onMoveSection={handleMoveSection}
+          onOpenTrash={() => setTrashOpen(true)}
           canEdit={canEdit}
         />
 
@@ -1358,6 +1410,8 @@ function DocPageInner() {
             }}
           />
 
+          {session && <HistoryToggle key={active.id} workspaceId={session.workspaceId} pageId={active.id} />}
+
           <div className="rail-footer">
             <div className="foot-row">
               <span className="foot-key">Last edited</span>
@@ -1379,30 +1433,19 @@ function DocPageInner() {
 
       {/* ---------------- floating dock (global chrome) ---------------- */}
       <Dock
-        leading={
-          <button className="dock-search" onClick={() => setPaletteOpen(true)}>
-            <Search className="dock-search-icon" />
-            <kbd className="kbd">⌘K</kbd>
-          </button>
-        }
+        search={docSearch}
         onNew={canEdit ? () => handleNewPage(activeSectionId, active.group) : undefined}
       />
 
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        docs={docs}
-        activeSectionId={activeSectionId}
-        activeGroup={active.group}
-        onJump={openPage}
-        canCreate={canEdit}
-        onNewPage={handleNewPage}
-        onNewSection={() => {
-          const name = window.prompt("New section name");
-          if (name && name.trim()) handleNewSection(name.trim());
-        }}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
+      {trashOpen && (
+        <TrashDialog
+          workspaceId={session!.workspaceId}
+          onClose={() => setTrashOpen(false)}
+          onRestored={() => refreshWorkspace().catch(console.error)}
+        />
+      )}
+      {toast && <UndoToast message={toast.message} onUndo={toast.onUndo} onDismiss={dismissToast} />}
+
 
       {session && (
         <Settings

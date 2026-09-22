@@ -155,6 +155,7 @@
 }
 .new-page:hover { background: var(--line-soft); color: var(--ink); }
 .new-page-icon { width: 15px; height: 15px; }
+.sidebar-trash { margin-top: auto; }
 
 /* ---- responsive: below 860px the sidebar becomes a slide-in drawer,
    opened via the topbar's hamburger button (app/page.tsx toggles

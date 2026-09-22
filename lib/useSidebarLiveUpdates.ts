@@ -3,6 +3,11 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 
+// supabase.channel(name) returns an existing channel with the same topic, and
+// callbacks can't be added once it's subscribed — so two components watching
+// the same tables (e.g. the notification bell and My Work) need distinct names.
+let channelSeq = 0;
+
 /** Workspace snapshots recover missed events; DELETE events cannot be filtered. */
 export function useSidebarLiveUpdates(workspaceId: string | null, tables: string[], refresh: () => Promise<void>) {
   const refreshRef = useRef(refresh);
@@ -30,7 +35,7 @@ export function useSidebarLiveUpdates(workspaceId: string | null, tables: string
       clearTimeout(timer);
       timer = setTimeout(run, 250);
     }
-    const channel = supabase.channel(`sidebar:${workspaceId}:${tableKey}`);
+    const channel = supabase.channel(`sidebar:${workspaceId}:${tableKey}:${++channelSeq}`);
     for (const table of tableKey.split(",")) {
       for (const event of ["INSERT", "UPDATE"] as const) {
         channel.on("postgres_changes", { event, schema: "public", table, filter: `project_id=eq.${workspaceId}` }, schedule);

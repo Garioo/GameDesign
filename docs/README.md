@@ -46,6 +46,7 @@ as the production redirect URL. See the full setup in
 | `/auth/callback` | OAuth redirect handler                        |
 | `/doc`           | The collaborative editor (requires auth)      |
 | `/board`         | Kanban boards; **All boards** (sidebar or board picker) stacks every board as its own section, drag-and-drop stays within a board |
+| `/work`          | My Work: tasks assigned to you across every board, grouped by priority, plus unread mentions and to-dos on pages you own |
 
 ## Documentation
 
@@ -58,6 +59,7 @@ as the production redirect URL. See the full setup in
 
 Apply `supabase/migrate-calendar-events.sql` after the base schema and security setup.
 For existing event tables, also apply `supabase/migrate-calendar-event-ranges.sql` to add end dates.
+To subscribe the workspace to a Moodle calendar (Calendar → **Calendars**), apply `supabase/migrate-calendar-feeds.sql`. Events are fetched server-side by `app/api/calendar-feed/route.ts`, since Moodle doesn't allow browser requests from other sites.
 The Calendar's **New event** action creates shared workspace events with inclusive start and end dates,
 optional start/end times, location, and notes. Events are stored in `calendar_events`,
 independently of Board and Gantt tasks. Month, Week, and Day views share the same
@@ -86,6 +88,80 @@ a board: its stages and every task, including subtask hierarchy and any dependen
 fully internal to the board. Canvas links and milestones are deliberately not copied — see the
 comment at the top of `supabase/migrate-board-copy.sql`, which this needs applied first.
 
+
+## Page trash and global search
+
+Apply `supabase/migrate-page-trash.sql`. Deleting a page now moves it, and its
+sub-pages, to a trash (Pages sidebar → **Trash**) instead of hard-deleting it.
+An undo toast appears right after the delete. Restoring brings back exactly the
+pages trashed together; a page whose parent is still trashed returns at the top
+level. Pages stay in the trash for 30 days and are purged the next time someone
+in the workspace trashes a page. Only owners and editors can trash, restore or
+delete forever.
+
+**⌘K** now works on every screen with the dock. It searches pages (titles and
+body text), canvases, boards, tasks (title, description, tags) and calendar
+events. Canvases open via `?c=`, boards via `?board=`, and events via
+`/calendar?date=YYYY-MM-DD`.
+
+## Task details: links, discussion, subtasks, tags
+
+Apply `supabase/migrate-card-comments.sql` (after the notifications and
+comments-realtime migrations). The task dialog now has:
+
+- **A shareable link.** Opening a task puts `?board=<id>&card=<id>` in the URL, and
+  **Copy link** copies it. Opening that URL opens the task on its board. Task
+  assignment and task @mention notifications link straight to the task.
+- **A discussion thread.** The same comments as pages: threads, @mentions (which
+  notify), edit, resolve, and live updates. Viewers can comment too.
+- **Subtasks.** Direct subtasks are listed with their stage and a done count.
+  Clicking one opens it, and editors can add one in place. Cards on the board show
+  a `☑ done/total` badge.
+- **Tags.** Add them with Enter or a comma, and remove them with × or Backspace
+  (max 20).
+
+The notification bell can also dismiss notifications now.
+
+## My Work and task moves
+
+Apply `supabase/migrate-move-card.sql` **before deploying this client**: dragging
+a task between stages and changing its stage from My Work both call
+`move_board_card`. It moves the task and writes the destination stage's order in
+one transaction. That replaces the old snapshot round-trip, which failed with
+"The schedule changed" whenever a teammate edited the board. Moves stay within
+the task's own board, and only editors can make them.
+
+**My Work** (`/work`, in the dock, and linked from the "tasks for me" count on
+Home) lists every task you're assigned to, grouped High → Medium → Low → no
+priority. Within a group, tasks are ordered by board, then stage, then position.
+Each row shows the board color, category and subtask progress. Editors can change
+a task's stage and priority inline, and the task title opens it on its board.
+Tasks in done stages sit behind **Show done**. The side rail lists unread mentions
+and assignments, and open to-dos on pages you own, which you can tick off there.
+The page updates live.
+
+## Activity feed and more notifications
+
+Apply `supabase/migrate-activity.sql` after the page-trash and card-comments
+migrations. It redefines `trash_page`/`restore_page` so that each trash or
+restore logs one entry.
+
+- **What gets recorded:** pages created, status changed, trashed or restored;
+  tasks created, moved to another stage (or completed) or assigned; comments on
+  pages and tasks; canvases created; members joining through an invite.
+  Rows are written only by database triggers. The client can't insert them, so
+  nobody can forge an entry.
+- **Repeats are folded together:** within 10 minutes, the same person doing the
+  same kind of thing to the same item updates one row instead of adding more
+  (e.g. "added 5 tasks to Gameplay", "left 3 comments on Combat"). A status or
+  stage change that is reversed inside that window disappears.
+- **Not recorded:** block text edits. "Recently edited" already covers those.
+- **Where it shows:** a **Team activity** feed on Home, and a collapsed
+  **History** section in each page's side panel and each task dialog.
+- **New notifications:** **replies** (everyone else in a comment thread hears
+  about a new reply, unless it @-mentions them, in which case they get the
+  mention instead) and **page ownership** (you're made owner of a page by
+  someone else).
 
 ## Phase planning
 

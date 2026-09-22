@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  deleteNotification,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  notificationVerb,
   type NotificationRow,
 } from "@/lib/notificationsRepo";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
@@ -53,7 +55,17 @@ export default function NotificationBell({ workspaceId }: { workspaceId: string 
       setNotifications((prev) => prev.map((p) => (p.id === n.id ? { ...p, read_at: new Date().toISOString() } : p)));
       markNotificationRead(n.id).catch(console.error);
     }
-    router.push(n.link);
+    // Routes read their query (e.g. ?card=) on load, so a same-route link reloads.
+    if (new URL(n.link, window.location.origin).pathname === window.location.pathname) window.location.assign(n.link);
+    else router.push(n.link);
+  };
+
+  const dismiss = (n: NotificationRow) => {
+    setNotifications((prev) => prev.filter((p) => p.id !== n.id));
+    deleteNotification(n.id).catch((e) => {
+      console.error(e);
+      refresh().catch(console.error);
+    });
   };
 
   return (
@@ -85,21 +97,24 @@ export default function NotificationBell({ workspaceId }: { workspaceId: string 
             )}
           </div>
           <div className="notif-list">
-            {notifications.length === 0 && <p className="notif-empty">Nothing yet — @mention someone in a comment or assign them a task and they'll show up here.</p>}
+            {notifications.length === 0 && <p className="notif-empty">Nothing yet. You’ll hear about @mentions, replies to your threads, tasks assigned to you and pages you’re made owner of.</p>}
             {notifications.map((n) => (
-              <button type="button" key={n.id} className={"notif-item" + (n.read_at ? "" : " is-unread")} onClick={() => openNotification(n)}>
+              <div key={n.id} className="notif-row">
+              <button type="button" className={"notif-item" + (n.read_at ? "" : " is-unread")} onClick={() => openNotification(n)}>
                 <span className="notif-avatar" style={{ background: n.actor_color ?? "#a59a8c" }}>
                   {n.actor_initials ?? "?"}
                 </span>
                 <span className="notif-body">
                   <span className="notif-text">
                     <strong>{n.actor_name ?? "Someone"}</strong>{" "}
-                    {n.kind === "mention" ? "mentioned you in a comment" : "assigned you a task"}
+                    {notificationVerb(n)}
                   </span>
                   <span className="notif-snippet">{n.snippet}</span>
                   <span className="notif-time">{timeAgo(n.created_at)}</span>
                 </span>
               </button>
+              <button type="button" className="notif-dismiss" aria-label="Dismiss notification" title="Dismiss" onClick={() => dismiss(n)}>×</button>
+              </div>
             ))}
           </div>
         </div>

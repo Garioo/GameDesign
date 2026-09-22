@@ -15,7 +15,7 @@ export interface NotificationRow {
   actor_name: string | null;
   actor_initials: string | null;
   actor_color: string | null;
-  kind: "mention" | "assignment";
+  kind: "mention" | "assignment" | "reply" | "page_owner";
   snippet: string;
   link: string;
   read_at: string | null;
@@ -31,6 +31,17 @@ function notificationsError(error: { code?: string; message: string }) {
 }
 
 /** Recent notifications for the signed-in user in this workspace, newest first. */
+/** "mentioned you in a comment", "replied to your thread", … — the sentence after the actor's name. */
+export function notificationVerb(n: Pick<NotificationRow, "kind" | "link">): string {
+  const onTask = n.link.includes("card=");
+  switch (n.kind) {
+    case "mention": return onTask ? "mentioned you on a task" : "mentioned you in a comment";
+    case "reply": return onTask ? "replied on a task thread" : "replied to a thread you're in";
+    case "page_owner": return "made you owner of a page";
+    default: return "assigned you a task";
+  }
+}
+
 export async function listNotifications(workspaceId: string, limit = 50): Promise<NotificationRow[]> {
   const { data, error } = await supabase
     .from("notification_rows")

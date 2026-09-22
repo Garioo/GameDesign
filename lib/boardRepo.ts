@@ -131,6 +131,17 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
   }));
 }
 
+/** When each finished task was finished (card id → ISO time), from
+ *  supabase/migrate-card-completed-at.sql. Empty until that migration is applied. */
+export async function loadCompletions(workspaceId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from("card_completions").select("card_id, completed_at").eq("project_id", workspaceId);
+  if (error) {
+    if (error.code !== "PGRST205" && error.code !== "42P01") console.error("loadCompletions failed", error.message);
+    return new Map();
+  }
+  return new Map((data ?? []).map((r: { card_id: string; completed_at: string }) => [r.card_id, r.completed_at]));
+}
+
 /** Create a board only with an explicitly supplied workflow. */
 export async function createBoard(workspaceId:string,name:string,stages:import('./stagesRepo').StageDraft[]):Promise<Board>{
   const {saveBoardStages}=await import('./stagesRepo');
@@ -222,26 +233,54 @@ export async function createCard(
 }
 
 /**
- * Move a card into a column and persist the target column's new card order.
- * orderedCardIds is the full ordered list of card ids in the destination
- * column after the move (including the moved card).
+ * Create a subtask under a parent task, in the given stage of the parent's
+ * board. Created like any new task (no dates), then attached to the parent
+ * through the hierarchy mutation so its validation still applies.
+ */
+export async function createSubtask(
+  workspaceId: string,
+  parentId: string,
+  columnId: string,
+  title: string,
+): Promise<BoardCard> {
+  const card = await createCard(workspaceId, columnId, title);
+  try {
+    const snapshot = await loadSchedule(workspaceId);
+    await mutateSchedule(workspaceId, snapshot, { op: "card", card: { id: card.id, parent_id: parentId } });
+  } catch (e) {
+    await deleteCard(card.id).catch(console.error);
+    throw e;
+  }
+  return { ...card, parentId };
+}
+
+/**
+ * Move a card into a column and persist the target column's new card order,
+ * atomically (supabase/migrate-move-card.sql). orderedCardIds is the full
+ * ordered list of card ids in the destination column after the move
+ * (including the moved card). The column must be on the card's own board.
  */
 export async function moveCard(
   cardId: string,
   toColumnId: string,
   orderedCardIds: string[],
 ): Promise<void> {
-  const {data, error} = await supabase.from('board_cards').select('project_id').eq('id',cardId).single();
-  if (error) throw new Error(`moveCard failed: ${error.message}`);
-  const snapshot = await loadSchedule(data.project_id);
-  const card = snapshot.cards.find(c=>c.id===cardId);
-  if(!card) throw new Error('Task unavailable');
-  await mutateSchedule(data.project_id,snapshot,{op:'card',card:{id:card.id,start_date:card.start_date,deadline:card.deadline,firm_deadline:card.firm_deadline,column_id:toColumnId}});
-  await Promise.all(
-    orderedCardIds.map((id, i) =>
-      supabase.from("board_cards").update({ position: i }).eq("id", id),
-    ),
-  );
+  const { error } = await supabase.rpc("move_board_card", {
+    p_card: cardId,
+    p_column: toColumnId,
+    p_ordered: orderedCardIds,
+  });
+  if (error) {
+    throw new Error(error.code === "PGRST202"
+      ? "Moving tasks needs a database update. Apply supabase/migrate-move-card.sql in Supabase."
+      : `moveCard failed: ${error.message}`);
+  }
+}
+
+/** Change only a task's priority ("high" | "medium" | "low", or null to clear). */
+export async function setCardPriority(cardId: string, priority: string | null): Promise<void> {
+  const { error } = await supabase.from("board_cards").update({ priority }).eq("id", cardId);
+  if (error) throw new Error(`setCardPriority failed: ${error.message}`);
 }
 
 /** Persist a board's column order. */

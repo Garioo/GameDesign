@@ -21,7 +21,7 @@
                                main, right rail, dock, meta card)
      app/doc/Sidebar.css ..... left navigation tree
      app/doc/BlockEditor.css . the block editor + slash menu
-     app/doc/CommandPalette.css the ⌘K palette
+     app/components/CommandPalette.css the ⌘K palette
 
    Because each component owns its own stylesheet, two developers
    editing different components touch different files — so they no

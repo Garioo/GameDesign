@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import GlobalSearch, { type SearchConfig } from "./GlobalSearch";
 import "./chrome.css";
 
 type IconProps = { className?: string };
@@ -36,6 +37,16 @@ const CalendarIcon = ({ className }: IconProps) => (
     <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 11h18M7 15h2M15 15h2" />
   </svg>
 );
+const CheckIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" />
+  </svg>
+);
+const SearchIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+  </svg>
+);
 const Plus = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M12 5v14M5 12h14" />
@@ -44,6 +55,7 @@ const Plus = ({ className }: IconProps) => (
 
 const ITEMS: { id: string; label: string; href?: string; Icon: ComponentType<IconProps> }[] = [
   { id: "home", label: "Home", href: "/home", Icon: HomeIcon },
+  { id: "work", label: "My Work", href: "/work", Icon: CheckIcon },
   { id: "pages", label: "Pages", href: "/doc", Icon: Doc },
   { id: "canvas", label: "Canvas", href: "/doc/canvas", Icon: Grid },
   { id: "board", label: "Board", href: "/board", Icon: Columns },
@@ -58,13 +70,14 @@ function activeFromPath(path: string): string {
   if (path.startsWith("/table")) return "table";
   if (path.startsWith("/board")) return "board";
   if (path.startsWith("/home")) return "home";
+  if (path.startsWith("/work")) return "work";
   return "";
 }
 
 interface DockProps {
   planningBoardId?: string;
-  /** Extra leading content before the nav items (e.g. the ⌘K search). */
-  leading?: ReactNode;
+  /** Route-specific additions to the ⌘K search (live pages, extra commands). */
+  search?: SearchConfig;
   /** "New" action; the button is hidden when omitted. */
   onNew?: () => void;
   newLabel?: string;
@@ -73,10 +86,31 @@ interface DockProps {
   tools?: ReactNode;
 }
 
-export default function Dock({ leading, onNew, newLabel = "New", tools, planningBoardId }: DockProps) {
+export default function Dock({ search, onNew, newLabel = "New", tools, planningBoardId }: DockProps) {
   const router = useRouter();
   const pathname = usePathname();
   const active = activeFromPath(pathname);
+
+  // ⌘K / Ctrl-K toggles the search on every route that shows the dock.
+  const [searchOpen, setSearchOpen] = useState(false);
+  // "⌘K" on Apple devices, "Ctrl K" elsewhere. Decided after mount so the
+  // server-rendered markup (which can't know the platform) never mismatches.
+  const [shortcut, setShortcut] = useState("⌘K");
+  useEffect(() => {
+    const platform =
+      (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? "";
+    if (!/mac|iphone|ipad|ipod/i.test(platform)) setShortcut("Ctrl K");
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const [navHover, setNavHover] = useState(false);
   const navRevert = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,8 +138,11 @@ export default function Dock({ leading, onNew, newLabel = "New", tools, planning
       <nav className="dock">
         {showNav ? (
           <div key="nav" className="dock-row dock-nav">
-            {leading}
-            {leading && <span className="dock-divider" />}
+            <button className="dock-search" onClick={() => setSearchOpen(true)} aria-label={`Search (${shortcut})`}>
+              <SearchIcon className="dock-search-icon" />
+              <kbd className="kbd">{shortcut}</kbd>
+            </button>
+            <span className="dock-divider" />
             {ITEMS.map(({ id, label, href, Icon }) => (
               <button
                 key={id}
@@ -127,6 +164,7 @@ export default function Dock({ leading, onNew, newLabel = "New", tools, planning
           </div>
         )}
       </nav>
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} config={search} />
       {tools && (
         <div className="dock-hint" title="Menu" onMouseEnter={() => setNavHover(true)}>
           <span className="dock-hint-bar" />

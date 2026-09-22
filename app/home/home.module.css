@@ -199,6 +199,17 @@
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+.statLink {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+}
+.statLink:hover {
+  border-bottom-color: var(--ember);
+}
+.statLink:hover .statNum {
+  color: var(--ember-deep);
+}
 .statRule {
   width: 1px;
   height: 22px;
@@ -322,12 +333,18 @@
   margin-top: 44px;
 }
 
-/* left column stacks "Recently edited" over "Open to-dos" */
-.main {
+/* Two stacks: pages ("Recently edited", "Open to-dos") and team ("Team scoreboard",
+   "Team activity"). One after the other by default; side by side on wide screens. */
+.main,
+.mainCol {
   display: flex;
   flex-direction: column;
   gap: var(--sp-5);
   min-width: 0;
+}
+/* Rows adapt to the column they're in, not the window (see the @container rule below). */
+.mainCol {
+  container-type: inline-size;
 }
 
 .section {
@@ -335,6 +352,8 @@
 }
 .sectionHead {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 12px;
@@ -638,6 +657,14 @@
 }
 
 /* ---------------- workspace rail ---------------- */
+.activityCard {
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  padding: 14px 18px 16px;
+}
+
 .rail {
   display: flex;
   flex-direction: column;
@@ -904,6 +931,30 @@
 }
 
 /* ---------------- responsive ---------------- */
+/* A narrow column (side by side on a wide screen, or a small window) drops the extras. */
+@container (max-width: 520px) {
+  .recentRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .recentOwner,
+  .recentWhen,
+  .todoPage {
+    display: none;
+  }
+}
+/* Wide screens: use the side space — pages and team sit next to each other, rail on the right. */
+@media (min-width: 1280px) {
+  .shell {
+    max-width: 1520px;
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+  .main {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
 @media (max-width: 880px) {
   .columns {
     grid-template-columns: 1fr;
@@ -922,6 +973,8 @@
   }
   .stats {
     gap: var(--sp-4);
+    flex-wrap: wrap;
+    row-gap: 10px;
   }
   .statNum {
     font-size: 22px;

@@ -89,7 +89,7 @@ on all tables.** Tables:
 | `blocks`          | Page body content (type, content JSONB, position)        |
 | `comments`        | Threaded discussion (page_id, parent_id)                 |
 | `milestones`      | Project timeline                                         |
-| `activity`        | Audit / activity feed                                    |
+| `activity`        | Team activity feed, written only by triggers (`migrate-activity.sql`) |
 
 ## Real-time patterns
 
@@ -127,6 +127,12 @@ trade-off between "feels instant" and "doesn't hammer the database."
    14. `migrate-board-color.sql`
    15. `migrate-board-copy.sql`
    16. `migrate-phase-planning.sql` — apply once before deploying the phase-only Gantt client; keep last because it wraps the task and board-copy RPCs.
+   17. `migrate-page-trash.sql` — page trash/restore (`trash_page`, `restore_page`); independent of the planning migrations.
+   18. `migrate-card-comments.sql` — comments on board tasks; apply after `migrate-notifications.sql` and `migrate-comments-realtime.sql` (it replaces their comment policies and notification triggers).
+   19. `migrate-move-card.sql` — `move_board_card`: moves a task between stages of its board and writes that stage's order in one transaction; apply after `migrate-phase-planning.sql`.
+   20. `migrate-activity.sql` — team activity feed (trigger-written `activity` rows) plus `reply` and `page_owner` notifications; apply after `migrate-page-trash.sql` and `migrate-card-comments.sql` (it redefines `trash_page`/`restore_page`).
+   21. `migrate-calendar-feeds.sql` — subscribed Moodle calendars on the workspace calendar. The export link is hidden from normal reads (column grants) and read by `/api/calendar-feed` through `calendar_feed_url()`; apply after `migrate-calendar-events.sql`.
+   22. `migrate-card-completed-at.sql` — `card_completions` (when each task was finished), kept by triggers as tasks enter/leave done stages; feeds the Team scoreboard on Home. A separate table so the migration never writes `board_cards`, whose guards require a signed-in member. Apply after `migrate-activity.sql` (the backfill reads the activity feed).
 
    All of them are written to be safe to rerun, so applying the whole list again after a new one
    is added won't touch existing data.

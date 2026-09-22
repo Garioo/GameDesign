@@ -91,7 +91,22 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  await clickOutside();
  await filtersPanel.waitFor({state:'hidden'});
 
+ // Deep link: /board?card=<id> opens that task's dialog on its board; closing drops ?card=.
+ const prototypeId=(await db.query("select id from board_cards where title='Prototype' limit 1")).rows[0].id;
+ await page.goto((process.env.APP_URL || 'http://localhost:3000')+'/board?card='+prototypeId);
+ const dialog=page.getByRole('dialog',{name:'Task details'});
+ await dialog.waitFor({timeout:15000});
+ assert.equal((await dialog.getByRole('heading',{level:2}).innerText()).trim(),'Prototype','Deep link opens the linked task in view mode');
+ await dialog.getByRole('button',{name:'Edit',exact:true}).click();
+ assert.equal(await dialog.locator('input.modal-input').first().inputValue(),'Prototype','Edit switches to the form');
+ await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+ await dialog.getByRole('button',{name:'Edit',exact:true}).waitFor();
+ assert.ok(new URL(page.url()).searchParams.get('board'),'Opening a task pins its board in the URL');
+ await dialog.getByRole('button',{name:'Close task details'}).click();
+ await dialog.waitFor({state:'hidden'});
+ assert.equal(new URL(page.url()).searchParams.get('card'),null,'Closing the task removes ?card=');
+
  assert.deepEqual(errors,[]);
- console.log('Board passed: All-boards grouped view (color, task count, overflow menu), open-board switch, and outside-click closes dropdowns.');
+ console.log('Board passed: All-boards grouped view (color, task count, overflow menu), open-board switch, outside-click closes dropdowns, and ?card= deep links.');
  await browser.close();await db.close();
 })().catch(e=>{console.error(e);process.exit(1);});

@@ -110,3 +110,27 @@
   .dayEventRow { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
 }
 
+
+/* Subscribed (Moodle) calendars: read-only events in a blue tint. */
+.feedEvent, .spanEvent.feedEvent { background: #e6ecf7; border-color: #c8d4ea; color: #34507e; }
+.spanEvent.feedEvent:hover, .event.feedEvent:hover, .agendaTask.feedEvent:hover { background: #d5e0f2; border-color: #6f8cc0; }
+.agendaTask.feedEvent > svg:first-child { color: #5a77aa; }
+.feedsButton { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.feedsButton:hover { border-color: var(--ember); }
+.feedsButton svg { width: 14px; height: 14px; }
+.feedWarning { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #a13923; color: white; font-size: 11px; font-weight: 700; }
+.feedList { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.feedList li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.feedList li > span:nth-child(2) { flex: 1; min-width: 0; font-size: 13px; }
+.feedList small { display: block; margin-top: 4px; color: #a13923; font-size: 11px; line-height: 1.4; }
+.feedSwatch { width: 10px; height: 10px; border-radius: 3px; background: #6f8cc0; flex-shrink: 0; }
+.eventDialog .feedReload { margin-bottom: 22px; }
+
+/* Week overview: faded weekends and ISO week numbers on each Monday. */
+.weekend { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.weekend .date { color: var(--ink-soft); }
+.weekend.outside { background: color-mix(in srgb, var(--ink) 7%, var(--line-soft)); }
+.weekend.selected { background: var(--ember-tint); }
+.weekdays .weekendHead { color: var(--ink-faint); }
+.weekNumber { position: relative; float: right; margin: 5px 2px 0 0; font-size: 10px; font-weight: 600; color: var(--ink-faint); font-variant-numeric: tabular-nums; pointer-events: none; }
+@media (max-width: 600px) { .weekNumber { font-size: 9px; margin: 3px 0 0; } }

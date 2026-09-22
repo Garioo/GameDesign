@@ -278,7 +278,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
         (p) => p.title === "Production" && !p.category_id,
       ),
     );
-    await page.getByLabel("Show phases", { exact: true }).selectOption("all");
+    // Creating a phase while every phase is shown keeps the "All phases" view.
+    await page.getByRole("button", { name: "Show phases", exact: true }).click();
+    assert.ok(
+      await page
+        .getByRole("group", { name: "Phases to show" })
+        .getByLabel("All phases", { exact: true })
+        .isChecked(),
+    );
+    await page.keyboard.press("Escape");
     viewer = true;
     await db.exec("set test.role='viewer'");
     await page.reload();

@@ -1,0 +1,200 @@
+/* Team scoreboard on Home: finished board tasks per person and per week.
+   One measure, one hue (ember); avatars carry each person's identity. */
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px 20px;
+}
+.empty {
+  margin: 0;
+  padding: 20px 8px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+.bigNumber {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  margin-right: 8px;
+  color: var(--ink);
+}
+.bigLabel {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.delta {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 22px 28px minmax(0, 160px) minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.me {
+  background: var(--ember-tint);
+}
+.rank {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-faint);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
+.name {
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name small {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+.you {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.track {
+  height: 10px;
+  border-radius: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.bar {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: 4px;
+  background: var(--ember);
+  transition: width 0.4s var(--ease-rise, ease);
+}
+.count {
+  text-align: right;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  margin: 10px 8px 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.chart {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.chart figcaption {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+.weeks {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+.week {
+  display: grid;
+  grid-template-rows: 16px 72px 16px;
+  justify-items: center;
+  gap: 4px;
+}
+.weekValue,
+.weekLabel {
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.weekLabel {
+  color: var(--ink-faint);
+}
+.weekTrack {
+  width: 100%;
+  max-width: 34px;
+  height: 72px;
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--line);
+}
+.weekBar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in srgb, var(--ember) 55%, var(--surface));
+}
+.weekNow {
+  background: var(--ember);
+}
+.week:hover .weekBar {
+  background: var(--ember-deep);
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .card { padding: 14px 12px 16px; }
+  .row { grid-template-columns: 18px 26px minmax(0, 1fr) 60px 28px; gap: 8px; padding: 6px 4px; }
+  .weeks { gap: 4px; }
+}
+.since {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+/* In a narrow Home column the name gives up width to the bar. */
+@container (max-width: 520px) {
+  .row { grid-template-columns: 18px 26px minmax(0, 120px) minmax(40px, 1fr) 28px; gap: 8px; padding: 6px 4px; }
+  .card { padding: 16px 14px 18px; }
+}

@@ -24,7 +24,7 @@ import {
 } from "@/lib/boardRepo";
 import { boardColor } from "@/lib/boardColors";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
-import { dayNumber, dayKey, localToday } from "@/lib/gantt";
+import { dayNumber, dayKey, isoWeek, localToday, weekday } from "@/lib/gantt";
 import {
   loadPhases,
   mutatePhases,
@@ -49,7 +49,138 @@ type Drag = {
   phase: Phase;
   snapshot: PhaseSnapshot;
 };
-type Preferences = { board: string; collapsed: string[]; zoom: number };
+/** `shown` lists the board ids to show; `null` means every phase, `[]` means none. */
+type Preferences = {
+  shown: string[] | null;
+  collapsed: string[];
+  zoom: number;
+  /** "start": earliest start first; "board": the boards' own order from the sidebar. */
+  sort: "start" | "board";
+};
+
+/** Earliest start first, then earliest end, then title; unscheduled phases go last. */
+function byStartDate(a: Phase, b: Phase) {
+  const as = a.effective_start, bs = b.effective_start;
+  if (!as || !bs) return as ? -1 : bs ? 1 : a.title.localeCompare(b.title);
+  return (
+    as.localeCompare(bs) ||
+    (a.effective_end ?? "").localeCompare(b.effective_end ?? "") ||
+    a.title.localeCompare(b.title)
+  );
+}
+
+/** Checkbox dropdown for picking any subset of phases. The panel is positioned `fixed`
+ *  from the trigger's rect because `.phase-toolbar` scrolls horizontally and would clip
+ *  an absolutely positioned panel. */
+function PhasePicker({
+  phases,
+  selected,
+  onChange,
+}: {
+  phases: Phase[];
+  selected: string[] | null;
+  onChange: (boards: string[] | null) => void;
+}) {
+  const [open, setOpen] = useState<{ top: number; left: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
+      if (e.type === "pointerdown" && rootRef.current?.contains(e.target as Node))
+        return;
+      setOpen(null);
+      if (e.type === "keydown") triggerRef.current?.focus();
+    };
+    const dismiss = () => setOpen(null);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    window.addEventListener("resize", dismiss);
+    const toolbar = triggerRef.current?.closest(".phase-toolbar");
+    toolbar?.addEventListener("scroll", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+      window.removeEventListener("resize", dismiss);
+      toolbar?.removeEventListener("scroll", dismiss);
+    };
+  }, [open]);
+  const label =
+    selected === null
+      ? "All phases"
+      : selected.length === 0
+        ? "No phases"
+        : selected.length === 1
+          ? (phases.find((p) => p.board_id === selected[0])?.title ??
+            "1 phase")
+          : `${selected.length} phases`;
+  const toggle = (id: string) => {
+    // From "all", unticking one phase narrows to everything except it.
+    const current = selected ?? phases.map((p) => p.board_id);
+    const next = current.includes(id)
+      ? current.filter((b) => b !== id)
+      : [...current, id];
+    // Ticking every phase is the same as "all", so later phases show up too.
+    onChange(next.length === phases.length ? null : next);
+  };
+  return (
+    <div className="phase-picker" ref={rootRef}>
+      <button
+        ref={triggerRef}
+        aria-label="Show phases"
+        aria-haspopup="true"
+        aria-expanded={!!open}
+        onClick={() => {
+          if (open) return setOpen(null);
+          const r = triggerRef.current!.getBoundingClientRect();
+          setOpen({ top: r.bottom + 6, left: r.left });
+        }}
+      >
+        {label} <span aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div
+          className="phase-picker-panel"
+          role="group"
+          aria-label="Phases to show"
+          style={{ top: open.top, left: open.left }}
+        >
+          <label>
+            <input
+              type="checkbox"
+              checked={selected === null}
+              onChange={() => onChange(selected === null ? [] : null)}
+            />
+            All phases
+          </label>
+          <hr />
+          {phases.map((p) => (
+            <label key={p.id}>
+              <input
+                type="checkbox"
+                checked={selected === null || selected.includes(p.board_id)}
+                onChange={() => toggle(p.board_id)}
+              />
+              {p.title}
+            </label>
+          ))}
+          <div className="phase-picker-actions">
+            <button disabled={selected === null} onClick={() => onChange(null)}>
+              Select all
+            </button>
+            <button
+              disabled={selected?.length === 0}
+              onClick={() => onChange([])}
+            >
+              Remove all
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PhaseEditor({
   phase,
@@ -209,9 +340,10 @@ export default function GanttWorkspace() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [preferences, setPreferences] = useState<Preferences>({
-    board: "all",
+    shown: null,
     collapsed: [],
     zoom: 40,
+    sort: "start",
   });
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<{
@@ -281,14 +413,21 @@ export default function GanttWorkspace() {
         const requested = new URLSearchParams(window.location.search).get(
           "board",
         );
+        // v1 preferences stored a single `board` ("all" or an id); still honour it.
+        const legacy = (saved as { board?: unknown }).board;
         setPreferences({
-          board:
-            requested ||
-            (typeof saved.board === "string" ? saved.board : "all"),
+          shown: requested
+            ? [requested]
+            : Array.isArray(saved.shown)
+              ? saved.shown.filter((id) => typeof id === "string")
+              : typeof legacy === "string" && legacy !== "all"
+                ? [legacy]
+                : null,
           collapsed: Array.isArray(saved.collapsed)
             ? saved.collapsed.filter((id) => typeof id === "string")
             : [],
           zoom: [24, 40, 64].includes(saved.zoom ?? 0) ? saved.zoom! : 40,
+          sort: saved.sort === "board" ? "board" : "start",
         });
         await refresh(s.workspaceId);
       } catch (e) {
@@ -359,13 +498,22 @@ export default function GanttWorkspace() {
     }
   }
   const phases = snapshot?.phases ?? [];
-  const main = phases.filter((p) => !p.category_id);
-  const active = phases.filter((p) => p.active);
-  const chosenBoard = main.some((p) => p.board_id === preferences.board)
-    ? preferences.board
-    : "all";
+  // The snapshot arrives in board order; "start" re-sorts phases and, within each, categories.
+  const ordered =
+    preferences.sort === "start" ? [...phases].sort(byStartDate) : phases;
+  const main = ordered.filter((p) => !p.category_id);
+  const active = ordered.filter((p) => p.active);
+  // Drop ids of boards that no longer have a phase. If a non-empty filter loses all of
+  // them, show everything rather than an empty chart; an explicit "Remove all" stays empty.
+  const surviving = preferences.shown?.filter((id) =>
+    main.some((p) => p.board_id === id),
+  );
+  const chosenBoards =
+    !surviving || (!surviving.length && preferences.shown!.length)
+      ? null
+      : surviving;
   const rows: Phase[] = main
-    .filter((p) => chosenBoard === "all" || p.board_id === chosenBoard)
+    .filter((p) => !chosenBoards || chosenBoards.includes(p.board_id))
     .flatMap((p) => {
       const children = active.filter(
         (c) => c.board_id === p.board_id && c.category_id,
@@ -394,6 +542,8 @@ export default function GanttWorkspace() {
   const months = ticks.filter(
     (day) => day === first || dayKey(day).endsWith("-01"),
   );
+  // Label each week at its Monday, plus the partial week the chart opens on.
+  const weeks = ticks.filter((day) => day === first || weekday(day) === 0);
   const rowIndex = new Map(rows.map((p, i) => [p.id, i]));
   const editing = phases.find((p) => p.id === editor?.id);
   function openEditor(id: string) {
@@ -522,23 +672,14 @@ export default function GanttWorkspace() {
           </div>
         )}
         <div className="phase-toolbar">
-          <label>
+          <div className="phase-show">
             Show
-            <select
-              aria-label="Show phases"
-              value={chosenBoard}
-              onChange={(e) =>
-                setPreferences((p) => ({ ...p, board: e.target.value }))
-              }
-            >
-              <option value="all">All phases</option>
-              {main.map((p) => (
-                <option key={p.id} value={p.board_id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </label>
+            <PhasePicker
+              phases={main}
+              selected={chosenBoards}
+              onChange={(shown) => setPreferences((p) => ({ ...p, shown }))}
+            />
+          </div>
           <input
             aria-label="Search phases"
             type="search"
@@ -557,6 +698,22 @@ export default function GanttWorkspace() {
             >
               Today
             </button>
+            <label>
+              Sort
+              <select
+                aria-label="Sort phases"
+                value={preferences.sort}
+                onChange={(e) =>
+                  setPreferences((p) => ({
+                    ...p,
+                    sort: e.target.value === "board" ? "board" : "start",
+                  }))
+                }
+              >
+                <option value="start">Start date</option>
+                <option value="board">Board order</option>
+              </select>
+            </label>
             <label>
               Scale
               <select
@@ -753,7 +910,17 @@ export default function GanttWorkspace() {
             aria-label="Phase timeline"
             tabIndex={0}
           >
-            <div className="phase-grid" style={{ width: labelWidth + width }}>
+            <div
+              className="phase-grid"
+              style={
+                {
+                  width: labelWidth + width,
+                  // Rows draw day lines, Monday lines and weekend shading from these.
+                  "--phase-day": `${preferences.zoom}px`,
+                  "--phase-week-offset": `${((7 - weekday(first)) % 7) * preferences.zoom}px`,
+                } as CSSProperties
+              }
+            >
               <div className="phase-grid-header">
                 <div className="phase-label-header">PHASE / COMPLETION</div>
                 <div className="phase-ruler" style={{ width }}>
@@ -769,23 +936,39 @@ export default function GanttWorkspace() {
                       )}
                     </span>
                   ))}
+                  {weeks.map((day) => (
+                    <span
+                      className="phase-week-label"
+                      key={day}
+                      style={{
+                        left: (day - first) * preferences.zoom,
+                        width: (7 - weekday(day)) * preferences.zoom,
+                      }}
+                    >
+                      {preferences.zoom < 40 && day !== first ? "W" : "Week "}
+                      {isoWeek(day)}
+                    </span>
+                  ))}
                   {ticks.map((day) => (
                     <span
-                      className="phase-day-label"
+                      className={`phase-day-label${weekday(day) >= 5 ? " phase-weekend" : ""}${weekday(day) === 0 ? " phase-monday" : ""}${day === today ? " phase-today-label" : ""}`}
                       key={day}
-                      title={new Date(
+                      title={`${new Date(
                         dayKey(day) + "T12:00:00",
                       ).toLocaleDateString("en", {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
                         day: "numeric",
-                      })}
+                      })} · Week ${isoWeek(day)}`}
                       style={{
                         left: (day - first) * preferences.zoom,
                         width: preferences.zoom,
                       }}
                     >
+                      {preferences.zoom >= 40 && (
+                        <small>{"MTWTFSS"[weekday(day)]}</small>
+                      )}
                       {Number(dayKey(day).slice(-2))}
                     </span>
                   ))}
@@ -874,10 +1057,7 @@ export default function GanttWorkspace() {
                       </div>
                       <div
                         className="phase-track"
-                        style={{
-                          width,
-                          backgroundSize: `${preferences.zoom}px 100%`,
-                        }}
+                        style={{ width }}
                       >
                         {r ? (
                           <div
@@ -999,7 +1179,9 @@ export default function GanttWorkspace() {
           </span>
         </p>
       </main>
-      <Dock planningBoardId={chosenBoard === "all" ? undefined : chosenBoard} />
+      <Dock
+        planningBoardId={chosenBoards?.length === 1 ? chosenBoards[0] : undefined}
+      />
       {editing && canEdit && (
         <PhaseEditor
           key={editing.id}
@@ -1028,7 +1210,12 @@ export default function GanttWorkspace() {
           onClose={() => setStageBoard(undefined)}
           onSaved={async (id) => {
             await refresh(session.workspaceId);
-            setPreferences((p) => ({ ...p, board: id }));
+            // Keep a new phase visible when a filter is active.
+            setPreferences((p) =>
+              p.shown && !p.shown.includes(id)
+                ? { ...p, shown: [...p.shown, id] }
+                : p,
+            );
           }}
         />
       )}

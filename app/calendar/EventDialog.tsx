@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { deleteCalendarEvent, saveCalendarEvent, type CalendarEvent, type CalendarEventDraft } from "@/lib/calendarEventsRepo";
 import styles from "./calendar.module.css";
 
-export default function EventDialog({ event, date, project, canEdit, onClose, onSaved, onDeleted }: {
+export default function EventDialog({ event, date, project, canEdit, source, onClose, onSaved, onDeleted }: {
   event: CalendarEvent | null;
   date: string;
   project: string;
   canEdit: boolean;
+  /** Name of the subscribed calendar a read-only event came from. */
+  source?: string;
   onClose: () => void;
   onSaved: (event: CalendarEvent) => void;
   onDeleted: (id: string) => void;
@@ -27,7 +29,7 @@ export default function EventDialog({ event, date, project, canEdit, onClose, on
       try { onSaved(await saveCalendarEvent(project, draft, event?.id)); onClose(); }
       catch (e) { setError((e as Error).message); } finally { setBusy(false); }
     }}>
-      <div className={styles.dialogHeading}><div><h2 id="event-dialog-title">{event ? "Calendar event" : "New event"}</h2><p>A shared workspace event, independent of your boards.</p></div><button type="button" aria-label="Close event" disabled={busy} onClick={onClose}>×</button></div>
+      <div className={styles.dialogHeading}><div><h2 id="event-dialog-title">{event ? "Calendar event" : "New event"}</h2><p>{source ? `From the subscribed calendar “${source}”. Change it in Moodle.` : "A shared workspace event, independent of your boards."}</p></div><button type="button" aria-label="Close event" disabled={busy} onClick={onClose}>×</button></div>
       <fieldset disabled={!canEdit || busy}>
         <label>Event title<input autoFocus required maxLength={160} value={draft.title} onChange={e => update("title", e.target.value)} placeholder="e.g. Team playtest" /></label>
         <div className={styles.timeFields}>

@@ -1,6 +1,6 @@
 "use client";
 import { parentChoices as hierarchyParentChoices } from "@/lib/taskHierarchy";
-import { loadSchedule, mutateSchedule, type ScheduleSnapshot, type ScheduleResult } from '@/lib/ganttRepo';
+import { loadSchedule, mutateSchedule, type ScheduleSnapshot } from '@/lib/ganttRepo';
 
 import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -16,6 +16,9 @@ import {PlanningIcon} from "./PlanningIcons";
 import "./planning.css";
 import PlanningDialog,{type PlanningAction} from './PlanningDialog';
 import CategoryManager from './CategoryManager';
+import { CardComments, SubtaskList, TagInput, type SubtaskItem } from "./CardDetails";
+import cardStyles from "./CardDetails.module.css";
+import { HistoryToggle } from "@/app/components/ActivityFeed";
 import TopBar, { type PresenceUser } from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
@@ -29,6 +32,7 @@ import {
   createCard,
   deleteBoard,
   deleteCard,
+  createSubtask,
   listCategories,
   loadBoards,
   moveCard,
@@ -437,9 +441,11 @@ function formatDeadline(key: string) {
 }
 
 /* ── Card component ──────────────────────────────────────────────────────── */
-function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
+function Card({ card, people, subtasks, onDragStart, onDragEnd, dropState, onClick }: {
   card: CardData;
   people: Person[];
+  /** Direct-subtask progress, when the task has any. */
+  subtasks?: { done: number; total: number };
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
   onDragEnd: () => void;
   dropState: "above" | "below" | null;
@@ -481,15 +487,23 @@ function Card({ card, people, onDragStart, onDragEnd, dropState, onClick }: {
             <span className="card-owner-name" style={{ color: "var(--ink-faint)" }}>Unassigned</span>
           )}
         </div>
+        {subtasks && (
+          <span className={cardStyles.badges}>
+            <span className={subtasks.done === subtasks.total ? cardStyles.badgeDone : undefined} title="Subtasks done">
+              ☑ {subtasks.done}/{subtasks.total}
+            </span>
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, subtaskStats, canEdit, onManageStages, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
   people: Person[];
+  subtaskStats: Map<string, { done: number; total: number }>;
   canEdit:boolean;
   onManageStages:()=>void;
   onAddCard: (colId: string, title: string) => Promise<void>;
@@ -559,6 +573,7 @@ function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, 
               <Card
                 card={card}
                 people={people}
+                subtasks={subtaskStats.get(card.id)}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 dropState={dropState}
@@ -599,9 +614,16 @@ function Column({ col, people, canEdit, onManageStages, onAddCard, onCardClick, 
 }
 
 /* ── Card detail modal ───────────────────────────────────────────────────── */
-function CardModal({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, panel, canEdit, columns, boards }: {
+type CardModalProps = {
   boards: BoardData[];
-  panel: boolean; canEdit: boolean; columns: {id:string;name:string}[];
+  currentUserId: string;
+  /** Switch the dialog to another task (e.g. a subtask). */
+  onOpenCard: (id: string) => void;
+  onAddSubtask: (parent: CardData, title: string) => Promise<void>;
+  onToggleSubtask: (id: string, done: boolean) => Promise<void>;
+  /** Move the task to another stage of its own board, straight from the task view. */
+  onMoveStage: (id: string, columnId: string) => Promise<void>;
+  panel: boolean; canEdit: boolean;
   card: CardData;
   workspaceId: string;
   people: Person[];
@@ -610,7 +632,161 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   onSave: (card: CardData, snapshot: ScheduleSnapshot) => Promise<void>;
   onDelete: (card: CardData) => void;
   onMakeCanvas: (card: CardData, existingCanvasId?: string) => Promise<void>;
-}) {
+};
+
+/** Task dialog: a read-only view by default; editors switch to the form with Edit. */
+function CardModal(props: CardModalProps) {
+  const { card, people, categories, onClose, onOpenCard, onAddSubtask, onToggleSubtask, onMoveStage, currentUserId, panel, canEdit, boards } = props;
+  const [editing, setEditing] = useState(false);
+  const [stageBusy, setStageBusy] = useState(false);
+  const [stageError, setStageError] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [canvasBusy, setCanvasBusy] = useState(false);
+  const [canvasError, setCanvasError] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const cardBoard = boards.find(b => b.cols.some(c => c.cards.some(k => k.id === card.id)));
+  const cardCol = cardBoard?.cols.find(c => c.cards.some(k => k.id === card.id));
+  const parent = card.parentId ? boards.flatMap(b => b.cols.flatMap(c => c.cards)).find(k => k.id === card.parentId) : undefined;
+  const category = categories.find(c => c.id === card.categoryId);
+  const owners = ownersByIds(people, card.ownerIds);
+  const subtasks: SubtaskItem[] = boards.flatMap(b => b.cols.flatMap(c => c.cards
+    .filter(t => t.parentId === card.id)
+    .map(t => ({ id: t.id, title: t.title, stage: c.name, done: !!c.isCompleted }))));
+  const canAddSubtask = canEdit && !!cardBoard?.cols.some(c => !c.isCompleted);
+  const canToggle = canEdit && !!cardBoard?.cols.some(c => c.isCompleted) && !!cardBoard?.cols.some(c => !c.isCompleted);
+
+  const dialogRef=useRef<HTMLDivElement>(null);
+  const closeRef=useRef(onClose);
+  closeRef.current=onClose;
+  const editingRef=useRef(editing);
+  editingRef.current=editing;
+  useEffect(()=>{
+    const previous=document.activeElement as HTMLElement|null;
+    dialogRef.current?.focus();
+    function key(e:KeyboardEvent){
+      // Escape leaves the form first, then closes the dialog.
+      if(e.key==='Escape'){e.preventDefault();if(editingRef.current)setEditing(false);else closeRef.current();}
+      if(e.key==='Tab'){
+        const items=Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')??[]).filter(el=>el.offsetParent!==null&&!el.closest('fieldset:disabled'));
+        const first=items[0],last=items[items.length-1];
+        if(e.shiftKey&&(document.activeElement===first||document.activeElement===dialogRef.current)){e.preventDefault();last?.focus();}
+        else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+      }
+    }
+    document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};
+  },[card.id]);
+
+  async function createCanvas() {
+    if (canvasBusy) return;
+    setCanvasBusy(true); setCanvasError("");
+    try { await props.onMakeCanvas(card); }
+    catch (e) { setCanvasError(e instanceof Error ? e.message : "Could not open canvas."); }
+    finally { setCanvasBusy(false); }
+  }
+
+  return (
+    <div className={`modal-backdrop${panel ? " gantt-inspector-backdrop" : ""}`} onClick={onClose}>
+      <div ref={dialogRef} tabIndex={-1} className={`modal ${cardStyles.dialog}${panel ? " gantt-inspector" : ` ${cardStyles.wide}`}${expanded ? " expanded" : ""}`} role="dialog" aria-modal="true" aria-label="Task details" onClick={(e) => e.stopPropagation()}>
+        <div className={`gantt-inspector-heading ${cardStyles.heading}`}>
+          {editing
+            ? <h2>Edit task</h2>
+            : <span className={cardStyles.crumb}>{cardBoard?.name ?? "Task"}{cardCol ? ` · ${cardCol.name}` : ""}</span>}
+          {!editing && canEdit && <button type="button" className="modal-save" onClick={() => setEditing(true)}>Edit</button>}
+          <button type="button" className="modal-cancel" onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(cardBoard?.id ?? "")}&card=${encodeURIComponent(card.id)}`);
+              setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500);
+            } catch (e) { console.error(e); }
+          }}>{linkCopied ? "Copied!" : "Copy link"}</button>
+          <button className={cardStyles.close} onClick={onClose} aria-label="Close task details">×</button>
+        </div>
+        {panel && <button className="gantt-sheet-toggle" onClick={()=>setExpanded(!expanded)}>{expanded ? "Reduce panel" : "Expand panel"}</button>}
+        <div className={cardStyles.layout}>
+          {editing ? (
+            <CardEditForm {...props} onDone={() => setEditing(false)} />
+          ) : (
+            <div className={cardStyles.view}>
+              {parent && (
+                <button type="button" className={cardStyles.parentLink} onClick={() => onOpenCard(parent.id)}>
+                  ↖ Subtask of <strong>{parent.title}</strong>
+                </button>
+              )}
+              <h2 className={cardStyles.viewTitle}>{card.title}</h2>
+              <div className={cardStyles.chips}>
+                {cardCol && (canEdit && cardBoard
+                  ? <label className={`${cardStyles.stageChip} ${cardStyles.stagePicker}`}>
+                      <span className={cardStyles.stageDot} style={{ background: cardCol.color }} />
+                      <select aria-label="Task status" value={cardCol.id} disabled={stageBusy} onChange={async e => {
+                        setStageBusy(true); setStageError("");
+                        try { await onMoveStage(card.id, e.target.value); }
+                        catch (err) { setStageError(err instanceof Error ? err.message : "Could not change the status."); }
+                        finally { setStageBusy(false); }
+                      }}>
+                        {cardBoard.cols.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </label>
+                  : <span className={cardStyles.stageChip}><span className={cardStyles.stageDot} style={{ background: cardCol.color }} />{cardCol.name}</span>)}
+                {card.priority && <span className={`card-priority ${card.priority}`}>{card.priority[0].toUpperCase() + card.priority.slice(1)} priority</span>}
+                {(category?.name || card.kind) && <span className="card-tag">{category?.name ?? card.kind}</span>}
+              </div>
+
+              {stageError && <p role="alert" className="gantt-error">{stageError}</p>}
+              <div className={cardStyles.section}>
+                <div className="modal-label">Description</div>
+                {card.sub
+                  ? <p className={cardStyles.description}><Linkified text={card.sub} /></p>
+                  : canEdit
+                    ? <button type="button" className={cardStyles.linkBtn} onClick={() => setEditing(true)}>+ Add a description</button>
+                    : <p className={cardStyles.muted}>No description.</p>}
+              </div>
+
+              <div className={cardStyles.section}>
+                <div className="modal-label">Assignees</div>
+                {owners.length
+                  ? <div className={cardStyles.people}>{owners.map(o => (
+                      <span key={o.id} className={cardStyles.person}>
+                        <span className="owner-chip-avatar" style={{ background: o.color }}>{o.initials}</span>{o.name}
+                      </span>))}</div>
+                  : <p className={cardStyles.muted}>Unassigned</p>}
+              </div>
+
+              {card.tags.length > 0 && (
+                <div className={cardStyles.section}>
+                  <div className="modal-label">Tags</div>
+                  <div className={cardStyles.chips}>{card.tags.map(t => <span key={t} className={cardStyles.tag}>{t}</span>)}</div>
+                </div>
+              )}
+
+              <div className={cardStyles.section}>
+                <div className="modal-label">Canvas</div>
+                {card.canvasId
+                  ? <Link className={`modal-cancel ${cardStyles.canvasLink}`} href={`/doc/canvas?c=${card.canvasId}`}>Open linked canvas ↗</Link>
+                  : canEdit
+                    ? <button type="button" className="modal-cancel" disabled={canvasBusy} onClick={createCanvas}>{canvasBusy ? "Opening…" : "Open as canvas"}</button>
+                    : <p className={cardStyles.muted}>No linked canvas.</p>}
+                {canvasError && <p role="alert" className="gantt-error">{canvasError}</p>}
+              </div>
+            </div>
+          )}
+          <div>
+            <SubtaskList items={subtasks} canAdd={canAddSubtask} onOpen={onOpenCard} onAdd={title => onAddSubtask(card, title)} onToggle={canToggle ? onToggleSubtask : undefined} />
+            <CardComments cardId={card.id} people={people} currentUserId={currentUserId} />
+            <HistoryToggle workspaceId={props.workspaceId} cardId={card.id} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Turns bare http(s) URLs in plain text into links. */
+function Linkified({ text }: { text: string }) {
+  return <>{text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+    i % 2 ? <a key={i} href={part} target="_blank" rel="noopener noreferrer">{part}</a> : part)}</>;
+}
+
+/** The editable form, mounted fresh on each Edit so it starts from the latest task data. */
+function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, canEdit, boards, onDone }: CardModalProps & { onDone: () => void }) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
@@ -618,28 +794,10 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   const [priority, setPriority] = useState(card.priority ?? "");
   const [ownerIds, setOwnerIds] = useState<string[]>(card.ownerIds ?? []);
   const [parentId, setParentId] = useState(card.parentId ?? "");
-  const childTasks = boards.flatMap(b => b.cols.flatMap(c => c.cards)).filter(t => t.parentId === card.id);
+  const [tags, setTags] = useState<string[]>(card.tags ?? []);
   const [columnId, setColumnId] = useState(card.columnId ?? "");
   const parentChoices = hierarchyParentChoices(boards.find(b => b.cols.some(c => c.id === columnId)), card.id);
   const [baseline, setBaseline] = useState<ScheduleSnapshot | null>(null);
-  const [expanded, setExpanded] = useState(false);
-  const dialogRef=useRef<HTMLDivElement>(null);
-  const closeRef=useRef(onClose);
-  closeRef.current=onClose;
-  useEffect(()=>{
-    const previous=document.activeElement as HTMLElement|null;
-    dialogRef.current?.querySelector<HTMLElement>('button')?.focus();
-    function key(e:KeyboardEvent){
-      if(e.key==='Escape'){e.preventDefault();closeRef.current();}
-      if(e.key==='Tab'){
-        const items=Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')??[]).filter(el=>el.offsetParent!==null&&!el.closest('fieldset:disabled'));
-        const first=items[0],last=items[items.length-1];
-        if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
-        else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
-      }
-    }
-    document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};
-  },[card.id]);
   useEffect(() => { let active=true; loadSchedule(workspaceId).then(s=>{if(active)setBaseline(s);}).catch(e=>{if(active)setSaveError(e.message);}); return()=>{active=false;}; }, [workspaceId]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -666,11 +824,7 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
   }
 
   return (
-    <div className={`modal-backdrop${panel ? " gantt-inspector-backdrop" : ""}`} onClick={onClose}>
-      <div ref={dialogRef} className={`modal${panel ? " gantt-inspector" : ""}${expanded ? " expanded" : ""}`} role="dialog" aria-modal="true" aria-label="Task details" onClick={(e) => e.stopPropagation()}>
-        <div className="gantt-inspector-heading"><h2>Task details</h2><button onClick={onClose} aria-label="Close task details">×</button></div>
-        {panel && <button className="gantt-sheet-toggle" onClick={()=>setExpanded(!expanded)}>{expanded ? "Reduce panel" : "Expand panel"}</button>}
-        <fieldset disabled={!canEdit || saving} className="gantt-card-fields">
+        <fieldset disabled={!canEdit || saving} className={`gantt-card-fields ${cardStyles.form}`}>
         <div className="modal-field">
           <label className="modal-label" htmlFor="task-parent">Parent task</label>
           <select id="task-parent" className="modal-select" value={parentId} onChange={e => setParentId(e.target.value)}>
@@ -678,15 +832,18 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
             {parentChoices.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
             {parentId && !parentChoices.some(t => t.id === parentId) && <option value={parentId}>Parent in another board — choose None to move</option>}
           </select>
-          {childTasks.length > 0 && <small>This task contains {childTasks.length} direct subtasks. Dates and completion are independent.</small>}
         </div>
         <div className="modal-field">
           <label className="modal-label">Title</label>
-          <input className="modal-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className="modal-input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div className="modal-field">
           <label className="modal-label">Description</label>
           <textarea className="modal-textarea" value={sub} onChange={(e) => setSub(e.target.value)} />
+        </div>
+        <div className="modal-field">
+          <label className="modal-label">Tags</label>
+          <TagInput tags={tags} onChange={setTags} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="modal-field">
@@ -723,7 +880,17 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
             ))}
           </div>
         </div>
-        <div className="modal-field"><label className="modal-label" htmlFor="card-status">Stage</label><select id="card-status" className="modal-select" value={columnId} onChange={e=>setColumnId(e.target.value)}>{columns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        {boards.length > 1 && <div className="modal-field">
+          <label className="modal-label" htmlFor="card-board">Board</label>
+          <select id="card-board" className="modal-select" value={boards.find(b => b.cols.some(c => c.id === columnId))?.id ?? ""} onChange={e => {
+            // Status is changed on the task itself; here a board change keeps a same-named
+            // stage when the new board has one, else lands in its first open stage.
+            const target = boards.find(b => b.id === e.target.value);
+            const current = boards.flatMap(b => b.cols).find(c => c.id === columnId);
+            const next = target?.cols.find(c => c.name === current?.name) ?? target?.cols.find(c => !c.isCompleted) ?? target?.cols[0];
+            if (next) setColumnId(next.id);
+          }}>{boards.map(b => <option key={b.id} value={b.id} disabled={!b.cols.length}>{b.name}</option>)}</select>
+        </div>}
         <div className="modal-field">
           <button className="modal-cancel" disabled={canvasBusy || saving} onClick={chooseCanvas}>
             {card.canvasId ? "Change linked canvas" : "Link existing canvas"}
@@ -747,23 +914,18 @@ function CardModal({ card, workspaceId, people, categories, onClose, onSave, onD
           >
             <Trash style={{ width: 13, height: 13 }} /> Delete
           </button>
-          <button className="modal-cancel" disabled={canvasBusy || saving} onClick={() => openCanvas()}>
-            {canvasBusy ? "Opening…" : card.canvasId ? "Open linked canvas" : "Open as canvas"}
-          </button>
-          <button className="modal-cancel" onClick={onClose}>Cancel</button>
+          <button className="modal-cancel" onClick={onDone}>Cancel</button>
           <button className="modal-save" disabled={saving || !baseline} onClick={async () => {
             setSaving(true); setSaveError("");
             try {
               if (!baseline) return;
-              await onSave({ ...card, title, sub, kind, categoryId: categoryId || null, priority: priority || null, ownerIds, columnId, parentId: parentId || null }, baseline);
-              onClose();
+              await onSave({ ...card, title, sub, kind, categoryId: categoryId || null, priority: priority || null, ownerIds, columnId, parentId: parentId || null, tags }, baseline);
+              onDone();
             } catch (e) { setSaveError(e instanceof Error ? e.message : "Could not save card."); }
             finally { setSaving(false); }
           }}>{saving ? "Saving…" : "Save"}</button>
         </div>
         </fieldset>
-      </div>
-    </div>
   );
 }
 
@@ -789,10 +951,8 @@ export default function BoardWorkspace() {
   const [categoryManager,setCategoryManager]=useState(false);
   const [ownerFilter,setOwnerFilter]=useState('');
   const canEdit=!!session&&session.role!=='viewer';
-  const [scheduleResult,setScheduleResult]=useState<ScheduleResult|null>(null);
   const [boardActionError,setBoardActionError]=useState('');
   const [shareCopied,setShareCopied]=useState(false);
-  const [undoBusy,setUndoBusy]=useState(false);
   // One board has nothing to combine, so the grouped view needs at least two.
   const combined = allBoards && boards.length > 1;
   const [filterKind, setFilterKind] = useState<string | null>(null);
@@ -829,6 +989,11 @@ export default function BoardWorkspace() {
         if(requested)setAllBoards(false);
         setFilterKind(params.get('category'));
         setActiveBoardId(loaded.find(b => b.id === (requested||remembered))?.id ?? loaded[0]?.id ?? null);
+        // Deep link: ?card=<id> opens that task on its own board.
+        const requestedCard=params.get('card');
+        const cardBoard=requestedCard?loaded.find(b=>b.cols.some(c=>c.cards.some(k=>k.id===requestedCard))):undefined;
+        const linkedCard=cardBoard?.cols.flatMap(c=>c.cards).find(k=>k.id===requestedCard);
+        if(cardBoard&&linkedCard){setAllBoards(false);setActiveBoardId(cardBoard.id);setEditingCard(linkedCard);}
         setPeople(members);
         setCategories(cats);
         setLoading(false);
@@ -912,6 +1077,64 @@ export default function BoardWorkspace() {
       const byId = new Map(next.map((c) => [c.id, c]));
       return prev.map((b) => ({ ...b, cols: b.cols.map((c) => byId.get(c.id) ?? c) }));
     });
+  }
+
+  /** Open (or close, with null) the task dialog and mirror it in the URL as ?card=, so the link can be shared. */
+  function openCard(card: CardData | null) {
+    setEditingCard(card);
+    if (isCalendar) return;
+    const url = new URL(window.location.href);
+    if (card) {
+      const board = boardOfColumn(card.columnId ?? "") ?? boards.find(b => b.cols.some(c => c.cards.some(k => k.id === card.id)));
+      if (board) url.searchParams.set("board", board.id);
+      url.searchParams.set("card", card.id);
+    } else {
+      url.searchParams.delete("card");
+    }
+    window.history.replaceState(window.history.state, "", url);
+  }
+  function openCardById(id: string) {
+    const card = boards.flatMap(b => b.cols.flatMap(c => c.cards)).find(k => k.id === id);
+    if (card) openCard(card);
+  }
+
+  /** New subtask in the parent's stage, or the board's first unfinished stage when the parent is done. */
+  async function handleAddSubtask(parent: CardData, title: string) {
+    if (!session || !canEdit) throw new Error("You need editor access to add subtasks.");
+    const board = boards.find(b => b.cols.some(c => c.cards.some(k => k.id === parent.id)));
+    const parentCol = board?.cols.find(c => c.cards.some(k => k.id === parent.id));
+    const target = parentCol && !parentCol.isCompleted ? parentCol : board?.cols.find(c => !c.isCompleted);
+    if (!target) throw new Error("This board has no unfinished stage for new tasks.");
+    await createSubtask(session.workspaceId, parent.id, target.id, title);
+    setBoards(await loadBoards(session.workspaceId));
+  }
+
+  /** Tick a subtask: move it into the board's first done stage, or back to its first open stage. */
+  async function handleToggleSubtask(id: string, done: boolean) {
+    const board = boards.find(b => b.cols.some(c => c.cards.some(k => k.id === id)));
+    const target = board?.cols.find(c => done ? c.isCompleted : !c.isCompleted);
+    if (!target) throw new Error(done ? "This board has no done stage." : "This board has no open stage.");
+    await handleMoveStage(id, target.id);
+  }
+
+  /** Move a task to the end of another stage on its own board. */
+  async function handleMoveStage(id: string, columnId: string) {
+    if (!session || !canEdit) return;
+    const board = boards.find(b => b.cols.some(c => c.cards.some(k => k.id === id)));
+    const card = board?.cols.flatMap(c => c.cards).find(k => k.id === id);
+    const target = board?.cols.find(c => c.id === columnId);
+    if (!board || !card || !target) throw new Error("That stage isn't on this task's board.");
+    if (target.cards.some(k => k.id === id)) return;
+    // Optimistic: show the move at once, then reconcile with the server.
+    setBoards(prev => prev.map(b => b.id !== board.id ? b : { ...b, cols: b.cols.map(c => ({
+      ...c,
+      cards: c.id === target.id ? [...c.cards.filter(k => k.id !== id), { ...card, columnId: target.id }] : c.cards.filter(k => k.id !== id),
+    })) }));
+    try {
+      await moveCard(id, target.id, [...target.cards.filter(k => k.id !== id).map(k => k.id), id]);
+    } finally {
+      setBoards(await loadBoards(session.workspaceId));
+    }
   }
 
   /** Reuse the persistent link; only a newly created canvas receives the seed note. */
@@ -1015,7 +1238,7 @@ export default function BoardWorkspace() {
   async function handleSaveCard(updated: CardData, snapshot: ScheduleSnapshot) {
     if (session?.role === "viewer") throw new Error("You need editor access to change cards.");
     if (!session) return;
-    setScheduleResult(await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{...((snapshot.cards.find(c=>c.id===updated.id)?.parent_id??null)!==(updated.parentId??null)?{parent_id:updated.parentId??null}:{}),id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,category_id:updated.categoryId??null,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId}}));
+    await mutateSchedule(session.workspaceId, snapshot, {op:'card',card:{...((snapshot.cards.find(c=>c.id===updated.id)?.parent_id??null)!==(updated.parentId??null)?{parent_id:updated.parentId??null}:{}),id:updated.id,title:updated.title,sub:updated.sub,kind:updated.kind,category_id:updated.categoryId??null,tags:updated.tags,priority:updated.priority,owners:updated.ownerIds,column_id:updated.columnId}});
     setBoards(await loadBoards(session.workspaceId));
   }
 
@@ -1031,6 +1254,16 @@ export default function BoardWorkspace() {
       setAllBoards(false);
       setActiveBoardId(copy.id);
     }catch(e){setBoardActionError((e as Error).message);}
+  }
+
+  // Direct-subtask progress per parent, for the badge on each card.
+  const subtaskStats = new Map<string, { done: number; total: number }>();
+  for (const b of boards) for (const c of b.cols) for (const k of c.cards) {
+    if (!k.parentId) continue;
+    const stat = subtaskStats.get(k.parentId) ?? { done: 0, total: 0 };
+    stat.total++;
+    if (c.isCompleted) stat.done++;
+    subtaskStats.set(k.parentId, stat);
   }
 
   const displayCols = visibleCols.map((c) => ({
@@ -1114,11 +1347,6 @@ export default function BoardWorkspace() {
 
           <div className="main-col">
             {boardActionError&&<div role="alert" className="gantt-error">{boardActionError}<button onClick={()=>setBoardActionError('')}>Dismiss</button></div>}
-            {scheduleResult&&<div role="status" className="gantt-caption">{scheduleResult.moved} tasks moved. Changes saved.<button disabled={undoBusy} onClick={async()=>{
-              if(!session)return;setUndoBusy(true);
-              try{await mutateSchedule(session.workspaceId,scheduleResult.snapshot,{op:'undo',dates:scheduleResult.before});setScheduleResult(null);setBoards(await loadBoards(session.workspaceId));}
-              catch(e){setBoardActionError((e as Error).message);}finally{setUndoBusy(false);}
-            }}>Undo dates</button></div>}
             {!isCalendar&&<PlanningHeader title={combined&&boards.length?'All boards':activeBoard?.name??'Your boards'} mode="board" boardId={combined?undefined:activeBoardId??undefined} canEdit={canEdit} onCreate={handleAddBoard} onNavigation={()=>setNavigationOpen(v=>!v)}>
               <select aria-label="Choose board" value={combined?'all':activeBoard?.id??''} onChange={e=>{if(e.target.value==='all'){setAllBoards(true);}else{setAllBoards(false);setActiveBoardId(e.target.value);}}}>{!boards.length&&<option value="">No boards yet</option>}{boards.length>1&&<option value="all">All boards</option>}{boards.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
               <label className="planning-search"><PlanningIcon name="search"/><input aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={e=>setSearch(e.target.value)}/></label>
@@ -1158,7 +1386,8 @@ export default function BoardWorkspace() {
                         canEdit={canEdit}
                         onManageStages={()=>handleManageStages(board)}
                         onAddCard={handleAddCard}
-                        onCardClick={setEditingCard}
+                        onCardClick={openCard}
+                        subtaskStats={subtaskStats}
                         dragState={dragState}
                         onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
@@ -1191,12 +1420,16 @@ export default function BoardWorkspace() {
             panel={false}
             canEdit={!!session && session.role !== 'viewer'}
             boards={boards}
-            columns={boards.flatMap(b=>b.cols.map(c=>({id:c.id,name:`${b.name} · ${c.name}`})))}
-            card={editingCard}
+            card={boards.flatMap(b => b.cols.flatMap(c => c.cards)).find(k => k.id === editingCard.id) ?? editingCard}
             workspaceId={session?.workspaceId ?? ""}
             people={people}
             categories={categories}
-            onClose={() => setEditingCard(null)}
+            onClose={() => openCard(null)}
+            onOpenCard={openCardById}
+            onAddSubtask={handleAddSubtask}
+            onToggleSubtask={handleToggleSubtask}
+            onMoveStage={handleMoveStage}
+            currentUserId={session?.userId ?? ""}
             onSave={handleSaveCard}
             onDelete={handleDeleteCard}
             onMakeCanvas={handleMakeCanvas}
