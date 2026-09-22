@@ -156,9 +156,22 @@
 .new-page:hover { background: var(--line-soft); color: var(--ink); }
 .new-page-icon { width: 15px; height: 15px; }
 
-/* ---- responsive: the sidebar collapses on narrow viewports.
-   Kept here (not in doc.css) so it always follows the base
-   .sidebar rule in source order and reliably wins. ---- */
+/* ---- responsive: below 860px the sidebar becomes a slide-in drawer,
+   opened via the topbar's hamburger button (app/page.tsx toggles
+   `.nav-open` on the page's outer `.app`) instead of always sitting
+   in the grid. Kept here (not in doc.css) so it always follows the
+   base .sidebar rule in source order and reliably wins. ---- */
 @media (max-width: 860px) {
-  .sidebar { display: none; }
+  .sidebar {
+    display: none;
+    position: fixed;
+    left: 0; top: 58px; bottom: 0;
+    height: auto;
+    z-index: 45;
+    width: min(300px, 84vw);
+    box-shadow: 8px 0 25px rgba(42, 36, 30, 0.18);
+  }
+  .app.nav-open .sidebar {
+    display: flex;
+  }
 }

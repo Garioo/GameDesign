@@ -30,6 +30,20 @@
   box-shadow: 0 2px 8px rgba(191, 99, 43, 0.4), inset 0 1px 0 rgba(255,255,255,0.25);
 }
 .logo-icon { width: 16px; height: 16px; color: #fff4e8; }
+.topbar-menu-btn {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.topbar-menu-btn:hover { background: var(--line-soft); color: var(--ink); }
+.topbar-menu-icon { width: 16px; height: 16px; }
 .brand-name { font-weight: 700; letter-spacing: 0.06em; font-size: 13.5px; }
 .crumb-sep { color: var(--ink-faint); }
 .crumb-muted { color: var(--ink-soft); }
@@ -206,4 +220,29 @@
   .dock { overflow-x: auto; }
   .dock-nav { gap: 0; }
   .dock-nav .dock-item { flex-direction: column; gap: 4px; padding: 6px 8px; font-size: 10px; flex-shrink: 0; }
+}
+
+/* ---------------- topbar: narrow screens ----------------
+   The bar is a fixed 58px tall (several pages sticky-position
+   their sidebars against that exact height), so on mobile we
+   shrink and drop content rather than let it wrap or grow. */
+@media (max-width: 860px) {
+  .topbar-menu-btn { display: inline-flex; }
+}
+
+@media (max-width: 640px) {
+  .topbar { padding: 0 12px; gap: 8px; }
+  .brand { gap: 6px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  .brand-name { display: none; }
+  .crumb-muted, .crumb-current {
+    display: inline-block; vertical-align: bottom; max-width: 32vw;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .top-right { flex: none; gap: 6px; }
+  .online-dot, .online-text, .avatar-stack { display: none; }
+  .share-btn { padding: 7px 10px; font-size: 12.5px; }
+  .save-state { font-size: 11px; margin-left: 0; }
+}
+@media (max-width: 380px) {
+  .crumb-sep, .crumb-muted { display: none; }
 }

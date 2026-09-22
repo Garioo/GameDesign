@@ -17,6 +17,11 @@ const Flame = ({ className }: IconProps) => (
     <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
   </svg>
 );
+const Menu = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
 
 interface TopBarProps {
   /** Workspace name shown next to the logo; falls back to the app name. */
@@ -27,6 +32,8 @@ interface TopBarProps {
   online?: PresenceUser[];
   /** Page-specific actions on the right (save state, share, settings…). */
   children?: ReactNode;
+  /** Shows a hamburger button before the brand (mobile only, via CSS) that opens the page's own nav drawer. Omit when the page has no collapsible nav. */
+  onMenuToggle?: () => void;
 }
 
 export default function TopBar({
@@ -34,10 +41,16 @@ export default function TopBar({
   crumbs = [],
   online,
   children,
+  onMenuToggle,
 }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
+        {onMenuToggle && (
+          <button type="button" className="topbar-menu-btn" onClick={onMenuToggle} aria-label="Toggle navigation">
+            <Menu className="topbar-menu-icon" />
+          </button>
+        )}
         <span className="logo">
           <Flame className="logo-icon" />
         </span>

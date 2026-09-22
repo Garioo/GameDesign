@@ -189,6 +189,7 @@ export default function CanvasPage() {
   const [tool, setTool] = useState("select");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
 
   const wsRef = useRef<string | null>(null);
@@ -425,11 +426,12 @@ export default function CanvasPage() {
         : [];
 
   return (
-    <div className="app canvas-app">
+    <div className={"app canvas-app" + (sidebarOpen ? " nav-open" : "")}>
       {/* top bar (global chrome) */}
       <TopBar
         crumbs={active ? ["Canvas", active.name] : ["Canvas"]}
         online={onlineList}
+        onMenuToggle={() => setSidebarOpen((v) => !v)}
       >
         {active && (
           <span className={"save-state save-" + saveState}>
@@ -450,12 +452,15 @@ export default function CanvasPage() {
       </TopBar>
 
       <div className="body">
+        {sidebarOpen && (
+          <button type="button" className="nav-backdrop" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />
+        )}
         {/* canvas sidebar */}
         <CanvasSidebar
           canvases={canvases}
           folders={folders}
           activeId={active?.id ?? null}
-          onSelect={setActiveId}
+          onSelect={(id) => { setActiveId(id); setSidebarOpen(false); }}
           onNew={handleNew}
           onRename={handleRename}
           onDelete={handleDelete}

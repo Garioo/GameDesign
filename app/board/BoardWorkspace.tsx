@@ -423,6 +423,12 @@ function ownersByIds(people: Person[], ids: string[] | undefined): Person[] {
     .filter((p): p is Person => p !== null);
 }
 
+/** High first, then Medium, then Low; unset priority sinks to the bottom. */
+const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+function byPriority(a: CardData, b: CardData): number {
+  return (PRIORITY_RANK[a.priority ?? ""] ?? 3) - (PRIORITY_RANK[b.priority ?? ""] ?? 3);
+}
+
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function formatDeadline(key: string) {
@@ -1033,7 +1039,7 @@ export default function BoardWorkspace() {
       k.title.toLowerCase().includes(search.toLowerCase()) &&
       (!ownerFilter || k.ownerIds.includes(ownerFilter)) &&
       (!filterKind || k.categoryId === filterKind)
-    ),
+    ).sort(byPriority),
   }));
 
   if (loading || error) {

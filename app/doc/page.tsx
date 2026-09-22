@@ -114,6 +114,11 @@ const Search = ({ className }: IconProps) => (
     <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
   </svg>
 );
+const PanelInfo = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
 const Gear = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -187,6 +192,8 @@ function DocPageInner() {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
 
   const wsRef = useRef<string | null>(null);
@@ -229,6 +236,8 @@ function DocPageInner() {
   // Navigate to a page, recording it in the URL so reload/back/share work.
   const openPage = (id: string) => {
     setActiveId(id);
+    setSidebarOpen(false);
+    setRailOpen(false);
     router.push(`/doc?page=${id}`, { scroll: false });
   };
 
@@ -964,12 +973,13 @@ function DocPageInner() {
         : [];
 
   return (
-    <div className="app">
+    <div className={"app" + (sidebarOpen ? " nav-open" : "") + (railOpen ? " rail-open" : "")}>
       {/* ---------------- top bar (global chrome) ---------------- */}
       <TopBar
         brandName={workspace?.name}
         crumbs={[active.group, active.title]}
         online={onlineList}
+        onMenuToggle={() => setSidebarOpen((v) => !v)}
       >
         <span className={"save-state save-" + saveState}>
           {saveState === "saving" && "Saving…"}
@@ -983,6 +993,14 @@ function DocPageInner() {
             </>
           )}
         </span>
+        <button
+          className="share-btn rail-toggle-btn"
+          title="Linked references & comments"
+          onClick={() => setRailOpen((v) => !v)}
+        >
+          <PanelInfo className="settings-gear" />
+          {comments.length > 0 && <span className="rail-toggle-badge">{comments.length}</span>}
+        </button>
         <button
           className="share-btn"
           onClick={async () => {
@@ -1007,6 +1025,9 @@ function DocPageInner() {
       </TopBar>
 
       <div className="body">
+        {(sidebarOpen || railOpen) && (
+          <button type="button" className="nav-backdrop" aria-label="Close navigation" onClick={() => { setSidebarOpen(false); setRailOpen(false); }} />
+        )}
         {/* ---------------- left sidebar ---------------- */}
         <Sidebar
           workspaceId={session!.workspaceId}

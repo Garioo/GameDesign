@@ -39,6 +39,24 @@
   overflow: hidden;
 }
 
+/* Below 860px the canvas list becomes a slide-in drawer (topbar hamburger),
+   same pattern as the doc editor's page tree — see Sidebar.css. The plain
+   `.sidebar` media-query rule there loses to `.canvas-app .sidebar` above
+   on specificity, so it's restated here for this shell. */
+@media (max-width: 860px) {
+  .canvas-app .body { grid-template-columns: minmax(0, 1fr); }
+  .canvas-app .sidebar {
+    display: none;
+    position: fixed;
+    left: 0; top: 58px; bottom: 0;
+    height: auto;
+    z-index: 45;
+    width: min(300px, 84vw);
+    box-shadow: 8px 0 25px rgba(42, 36, 30, 0.18);
+  }
+  .canvas-app.nav-open .sidebar { display: flex; }
+}
+
 /* ---- tldraw tools, embedded in the app nav bar ----
    The dock-wrap / hover-swap shell itself is global chrome —
    see app/components/chrome.css (Dock.tsx). Only the tool buttons

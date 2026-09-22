@@ -60,6 +60,16 @@
 .blk-menu .danger { color: var(--danger); }
 .blk-menu .danger:hover { background: var(--danger-tint); }
 
+/* On touch screens there's no hover to reveal the gutter, and the -48px
+   left offset that fits the desktop margin runs off the edge of a phone
+   viewport. Pull it on-screen, make it permanently visible, and reserve
+   the same width inside the block instead of borrowing the page margin. */
+@media (max-width: 860px) {
+  .blk-gutter { left: 0; opacity: 1; }
+  .blk-menu { left: 0; }
+  .blk-main { padding-left: 34px; }
+}
+
 .blk-main { min-width: 0; border-radius: var(--r-sm); transition: background var(--t-med) ease; }
 /* faint hover tint on plain editor lines (skips callout/table/divider) */
 .blk:not(.blk-callout):not(.blk-table):not(.blk-divider):not(.blk-image):hover > .blk-main {
