@@ -15,6 +15,10 @@
   gap: 10px;
   overflow: auto;
 }
+/* Fade the floating dock while a bar is being dragged/resized, since it
+   otherwise sits right under the chart competing for attention during
+   the fiddliest part of scheduling. Hovering it brings it back. */
+.phase-workspace:has(.phase-bar.dragging) .dock-wrap { opacity: 0.35; }
 .phase-links p {
   color: var(--ink-soft);
   font-size: 13px;

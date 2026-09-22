@@ -121,6 +121,43 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+.mention {
+  font-weight: 600;
+  color: var(--ember-deep);
+  background: var(--ember-tint);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+.mentionField { position: relative; }
+.mentionMenu {
+  position: absolute;
+  left: 0; bottom: calc(100% + 6px); z-index: 20;
+  width: min(220px, 100%);
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-menu);
+  padding: 5px;
+}
+.mentionOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.mentionOptionActive { background: var(--ember-tint); }
 
 .actions {
   display: flex;

@@ -128,6 +128,25 @@ const Gear = ({ className }: IconProps) => (
 
 type SaveState = "saved" | "saving" | "error";
 
+// Local backup of a page's blocks, written on every edit so content survives
+// a reload while the debounced server save hasn't gone through yet (e.g. no
+// connection). Cleared once that save succeeds.
+interface BlockDraft { blocks: Block[]; ts: number }
+const draftKey = (pageId: string) => `gd-draft:${pageId}`;
+function writeDraft(pageId: string, blocks: Block[]) {
+  try { localStorage.setItem(draftKey(pageId), JSON.stringify({ blocks, ts: Date.now() } satisfies BlockDraft)); }
+  catch { /* storage unavailable (private mode, quota) — draft recovery is best-effort */ }
+}
+function readDraft(pageId: string): BlockDraft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(pageId));
+    return raw ? (JSON.parse(raw) as BlockDraft) : null;
+  } catch { return null; }
+}
+function clearDraft(pageId: string) {
+  try { localStorage.removeItem(draftKey(pageId)); } catch { /* ignore */ }
+}
+
 // useSearchParams needs a Suspense boundary in the app router.
 export default function DocPage() {
   return (
@@ -194,6 +213,8 @@ function DocPageInner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [draftRecovery, setDraftRecovery] = useState<BlockDraft & { pageId: string } | null>(null);
+  const draftChecked = useRef<Set<string>>(new Set());
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
 
   const wsRef = useRef<string | null>(null);
@@ -554,6 +575,30 @@ function DocPageInner() {
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0];
 
+  // If a local draft survived from a session that never made it to the
+  // server (dropped connection, closed tab before the debounce fired),
+  // offer to bring it back once — but only once per page per load, and
+  // only after that page's real blocks have arrived from the server.
+  useEffect(() => {
+    if (!active || draftChecked.current.has(active.id)) return;
+    draftChecked.current.add(active.id);
+    const draft = readDraft(active.id);
+    if (!draft) return;
+    if (JSON.stringify(draft.blocks) === JSON.stringify(active.blocks)) { clearDraft(active.id); return; }
+    setDraftRecovery({ ...draft, pageId: active.id });
+  }, [active]);
+
+  // Warn before an unsynced change is silently discarded by a reload/close.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveState !== "error") return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveState]);
+
   const activeSectionId =
     active?.sectionId ?? sections.find((s) => s.name === active?.group)?.id ?? null;
 
@@ -703,11 +748,12 @@ function DocPageInner() {
   // ---- debounced persistence ----
   const scheduleSaveBlocks = (pageId: string, blocks: Block[]) => {
     if (!canEdit) return;
+    writeDraft(pageId, blocks); // instant local backup — see readDraft's recovery check below
     clearTimeout(saveTimers.current[`b:${pageId}`]);
     setSaveState("saving");
     saveTimers.current[`b:${pageId}`] = setTimeout(() => {
       suppress.current[pageId] = Date.now() + 1500;
-      trackSave(() => saveBlocks(pageId, blocks));
+      trackSave(() => saveBlocks(pageId, blocks).then(() => clearDraft(pageId)));
     }, 600);
   };
   const scheduleSavePage = (doc: DesignDoc) => {
@@ -980,6 +1026,7 @@ function DocPageInner() {
         crumbs={[active.group, active.title]}
         online={onlineList}
         onMenuToggle={() => setSidebarOpen((v) => !v)}
+        workspaceId={session?.workspaceId}
       >
         <span className={"save-state save-" + saveState}>
           {saveState === "saving" && "Saving…"}
@@ -1049,6 +1096,15 @@ function DocPageInner() {
         {/* ---------------- main document ---------------- */}
         <main className="main">
           <article className="doc">
+            {draftRecovery && draftRecovery.pageId === active.id && (
+              <div role="alert" className="draft-recovery">
+                <span>Found unsaved changes to this page from a previous session (probably lost connection) — from {relativeTime(new Date(draftRecovery.ts).toISOString())}.</span>
+                <div>
+                  <button onClick={() => { update(active.id, { blocks: draftRecovery.blocks }); setDraftRecovery(null); }}>Restore</button>
+                  <button onClick={() => { clearDraft(draftRecovery.pageId); setDraftRecovery(null); }}>Discard</button>
+                </div>
+              </div>
+            )}
             <div className="doc-crumb">
               {active.group} <span className="dot">·</span> {active.kind}
             </div>

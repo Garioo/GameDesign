@@ -501,7 +501,7 @@ export default function HomeDashboard() {
 
   return (
     <div className={styles.page}>
-      <TopBar crumbs={["Home"]}>
+      <TopBar crumbs={["Home"]} workspaceId={session?.workspaceId}>
         {me && (
           <span className={styles.me} style={{ background: me.color }} title={me.name}>
             {me.initials}

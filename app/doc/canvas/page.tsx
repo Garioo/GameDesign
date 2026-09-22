@@ -432,6 +432,7 @@ export default function CanvasPage() {
         crumbs={active ? ["Canvas", active.name] : ["Canvas"]}
         online={onlineList}
         onMenuToggle={() => setSidebarOpen((v) => !v)}
+        workspaceId={session?.workspaceId}
       >
         {active && (
           <span className={"save-state save-" + saveState}>

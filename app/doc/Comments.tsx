@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ProfileInfo } from "@/lib/docsRepo";
 import type { CommentRow } from "@/lib/commentsRepo";
+import { activeMentionQuery, encodePersonMention, splitPersonMentions } from "@/lib/personMentions";
 import styles from "./Comments.module.css";
 
 function timeAgo(iso: string): string {
@@ -26,6 +27,113 @@ function Avatar({ a }: { a: Author }) {
     <span className={styles.avatar} style={{ background: a.color }} title={a.name}>
       {a.initials}
     </span>
+  );
+}
+
+/** Renders a comment body, turning @[Name](user:<id>) tokens into plain @Name chips. */
+function CommentBody({ body }: { body: string }) {
+  return (
+    <p className={styles.text}>
+      {splitPersonMentions(body).map((seg, i) =>
+        seg.mention ? (
+          <span key={i} className={styles.mention}>{seg.text}</span>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
+/**
+ * A textarea with @-mention autocomplete over the workspace's people. Typing
+ * "@" plus a few letters of a name opens a list; picking one inserts the
+ * `@[Name](user:<id>)` token the notifications trigger looks for.
+ */
+function MentionTextarea({
+  value,
+  onChange,
+  onSubmit,
+  onEscape,
+  people,
+  className,
+  rows,
+  placeholder,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  onEscape?: () => void;
+  people: ProfileInfo[];
+  className: string;
+  rows: number;
+  placeholder?: string;
+  autoFocus?: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const [menu, setMenu] = useState<{ start: number; query: string; index: number } | null>(null);
+  const matches = menu
+    ? people.filter((p) => p.name.toLowerCase().includes(menu.query.toLowerCase())).slice(0, 6)
+    : [];
+
+  const pick = (p: ProfileInfo) => {
+    if (!menu) return;
+    const el = ref.current;
+    const caret = el?.selectionStart ?? value.length;
+    const token = encodePersonMention(p.name, p.id) + " ";
+    const next = value.slice(0, menu.start) + token + value.slice(caret);
+    onChange(next);
+    setMenu(null);
+    requestAnimationFrame(() => {
+      const pos = menu.start + token.length;
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  };
+
+  return (
+    <div className={styles.mentionField}>
+      <textarea
+        ref={ref}
+        className={className}
+        rows={rows}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          const q = activeMentionQuery(e.target.value, e.target.selectionStart);
+          setMenu(q ? { ...q, index: 0 } : null);
+        }}
+        onKeyDown={(e) => {
+          if (menu && matches.length > 0) {
+            if (e.key === "ArrowDown") { e.preventDefault(); setMenu({ ...menu, index: (menu.index + 1) % matches.length }); return; }
+            if (e.key === "ArrowUp") { e.preventDefault(); setMenu({ ...menu, index: (menu.index - 1 + matches.length) % matches.length }); return; }
+            if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); pick(matches[menu.index]); return; }
+            if (e.key === "Escape") { e.preventDefault(); setMenu(null); return; }
+          }
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSubmit(); }
+          if (e.key === "Escape") { setMenu(null); onEscape?.(); }
+        }}
+        onBlur={() => setTimeout(() => setMenu(null), 120)} // after a mousedown pick registers
+      />
+      {menu && matches.length > 0 && (
+        <div className={styles.mentionMenu} role="listbox">
+          {matches.map((p, i) => (
+            <button
+              type="button"
+              key={p.id}
+              className={i === menu.index ? `${styles.mentionOption} ${styles.mentionOptionActive}` : styles.mentionOption}
+              onMouseDown={(e) => { e.preventDefault(); pick(p); }}
+            >
+              <span className={styles.avatar} style={{ background: p.color }}>{p.initials}</span>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -120,26 +228,22 @@ export default function Comments({
           </div>
           {editing ? (
             <div className={`${styles.composer} ${styles.editComposer}`}>
-              <textarea
+              <MentionTextarea
                 className={styles.textarea}
                 autoFocus
                 rows={2}
+                people={people}
                 value={editDraft}
-                onChange={(e) => setEditDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    submitEdit(c.id);
-                  }
-                  if (e.key === "Escape") setEditingId(null);
-                }}
+                onChange={setEditDraft}
+                onSubmit={() => submitEdit(c.id)}
+                onEscape={() => setEditingId(null)}
               />
               <button className={styles.send} onClick={() => submitEdit(c.id)}>
                 Save
               </button>
             </div>
           ) : (
-            <p className={styles.text}>{c.body}</p>
+            <CommentBody body={c.body} />
           )}
           {!editing && (
             <div className={styles.actions}>
@@ -188,19 +292,15 @@ export default function Comments({
       {(repliesByParent.get(c.id) ?? []).map((r) => renderComment(r, true, resolved))}
       {!resolved && replyTo === c.id && (
         <div className={`${styles.composer} ${styles.replyComposer}`}>
-          <textarea
+          <MentionTextarea
             className={styles.textarea}
             autoFocus
             rows={2}
             placeholder="Reply…"
+            people={people}
             value={replyDraft}
-            onChange={(e) => setReplyDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                submitReply(c.id);
-              }
-            }}
+            onChange={setReplyDraft}
+            onSubmit={() => submitReply(c.id)}
           />
           <button className={styles.send} onClick={() => submitReply(c.id)}>
             Reply
@@ -237,18 +337,14 @@ export default function Comments({
       </div>
 
       <div className={styles.composer}>
-        <textarea
+        <MentionTextarea
           className={styles.textarea}
           rows={2}
           placeholder="Add a comment…"
+          people={people}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              submitRoot();
-            }
-          }}
+          onChange={setDraft}
+          onSubmit={submitRoot}
         />
         <button className={styles.send} onClick={submitRoot} disabled={!draft.trim()}>
           Comment

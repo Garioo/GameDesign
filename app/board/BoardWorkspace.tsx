@@ -1064,6 +1064,7 @@ export default function BoardWorkspace() {
         <TopBar
           crumbs={topbarBoard ? [isCalendar ? "Calendar" : "Board", topbarBoard.name] : [isCalendar ? "Calendar" : "Board"]}
           online={onlineList}
+          workspaceId={session?.workspaceId}
         >
           <button
             className="share-btn"

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, type ReactNode } from "react";
+import NotificationBell from "./NotificationBell";
 import "./chrome.css";
 
 export interface PresenceUser {
@@ -34,6 +35,8 @@ interface TopBarProps {
   children?: ReactNode;
   /** Shows a hamburger button before the brand (mobile only, via CSS) that opens the page's own nav drawer. Omit when the page has no collapsible nav. */
   onMenuToggle?: () => void;
+  /** Current workspace id — shows the notification bell when given. */
+  workspaceId?: string;
 }
 
 export default function TopBar({
@@ -42,6 +45,7 @@ export default function TopBar({
   online,
   children,
   onMenuToggle,
+  workspaceId,
 }: TopBarProps) {
   return (
     <header className="topbar">
@@ -78,6 +82,7 @@ export default function TopBar({
             </div>
           </>
         )}
+        {workspaceId && <NotificationBell workspaceId={workspaceId} />}
         {children}
       </div>
     </header>
