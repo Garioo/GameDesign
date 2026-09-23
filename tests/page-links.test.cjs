@@ -37,3 +37,12 @@ test("typed [[Title]] without a picked page stays plain text", () => {
   const links = [{ title: "Concept proposal", ref: PAGE }];
   assert.equal(encodeEditedPageLinks("[[Concept propos]]", links), "[[Concept propos]]");
 });
+
+test("section links round-trip too", () => {
+  const SECTION = "section:99999999-8888-7777-6666-555555555555";
+  const text = `All of [[Meetings]](${SECTION})`;
+  assert.equal(stripPageLinks(text), "All of Meetings");
+  const { text: shown, links } = decodePageLinksForEditing(text);
+  assert.equal(shown, "All of [[Meetings]]");
+  assert.equal(encodeEditedPageLinks(shown, links), text);
+});

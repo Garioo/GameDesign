@@ -2,27 +2,28 @@
 //
 // A mention is serialized inside block HTML as:
 //   <a data-mention="" data-page="<ref>" contenteditable="false" href="…">Title</a>
-// where <ref> is a page id, or "canvas:<id>" for canvas boards (the same
-// convention pages.links uses). The sanitizer in BlockEditor normalizes every
-// mention to exactly that attribute set on each read/write; data-page is the
+// where <ref> is a page id, "canvas:<id>" for canvas boards (the same
+// convention pages.links uses), or "section:<id>" for a sidebar section. The
+// sanitizer in BlockEditor normalizes every mention to exactly that attribute
+// set on each read/write; data-page is the
 // source of truth and labels are re-derived from current titles for display.
 
 export interface MentionTarget {
-  ref: string; // page id, or "canvas:<id>"
+  ref: string; // page id, "canvas:<id>" or "section:<id>"
   title: string;
-  group: string; // section name (or "Canvas") shown in the autocomplete
-  kind: "page" | "canvas";
+  group: string; // section name (or "Canvas" / "Section") shown in the autocomplete
+  kind: "page" | "canvas" | "section";
 }
 
 // Page and canvas ids are DB-generated uuids, so anything else is rejected.
 export const MENTION_REF_RE =
-  /^(canvas:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  /^(canvas:|section:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Route for a mention ref. Always derived from data-page, never trusted. */
 export function mentionHref(ref: string): string {
-  return ref.startsWith("canvas:")
-    ? `/doc/canvas?c=${ref.slice("canvas:".length)}`
-    : `/doc?page=${ref}`;
+  if (ref.startsWith("canvas:")) return `/doc/canvas?c=${ref.slice("canvas:".length)}`;
+  if (ref.startsWith("section:")) return `/doc?section=${ref.slice("section:".length)}`;
+  return `/doc?page=${ref}`;
 }
 
 /** Attribute token for cheap "does this block mention X" substring scans. */

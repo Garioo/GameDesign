@@ -1,13 +1,14 @@
 /* ---------------------------------------------------------------------------
- * Links to pages and canvases inside plain-text fields (board task
+ * Links to pages, canvases and sections inside plain-text fields (board task
  * descriptions). Stored inline as `[[Title]](<ref>)`, where <ref> is a page
- * id or "canvas:<id>" — the same refs page mentions use (app/doc/mentions.ts).
+ * id, "canvas:<id>" or "section:<id>" — the same refs page mentions use
+ * (app/doc/mentions.ts).
  * While editing, the text box shows just `[[Title]]`; the ids are kept aside
  * and put back on save (decodePageLinksForEditing / encodeEditedPageLinks).
  * ------------------------------------------------------------------------- */
 
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
-const pageLinkRe = () => new RegExp(`\\[\\[([^\\]\\n]+)\\]\\]\\(((?:canvas:)?${UUID})\\)`, "g");
+const pageLinkRe = () => new RegExp(`\\[\\[([^\\]\\n]+)\\]\\]\\(((?:canvas:|section:)?${UUID})\\)`, "g");
 
 export interface PageLink {
   title: string;

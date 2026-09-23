@@ -688,18 +688,44 @@ function DocPageInner() {
           group: "Canvas",
           kind: "canvas" as const,
         })),
+        ...sections.map((s) => ({
+          ref: "section:" + s.id,
+          title: s.name,
+          group: "Section",
+          kind: "section" as const,
+        })),
       ]
     : [];
   const refsKey =
-    docs.map((d) => d.id).join("|") + "§" + canvases.map((c) => c.id).join("|");
+    docs.map((d) => d.id).join("|") + "§" + canvases.map((c) => c.id).join("|") + "§" + sections.map((s) => s.id).join("|");
   const validRefs = useMemo(
     () =>
-      new Set<string>([...docs.map((d) => d.id), ...canvases.map((c) => "canvas:" + c.id)]),
+      new Set<string>([
+        ...docs.map((d) => d.id),
+        ...canvases.map((c) => "canvas:" + c.id),
+        ...sections.map((s) => "section:" + s.id),
+      ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [refsKey],
   );
 
+  // A section link opens the section's first page and unfolds it in the sidebar.
+  const [focusSection, setFocusSection] = useState<{ id: string; at: number } | null>(null);
+  const openSection = (sectionId: string) => {
+    if (!sections.some((s) => s.id === sectionId)) return;
+    const first = docs
+      .filter((d) => d.sectionId === sectionId && !d.parentId)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))[0];
+    setFocusSection({ id: sectionId, at: Date.now() });
+    if (first) openPage(first.id);
+    else if (window.matchMedia("(max-width: 860px)").matches) setSidebarOpen(true);
+  };
+
   const handleMentionNavigate = (ref: string) => {
+    if (ref.startsWith("section:")) {
+      openSection(ref.slice("section:".length));
+      return;
+    }
     if (ref.startsWith("canvas:")) {
       const id = ref.slice("canvas:".length);
       if (canvases.some((c) => c.id === id)) router.push(`/doc/canvas?c=${id}`);
@@ -714,11 +740,14 @@ function DocPageInner() {
   const titleKey =
     docs.map((d) => d.id + ":" + d.title).join("|") +
     "§" +
-    canvases.map((c) => c.id + ":" + c.name).join("|");
+    canvases.map((c) => c.id + ":" + c.name).join("|") +
+    "§" +
+    sections.map((s) => s.id + ":" + s.name).join("|");
   useEffect(() => {
     setDocs((prev) => {
       const titles = new Map<string, string>(prev.map((d) => [d.id, d.title]));
       for (const c of canvases) titles.set("canvas:" + c.id, c.name);
+      for (const sec of sections) titles.set("section:" + sec.id, sec.name);
       let changed = false;
       const next = prev.map((d) => {
         let blocksChanged = false;
@@ -736,7 +765,17 @@ function DocPageInner() {
       return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titleKey, canvases]);
+  }, [titleKey, canvases, sections]);
+
+  // Section links from outside the editor (/doc?section=<id>, e.g. a task
+  // description): open that section once the workspace has loaded.
+  const urlSectionId = searchParams.get("section");
+  const docsLoaded = docs.length > 0;
+  useEffect(() => {
+    if (!urlSectionId || !docsLoaded) return;
+    openSection(urlSectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSectionId, docsLoaded]);
 
   // Browser back/forward: follow the URL's page param.
   const urlPageId = searchParams.get("page");
@@ -1187,6 +1226,7 @@ function DocPageInner() {
           onDeletePage={handleDeletePage}
           onRenameSection={handleRenameSection}
           onSetSectionColor={handleSetSectionColor}
+          focusSection={focusSection}
           onDeleteSection={handleDeleteSection}
           onMovePage={handleMovePage}
           onMoveSection={handleMoveSection}

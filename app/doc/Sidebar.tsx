@@ -62,6 +62,8 @@ interface SidebarProps {
   onRenamePage: (id: string, title: string) => void;
   onDeletePage: (id: string) => void;
   onRenameSection: (id: string, name: string) => void;
+  /** A section a link pointed at: unfold it, scroll to it and flash it. */
+  focusSection?: { id: string; at: number } | null;
   /** Set or clear (null) a section's colour; editors only. */
   onSetSectionColor?: (id: string, color: string | null) => void;
   onDeleteSection: (id: string) => void;
@@ -87,6 +89,7 @@ export default function Sidebar({
   onDeletePage,
   onRenameSection,
   onSetSectionColor,
+  focusSection,
   onDeleteSection,
   onOpenTrash,
   onMovePage,
@@ -113,6 +116,16 @@ export default function Sidebar({
       setCollapsed(new Set());
     }
   }, [collapsedKey]);
+  useEffect(() => {
+    if (!focusSection) return;
+    setSectionCollapsed(focusSection.id, false);
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`.nav-group[data-section-id="${focusSection.id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSection]);
   const setSectionCollapsed = (id: string, value: boolean) =>
     setCollapsed((prev) => {
       if (prev.has(id) === value) return prev;
@@ -343,9 +356,11 @@ export default function Sidebar({
           const isCollapsed = collapsed.has(sec.id);
           return (
             <div
-              key={sec.id}
+              key={focusSection?.id === sec.id ? `${sec.id}:${focusSection.at}` : sec.id}
+              data-section-id={sec.id}
               className={
                 "nav-group" +
+                (focusSection?.id === sec.id ? " is-focused" : "") +
                 (dropSection === sec.id ? " drop-section" : "") +
                 (dragSection === sec.id ? " dragging-section" : "")
               }

@@ -27,7 +27,7 @@ import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
-import { listMembers, listPageTargets, type ProfileInfo } from "@/lib/docsRepo";
+import { listMembers, listPageTargets, listSections, type ProfileInfo } from "@/lib/docsRepo";
 import { mentionHref, type MentionTarget } from "@/app/doc/mentions";
 import { splitPageLinks, stripPageLinks } from "@/lib/pageLinks";
 import PageLinkTextarea from "./PageLinkTextarea";
@@ -792,7 +792,7 @@ function Linkified({ text, targets = [] }: { text: string; targets?: MentionTarg
   const titleOf = new Map(targets.map((t) => [t.ref, t.title]));
   return <>{splitPageLinks(text).map((seg, i) => seg.link
     ? <Link key={i} href={mentionHref(seg.link.ref)} className={cardStyles.pageLink}>
-        <Icon name={seg.link.ref.startsWith("canvas:") ? "grid" : "file"} />
+        <Icon name={seg.link.ref.startsWith("canvas:") ? "grid" : seg.link.ref.startsWith("section:") ? "folder" : "file"} />
         {titleOf.get(seg.link.ref) ?? seg.link.title}
       </Link>
     : seg.text.split(/(https?:\/\/[^\s]+)/g).map((part, j) =>
@@ -981,12 +981,13 @@ export default function BoardWorkspace() {
     const ws = session?.workspaceId;
     if (!ws || !openCardId) return;
     let active = true;
-    Promise.all([listPageTargets(ws), listCanvases(ws)])
-      .then(([pages, canvases]) => {
+    Promise.all([listPageTargets(ws), listCanvases(ws), listSections(ws)])
+      .then(([pages, canvases, sections]) => {
         if (!active) return;
         setLinkTargets([
           ...pages.map((p): MentionTarget => ({ ref: p.id, title: p.title, group: p.group, kind: "page" })),
           ...canvases.map((c): MentionTarget => ({ ref: `canvas:${c.id}`, title: c.name, group: "Canvas", kind: "canvas" })),
+          ...sections.map((s): MentionTarget => ({ ref: `section:${s.id}`, title: s.name, group: "Section", kind: "section" })),
         ]);
       })
       .catch(console.error);

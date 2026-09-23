@@ -14,7 +14,7 @@ import styles from "./PageLinkTextarea.module.css";
 const TRIGGER_RE = /(?:\[\[|(?:^|\s)@)([^[\]@\n]{0,40})$/;
 
 /**
- * A textarea where typing "[[" or "@" opens a list of pages and canvases.
+ * A textarea where typing "[[" or "@" opens a list of pages, canvases and sections.
  * Picking one inserts `[[Title]]`; `value` / `onChange` carry the stored
  * `[[Title]](<ref>)` form (lib/pageLinks.ts).
  */
@@ -86,7 +86,7 @@ export default function PageLinkTextarea({
         }}
         onBlur={() => setTimeout(() => setMenu(null), 120)} // after a mousedown pick registers
       />
-      <p className={styles.hint}>Type [[ or @ to link a page or canvas.</p>
+      <p className={styles.hint}>Type [[ or @ to link a page, canvas or section.</p>
       {menu && matches.length > 0 && (
         <div className={styles.menu} role="listbox" aria-label="Link a page">
           {matches.map((t, i) => (
@@ -98,7 +98,7 @@ export default function PageLinkTextarea({
               className={`${styles.option}${i === menu.index ? ` ${styles.optionActive}` : ""}`}
               onMouseDown={(e) => { e.preventDefault(); pick(t); }}
             >
-              <Icon name={t.kind === "canvas" ? "grid" : "file"} className={styles.optionIcon} />
+              <Icon name={t.kind === "canvas" ? "grid" : t.kind === "section" ? "folder" : "file"} className={styles.optionIcon} />
               <span className={styles.optionTitle}>{t.title}</span>
               <span className={styles.optionGroup}>{t.group}</span>
             </button>
