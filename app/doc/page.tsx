@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor, { type BlockEditorApi } from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import TopBar from "@/app/components/TopBar";
+import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "@/app/components/Dock";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, signOutAndClear, type SessionInfo } from "@/lib/session";
@@ -71,7 +72,6 @@ import {
 } from "./data";
 import "./doc.css";
 
-interface PresenceUser { key: string; name: string; initials: string; color: string }
 
 // One "Linked references" rail entry: a page that points at the current one.
 interface Backlink { doc: DesignDoc; kind: "link" | "mention"; snippet: string }
@@ -169,7 +169,6 @@ function DocPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
-  const [online, setOnline] = useState<PresenceUser[]>([]);
   const [sections, setSections] = useState<SectionInfo[]>([]);
   const [people, setPeople] = useState<ProfileInfo[]>([]);
   const [canvases, setCanvases] = useState<CanvasInfo[]>([]);
@@ -581,24 +580,8 @@ function DocPageInner() {
           }
         },
       )
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<PresenceUser>();
-        const seen = new Map<string, PresenceUser>();
-        for (const metas of Object.values(state)) {
-          for (const m of metas) seen.set(m.key, m);
-        }
-        setOnline(Array.from(seen.values()));
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            key: session.userId,
-            name: session.name,
-            initials: session.initials,
-            color: session.color,
-          });
-        }
-      });
+      .subscribe();
+    // Who's online (and where) is tracked site-wide by useSitePresence.
 
     channelRef.current = channel;
 
@@ -609,6 +592,11 @@ function DocPageInner() {
   }, [loading, session]);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0];
+  // Online teammates, site-wide, each with where they are (this page for us).
+  const onlineList = useSitePresence(
+    session,
+    active ? { path: `/doc?page=${active.id}`, label: `${active.title || "Untitled"} · Pages` } : { path: "/doc", label: "Pages" },
+  );
 
   // If a local draft survived from a session that never made it to the
   // server (dropped connection, closed tab before the debounce fired),
@@ -940,13 +928,7 @@ function DocPageInner() {
     trackSave(() => updateProfile(session.userId, patch));
     const next = { ...session, ...patch };
     setSession(next);
-    // presence sync pushes the new identity to everyone's avatar stacks
-    channelRef.current?.track({
-      key: next.userId,
-      name: next.name,
-      initials: next.initials,
-      color: next.color,
-    });
+    // useSitePresence re-joins with the new identity, updating everyone's avatars.
     setPeople((prev) => prev.map((p) => (p.id === session.userId ? { ...p, ...patch } : p)));
     setDocs((prev) =>
       prev.map((d) =>
@@ -1120,13 +1102,6 @@ function DocPageInner() {
     );
   }
 
-  const onlineList: PresenceUser[] =
-    online.length > 0
-      ? online
-      : session
-        ? [{ key: session.userId, name: session.name, initials: session.initials, color: session.color }]
-        : [];
-
   return (
     <div className={"app" + (sidebarOpen ? " nav-open" : "") + (railOpen ? " rail-open" : "") + (sidebarHidden ? " sidebar-hidden" : "")}>
       {/* ---------------- top bar (global chrome) ---------------- */}
@@ -1134,6 +1109,7 @@ function DocPageInner() {
         brandName={workspace?.name}
         crumbs={[active.group, active.title]}
         online={onlineList}
+        selfKey={session?.userId}
         onMenuToggle={toggleSidebar}
         menuAlwaysVisible
         menuLabel={sidebarHidden ? "Show sidebar (⌘\\)" : "Hide sidebar (⌘\\)"}

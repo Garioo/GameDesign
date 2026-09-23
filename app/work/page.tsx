@@ -12,6 +12,7 @@ import { listNotifications, markNotificationRead, notificationVerb, type Notific
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { groupByPriority, myTasks, priorityKey, type MyTask, type PriorityKey } from "@/lib/myWork";
 import TopBar from "@/app/components/TopBar";
+import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import styles from "./work.module.css";
@@ -37,6 +38,7 @@ const cardHref = (t: MyTask) => `/board?board=${encodeURIComponent(t.board.id)}&
 export default function MyWorkPage() {
   const router = useRouter();
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const online = useSitePresence(session, { path: "/work", label: "My Work" });
   const [boards, setBoards] = useState<Board[] | null>(null);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [members, setMembers] = useState<ProfileInfo[]>([]);
@@ -190,7 +192,7 @@ export default function MyWorkPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar crumbs={isMe || !person ? ["My Work"] : ["My Work", person.name]} workspaceId={session?.workspaceId}>
+      <TopBar crumbs={isMe || !person ? ["My Work"] : ["My Work", person.name]} workspaceId={session?.workspaceId} online={online} selfKey={session?.userId}>
         <SettingsButton session={session} onSessionChange={setSession} />
       </TopBar>
 

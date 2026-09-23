@@ -21,7 +21,8 @@ import CategoryManager from './CategoryManager';
 import { CardComments, SubtaskList, TagInput, type SubtaskItem } from "./CardDetails";
 import cardStyles from "./CardDetails.module.css";
 import { HistoryToggle } from "@/app/components/ActivityFeed";
-import TopBar, { type PresenceUser } from "@/app/components/TopBar";
+import TopBar from "@/app/components/TopBar";
+import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
@@ -944,7 +945,6 @@ export default function BoardWorkspace() {
   const [linkTargets, setLinkTargets] = useState<MentionTarget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [online, setOnline] = useState<{ key: string; name: string; initials: string; color: string }[]>([]);
   const [boards, setBoards] = useState<BoardData[]>([]);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
@@ -1043,36 +1043,6 @@ export default function BoardWorkspace() {
       setActiveBoardId(cur => cur && fresh.some(b => b.id === cur) ? cur : fresh[0]?.id ?? null);
     });
 
-  // ---- realtime: refetch on any board change from a teammate + presence ----
-  useEffect(() => {
-    const wsId = wsRef.current;
-    if (loading || !wsId || !session) return;
-
-    const channel = supabase.channel(`board:${wsId}`, { config: { broadcast: { self: false } } });
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ key: string; name: string; initials: string; color: string }>();
-        const seen = new Map<string, { key: string; name: string; initials: string; color: string }>();
-        for (const metas of Object.values(state)) {
-          for (const m of metas) seen.set(m.key, m);
-        }
-        setOnline(Array.from(seen.values()));
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            key: session.userId,
-            name: session.name,
-            initials: session.initials,
-            color: session.color,
-          });
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [loading, session]);
 
   useEffect(() => {
     if (session && activeBoardId) {
@@ -1096,13 +1066,18 @@ export default function BoardWorkspace() {
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const topbarBoard = combined ? undefined : activeBoard;
-  // Same presence fallback as the doc/canvas pages: show yourself when alone.
-  const onlineList: PresenceUser[] =
-    online.length > 0
-      ? online
-      : session
-        ? [{ key: session.userId, name: session.name, initials: session.initials, color: session.color }]
-        : [];
+  // Online teammates, site-wide, each with where they are — for us the open
+  // task, else this board (or all boards / the calendar).
+  const onlineList = useSitePresence(
+    session,
+    editingCard
+      ? { path: `/board?card=${editingCard.id}`, label: `${editingCard.title || "Untitled task"} · Task` }
+      : isCalendar
+        ? { path: "/calendar", label: "Calendar" }
+        : topbarBoard
+          ? { path: `/board?board=${topbarBoard.id}`, label: `${topbarBoard.name} · Board` }
+          : { path: "/board", label: "All boards" },
+  );
   // In All boards mode the kanban works on every column at once; edits are mapped back to each board by column id.
   const cols = combined ? boards.flatMap((b) => b.cols) : activeBoard?.cols ?? [];
   const visibleCols = cols;
@@ -1341,6 +1316,7 @@ export default function BoardWorkspace() {
         <TopBar
           crumbs={topbarBoard ? [isCalendar ? "Calendar" : "Board", topbarBoard.name] : [isCalendar ? "Calendar" : "Board"]}
           online={onlineList}
+          selfKey={session?.userId}
           workspaceId={session?.workspaceId}
         >
           <button

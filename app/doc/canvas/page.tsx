@@ -8,6 +8,7 @@ import { GeoShapeGeoStyle, toRichText, type Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
 import CanvasBoard, { type SaveState } from "./CanvasBoard";
 import TopBar from "@/app/components/TopBar";
+import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
@@ -28,7 +29,6 @@ import {
 import "../doc.css";
 import "./canvas.css";
 
-interface PresenceUser { key: string; name: string; initials: string; color: string }
 
 type IconProps = { className?: string };
 
@@ -184,7 +184,6 @@ export default function CanvasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
-  const [online, setOnline] = useState<PresenceUser[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tool, setTool] = useState("select");
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -235,36 +234,13 @@ export default function CanvasPage() {
       setCanvases(list); setFolders(folderList);
     });
 
-  // ---- realtime: canvas list changes + presence ----
-  useEffect(() => {
-    const wsId = wsRef.current;
-    if (loading || !wsId || !session) return;
-
-    const channel = supabase
-      .channel(`canvas:${wsId}`, { config: { broadcast: { self: false } } })
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<PresenceUser>();
-        const seen = new Map<string, PresenceUser>();
-        for (const metas of Object.values(state)) {
-          for (const m of metas) seen.set(m.key, m);
-        }
-        setOnline(Array.from(seen.values()));
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            key: session.userId,
-            name: session.name,
-            initials: session.initials,
-            color: session.color,
-          });
-        }
-      });
-
-    return () => { supabase.removeChannel(channel); };
-  }, [loading, session]);
 
   const active = canvases.find((c) => c.id === activeId) ?? canvases[0] ?? null;
+  // Online teammates, site-wide, each with where they are (this canvas for us).
+  const onlineList = useSitePresence(
+    session,
+    active ? { path: `/doc/canvas?c=${active.id}`, label: `${active.name || "Untitled"} · Canvas` } : { path: "/doc/canvas", label: "Canvas" },
+  );
 
   // Viewers get a read-only board (CanvasBoard sets tldraw's isReadonly);
   // creating, renaming and deleting boards is hidden for them too.
@@ -418,19 +394,13 @@ export default function CanvasPage() {
     );
   }
 
-  const onlineList: PresenceUser[] =
-    online.length > 0
-      ? online
-      : session
-        ? [{ key: session.userId, name: session.name, initials: session.initials, color: session.color }]
-        : [];
-
   return (
     <div className={"app canvas-app" + (sidebarOpen ? " nav-open" : "")}>
       {/* top bar (global chrome) */}
       <TopBar
         crumbs={active ? ["Canvas", active.name] : ["Canvas"]}
         online={onlineList}
+        selfKey={session?.userId}
         onMenuToggle={() => setSidebarOpen((v) => !v)}
         workspaceId={session?.workspaceId}
       >

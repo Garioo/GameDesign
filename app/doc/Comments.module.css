@@ -8,7 +8,9 @@
   border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  /* The rail is a fixed-height, scrolling flex column: never let it squash
+     this panel below its content, or the threads spill over History below. */
+  flex-shrink: 0;
 }
 
 .head {
@@ -101,8 +103,12 @@
 }
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 7px;
+  column-gap: 7px;
+}
+.meta > * {
+  white-space: nowrap;
 }
 .author {
   font-size: 12.5px;

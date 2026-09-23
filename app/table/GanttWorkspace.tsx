@@ -13,6 +13,7 @@ import MultiSelectPicker from "@/app/components/MultiSelectPicker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
+import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "../components/Dock";
 import SettingsButton from "../components/SettingsButton";
 import StageDialog from "../board/StageDialog";
@@ -231,6 +232,7 @@ function PhaseEditor({
 export default function GanttWorkspace() {
   const router = useRouter();
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const online = useSitePresence(session, { path: "/table", label: "Gantt" });
   const [snapshot, setSnapshot] = useState<PhaseSnapshot | null>(null);
   const [boards, setBoards] = useState<Board[]>([]);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
@@ -567,7 +569,7 @@ export default function GanttWorkspace() {
       className="phase-workspace planning-app"
       style={{ "--phase-label-width": `${labelWidth}px` } as CSSProperties}
     >
-      <TopBar crumbs={["Gantt"]}>
+      <TopBar crumbs={["Gantt"]} online={online} selfKey={session?.userId} workspaceId={session?.workspaceId}>
         <SettingsButton session={session} onSessionChange={setSession} />
       </TopBar>
       <main className="phase-main" aria-label="Gantt planning">

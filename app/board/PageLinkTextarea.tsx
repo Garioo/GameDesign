@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Icon from "@/app/components/Icon";
 import type { MentionTarget } from "@/app/doc/mentions";
 import {
@@ -51,6 +51,40 @@ export default function PageLinkTextarea({
   const { text: shown, links } = decodePageLinksForEditing(value);
   for (const l of links) if (!known.current.some((k) => k.ref === l.ref && k.title === l.title)) known.current.push(l);
   const emit = (text: string) => onChange(encodeEditedPageLinks(text, known.current));
+
+  // The list is positioned against the window (position: fixed) so a dialog's
+  // scroll area can't clip it: below the box when it fits, otherwise above.
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const menuOpen = !!menu;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!menuOpen || !el) return setMenuStyle(null);
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const below = window.innerHeight - rect.bottom - margin;
+    const above = rect.top - margin;
+    const width = Math.min(320, rect.width);
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+    setMenuStyle(
+      below >= 200 || below >= above
+        ? { top: rect.bottom + 4, left, width, maxHeight: Math.min(260, below) }
+        : { bottom: window.innerHeight - rect.top + 4, left, width, maxHeight: Math.min(260, above) },
+    );
+  }, [menuOpen]);
+  // Anything scrolling underneath would detach the list from the box — close it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: Event) => {
+      if (!(e.target instanceof Node) || !listRef.current?.contains(e.target)) setMenu(null);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [menuOpen]);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const q = menu?.query.trim().toLowerCase() ?? "";
   const matches = menu ? targets.filter((t) => !q || t.title.toLowerCase().includes(q)).slice(0, 8) : [];
@@ -110,7 +144,7 @@ export default function PageLinkTextarea({
       />
       {hint && <p className={styles.hint}>{hint}</p>}
       {menu && matches.length > 0 && (
-        <div className={styles.menu} role="listbox" aria-label="Link a page">
+        <div ref={listRef} className={styles.menu} style={menuStyle ?? { visibility: "hidden" }} role="listbox" aria-label="Link a page">
           {matches.map((t, i) => (
             <button
               type="button"

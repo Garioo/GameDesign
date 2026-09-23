@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Icon from "@/app/components/Icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import {
   ensureSession,
   setActiveWorkspace,
@@ -31,6 +30,7 @@ import { myTasks } from "@/lib/myWork";
 import type { DesignDoc } from "@/app/doc/data";
 import { stripInlineHtml } from "@/app/doc/mentions";
 import TopBar from "@/app/components/TopBar";
+import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import ActivityFeed from "@/app/components/ActivityFeed";
@@ -249,7 +249,6 @@ export default function HomeDashboard() {
   const [completions, setCompletions] = useState<Map<string, string>>(new Map());
   const [scorePeriod, setScorePeriod] = useState<StatsPeriod>("week");
   const [cached, setCached] = useState<Snapshot | null>(null);
-  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const [recentFilter, setRecentFilter] = useState<"all" | "foryou">("all");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -342,38 +341,9 @@ export default function HomeDashboard() {
     );
   }, [session, docs, members, workspaces, comments]);
 
-  // Live presence: join the same workspace channel the doc editor uses, so
-  // "who's online" covers everyone in the workspace, not just this page.
-  useEffect(() => {
-    if (!session?.workspaceId) return;
-    const channel = supabase
-      .channel(`workspace:${session.workspaceId}`, {
-        config: { broadcast: { self: false } },
-      })
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ key: string }>();
-        const ids = new Set<string>();
-        for (const metas of Object.values(state)) {
-          for (const m of metas) ids.add(m.key);
-        }
-        setOnlineIds(ids);
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            key: session.userId,
-            name: session.name,
-            initials: session.initials,
-            color: session.color,
-          });
-        }
-      });
-    return () => {
-      setOnlineIds(new Set());
-      supabase.removeChannel(channel);
-    };
-    // Resubscribing on rename/recolor is harmless and keeps the payload fresh.
-  }, [session]);
+  // Who's online anywhere in the workspace (and where), shared with every page.
+  const online = useSitePresence(session, { path: "/home", label: "Home" });
+  const onlineIds = new Set(online.map((u) => u.key));
 
   const handleSignOut = async () => {
     clearSnapshots(); // don't leave dashboard data behind on a shared machine
@@ -481,7 +451,7 @@ export default function HomeDashboard() {
 
   return (
     <div className={styles.page}>
-      <TopBar crumbs={["Home"]} workspaceId={session?.workspaceId}>
+      <TopBar crumbs={["Home"]} workspaceId={session?.workspaceId} online={online} selfKey={session?.userId}>
         {me && (
           <span className={styles.me} style={{ background: me.color }} title={me.name}>
             {me.initials}
