@@ -71,9 +71,10 @@ export function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => 
     const names = [...by.keys()].sort((a, b) => (GROUP_ORDER.indexOf(a) + 99) % 99 - (GROUP_ORDER.indexOf(b) + 99) % 99);
     const out = names.map((g) => ({ name: g, items: by.get(g)!.map((s) => ({ keys: s.keys, label: s.label })) }));
     const writing = WRITING.filter((w) => !q || w.label.toLowerCase().includes(q));
-    if (writing.length && document.querySelector(".blocks")) out.push({ name: "Writing in a page", items: writing });
+    // Only on a page with the editor; `open` is false during server rendering, so no document there.
+    if (open && writing.length && document.querySelector(".blocks")) out.push({ name: "Writing in a page", items: writing });
     return out;
-  }, [list, filter]);
+  }, [list, filter, open]);
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(
