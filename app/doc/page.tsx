@@ -1366,7 +1366,8 @@ function DocPageInner() {
                 scheduleSaveBlocks(active.id, blocks);
               }}
             />
-            <LiveCursors key={active.id} pageId={active.id} me={session} />
+            {/* Distinct key: the sibling BlockEditor is already keyed by the page id. */}
+            <LiveCursors key={`cursors:${active.id}`} pageId={active.id} me={session} />
           </article>
         </main>
 
