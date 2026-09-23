@@ -155,7 +155,7 @@ restore logs one entry.
   same kind of thing to the same item updates one row instead of adding more
   (e.g. "added 5 tasks to Gameplay", "left 3 comments on Combat"). A status or
   stage change that is reversed inside that window disappears.
-- **Not recorded:** block text edits. Those go to the page's edit history (below).
+- **Not recorded:** block text edits. Those go to the page's version history (below).
 - **Where it shows:** a **Team activity** feed on Home, and a collapsed
   **History** section in each page's side panel and each task dialog.
 - **New notifications:** **replies** (everyone else in a comment thread hears
@@ -163,21 +163,31 @@ restore logs one entry.
   mention instead) and **page ownership** (you're made owner of a page by
   someone else).
 
-## Page edit history
+## Version history
 
-Apply `supabase/migrate-page-edits.sql`. The clock button in a page's top bar
-opens **Edit history**: who wrote, edited or deleted each block, when, and a
-word-level view of what changed (removed words struck through, added words
-highlighted). Filter by person, and click an entry to jump to that block.
+Apply `supabase/migrate-page-edits.sql` (safe to rerun if an earlier version of
+it is already applied). The clock button in a page's top bar opens a
+full-screen **Version history**, like Google Docs:
 
-- **How it's recorded:** a trigger on `blocks` writes `page_edits` rows with
-  the signed-in author and the block's text before and after. Clients can't
-  write the table, so authorship can't be forged. Members can read it.
-- **Typing is folded:** one person's edits to the same block within 10 minutes
-  make one entry. An edit that ends where it started, or a block added and
-  deleted in that window, leaves nothing.
-- **Not recorded:** moving blocks, changing a block's type, ticking to-dos,
-  and seeding. History starts when the migration is applied.
+- **Versions on the right**, grouped by day. A version is an editing session:
+  edits that follow each other within 20 minutes belong together. Each shows
+  when it happened and who edited, with their colour.
+- **The page as it was** in the middle. With **Show changes** on, the chosen
+  version's edits are marked in the editor's colour: added words underlined
+  and tinted, deleted words struck through, and a colour bar beside every
+  block it touched. Deleted blocks stay visible, struck through.
+- **Restore this version** (owners and editors) puts the page back the way it
+  was. The restore is itself recorded, so it can be undone from the history.
+
+How it's recorded: a trigger on `blocks` writes `page_edits` rows with the
+signed-in author, the block's text and content before and after, and its
+position. Clients can't write the table, so authorship can't be forged, and
+members can read it. One person's edits to the same block within 10 minutes
+fold into one row. Not recorded: moving blocks, changing a block's type,
+ticking to-dos, seeding, and image data. History starts when the migration is
+applied. Pages are rebuilt backwards from the current blocks. A deleted block
+comes back under the block that was above it when it was deleted, struck
+through and labelled "Deleted by …".
 
 ## Phase planning
 

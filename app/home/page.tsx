@@ -36,6 +36,7 @@ import SettingsButton from "@/app/components/SettingsButton";
 import ActivityFeed from "@/app/components/ActivityFeed";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import TeamScoreboard from "@/app/components/TeamScoreboard";
+import UpcomingMilestones from "@/app/components/UpcomingMilestones";
 import styles from "./home.module.css";
 
 /* ---------- inline icon set (lucide-flavoured, no deps) ---------- */
@@ -675,6 +676,16 @@ export default function HomeDashboard() {
               </div>
 
               <div className={styles.mainCol}>
+              {session?.workspaceId && (
+                <section className={styles.section}>
+                  <div className={styles.sectionHead}>
+                    <h2 className={styles.sectionTitle}>Upcoming milestones</h2>
+                    <Link href="/milestones" className={styles.sectionLink}>All milestones</Link>
+                  </div>
+                  <UpcomingMilestones workspaceId={session.workspaceId} />
+                </section>
+              )}
+
               {session && boards && members.length > 0 && (
                 <section className={styles.section}>
                   <div className={styles.sectionHead}>
@@ -707,6 +718,7 @@ export default function HomeDashboard() {
                 <section className={styles.section}>
                   <div className={styles.sectionHead}>
                     <h2 className={styles.sectionTitle}>Team activity</h2>
+                    <Link href="/digest" className={styles.sectionLink}>Weekly digest</Link>
                   </div>
                   <div className={styles.activityCard}>
                     <ActivityFeed

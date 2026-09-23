@@ -12,6 +12,11 @@
 -- Position-only saves, type changes and checkbox ticks are not text edits and
 -- are skipped. System work (seeding, migrations) has no caller and is skipped.
 --
+-- Each row also keeps the block's whole content before/after (null = the
+-- block didn't exist) and its position, so the client can rebuild the page as
+-- it was at any version and restore it. Large inline data (image data URLs,
+-- cached script code) is left out of those snapshots.
+--
 -- Apply after schema.sql. Safe to rerun.
 begin;
 
@@ -28,6 +33,16 @@ create table if not exists public.page_edits (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+alter table public.page_edits add column if not exists before_content jsonb;
+alter table public.page_edits add column if not exists after_content jsonb;
+alter table public.page_edits add column if not exists position int not null default 0;
+-- For deleted blocks: the block just above it, so history can put it back in place.
+alter table public.page_edits add column if not exists prev_block_id uuid;
+-- Rows recorded before the snapshot columns existed: rebuild what we can from the text.
+update public.page_edits
+set before_content = case when kind = 'added' then null else jsonb_build_object('text', before_text) end,
+    after_content = case when kind = 'removed' then null else jsonb_build_object('text', after_text) end
+where before_content is null and after_content is null;
 create index if not exists idx_page_edits_page on public.page_edits(page_id, updated_at desc);
 create index if not exists idx_page_edits_fold on public.page_edits(block_id, author, updated_at desc);
 
@@ -62,6 +77,16 @@ returns text language sql immutable set search_path = public as $$
   end, '');
 $$;
 
+-- A block's content without large inline data.
+create or replace function public.block_snapshot(p_content jsonb)
+returns jsonb language sql immutable as $$
+  select case
+    when p_content is null then null
+    when p_content->>'src' like 'data:%' then p_content - 'src' - 'code'
+    else p_content - 'code'
+  end;
+$$;
+
 -- Writing into an empty block counts as adding text; emptying one as removing it.
 create or replace function public.page_edit_kind(p_before text, p_after text)
 returns text language sql immutable as $$
@@ -77,6 +102,9 @@ declare
   v_type text := coalesce(new.type, old.type);
   v_before text := case when tg_op = 'INSERT' then '' else public.block_text(old.type, old.content) end;
   v_after text := case when tg_op = 'DELETE' then '' else public.block_text(new.type, new.content) end;
+  v_after_content jsonb := case when tg_op = 'DELETE' then null else public.block_snapshot(new.content) end;
+  v_position int := coalesce(new.position, old.position);
+  v_prev uuid;
   v_project uuid;
   v_row public.page_edits;
 begin
@@ -84,6 +112,12 @@ begin
   -- A page being deleted cascades to its blocks; there's nothing left to log against.
   select project_id into v_project from public.pages where id = v_page;
   if v_project is null then return null; end if;
+
+  if tg_op = 'DELETE' then
+    select id into v_prev from public.blocks
+    where page_id = old.page_id and id <> old.id and position < old.position
+    order by position desc limit 1;
+  end if;
 
   select * into v_row from public.page_edits
   where block_id = v_block and author = v_author and updated_at > now() - interval '10 minutes'
@@ -95,14 +129,17 @@ begin
       delete from public.page_edits where id = v_row.id; -- back where it started
     else
       update public.page_edits
-      set after_text = v_after, block_type = v_type, updated_at = now(), kind = public.page_edit_kind(v_row.before_text, v_after)
+      set after_text = v_after, after_content = v_after_content, position = v_position, prev_block_id = v_prev, block_type = v_type,
+          updated_at = now(), kind = public.page_edit_kind(v_row.before_text, v_after)
       where id = v_row.id;
     end if;
     return null;
   end if;
 
-  insert into public.page_edits(project_id, page_id, block_id, block_type, author, kind, before_text, after_text)
-  values (v_project, v_page, v_block, v_type, v_author, public.page_edit_kind(v_before, v_after), v_before, v_after);
+  insert into public.page_edits(project_id, page_id, block_id, block_type, author, kind, before_text, after_text,
+                                before_content, after_content, position, prev_block_id)
+  values (v_project, v_page, v_block, v_type, v_author, public.page_edit_kind(v_before, v_after), v_before, v_after,
+          case when tg_op = 'INSERT' then null else public.block_snapshot(old.content) end, v_after_content, v_position, v_prev);
   return null;
 end $$;
 revoke all on function public.record_page_edit() from public, anon, authenticated;

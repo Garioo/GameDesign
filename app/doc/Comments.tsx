@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProfileInfo } from "@/lib/docsRepo";
 import type { CommentRow } from "@/lib/commentsRepo";
 import {
@@ -57,7 +57,7 @@ function CommentBody({ body }: { body: string }) {
  * The textarea only ever shows "@Name" — `value` / `onChange` carry the stored
  * `@[Name](user:<id>)` tokens the notifications trigger looks for.
  */
-function MentionTextarea({
+export function MentionTextarea({
   value,
   onChange,
   onSubmit,
@@ -67,6 +67,7 @@ function MentionTextarea({
   rows,
   placeholder,
   autoFocus,
+  menuBelow = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -77,6 +78,8 @@ function MentionTextarea({
   rows: number;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Open the people list under the field (e.g. when there's no room above). */
+  menuBelow?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ start: number; query: string; index: number } | null>(null);
@@ -137,7 +140,7 @@ function MentionTextarea({
         onBlur={() => setTimeout(() => setMenu(null), 120)} // after a mousedown pick registers
       />
       {menu && matches.length > 0 && (
-        <div className={styles.mentionMenu} role="listbox">
+        <div className={menuBelow ? `${styles.mentionMenu} ${styles.mentionMenuBelow}` : styles.mentionMenu} role="listbox">
           {matches.map((p, i) => (
             <button
               type="button"
@@ -167,6 +170,9 @@ export default function Comments({
   onSettle,
   onJump,
   focusAnchor,
+  canComment = true,
+  canResolve = true,
+  composerFallback,
 }: {
   comments: CommentRow[];
   people: ProfileInfo[];
@@ -183,6 +189,12 @@ export default function Comments({
   onJump?: (anchor: string) => void;
   /** Thread to scroll into view and flash (its text was clicked on the page). */
   focusAnchor?: { anchor: string; at: number } | null;
+  /** Show the comment box and Reply (false e.g. for a signed-out guest). */
+  canComment?: boolean;
+  /** Show Resolve / Reopen (false for guests on a shared page). */
+  canResolve?: boolean;
+  /** Shown instead of the comment box when commenting isn't possible. */
+  composerFallback?: ReactNode;
 }) {
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -282,11 +294,11 @@ export default function Comments({
             </div>
           ) : (
             <>
-              {!isReply && c.anchor && c.quote != null && (
+              {!isReply && (c.anchor || c.block_id) && c.quote != null && (
                 <button
                   type="button"
                   className={styles.quote}
-                  onClick={() => onJump?.(c.anchor!)}
+                  onClick={() => onJump?.(c.anchor ?? `block:${c.block_id}`)}
                   title="Show in the page"
                 >
                   {c.suggestion != null ? (
@@ -319,7 +331,7 @@ export default function Comments({
                   </button>
                 </>
               )}
-              {!isReply && !resolved && (
+              {!isReply && !resolved && canComment && (
                 <button
                   className={styles.action}
                   onClick={() => {
@@ -330,7 +342,7 @@ export default function Comments({
                   Reply
                 </button>
               )}
-              {!isReply && c.suggestion == null && (
+              {!isReply && c.suggestion == null && canResolve && (
                 <button className={styles.action} onClick={() => onResolve(c.id, !resolved)}>
                   {resolved ? "Reopen" : "Resolve"}
                 </button>
@@ -358,14 +370,16 @@ export default function Comments({
     );
   };
 
+  // What the page points at to focus a thread: its text mark, or (block comments) the comment itself.
+  const threadKey = (c: CommentRow) => c.anchor ?? (c.block_id ? c.id : null);
   const renderThread = (c: CommentRow, resolved: boolean) => (
     <div
-      key={c.anchor && focusAnchor?.anchor === c.anchor ? `${c.id}:${focusAnchor.at}` : c.id}
-      data-anchor={c.anchor ?? undefined}
+      key={threadKey(c) && focusAnchor?.anchor === threadKey(c) ? `${c.id}:${focusAnchor.at}` : c.id}
+      data-anchor={threadKey(c) ?? undefined}
       className={[
         styles.thread,
         resolved ? styles.resolved : "",
-        c.anchor && focusAnchor?.anchor === c.anchor ? styles.focused : "",
+        threadKey(c) && focusAnchor?.anchor === threadKey(c) ? styles.focused : "",
       ].join(" ")}
     >
       {renderComment(c, false, resolved)}
@@ -416,6 +430,7 @@ export default function Comments({
         )}
       </div>
 
+      {!canComment ? composerFallback ?? null : (
       <div className={styles.composer}>
         <MentionTextarea
           className={styles.textarea}
@@ -430,6 +445,7 @@ export default function Comments({
           Comment
         </button>
       </div>
+      )}
     </div>
   );
 }

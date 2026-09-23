@@ -386,7 +386,7 @@ export default function Settings({
                           onChange={(e) => handleRoleChange(m, e.target.value)}
                         >
                           <option value="editor">Editor</option>
-                          <option value="viewer">Viewer</option>
+                          <option value="viewer">Supervisor / guest</option>
                           <option value="owner">Make owner…</option>
                         </select>
                         <button
@@ -399,7 +399,7 @@ export default function Settings({
                         </button>
                       </>
                     ) : (
-                      <span className={styles.roleChip}>{m.role}</span>
+                      <span className={styles.roleChip}>{m.role === "viewer" ? "supervisor / guest" : m.role}</span>
                     )}
                   </div>
                 );
@@ -417,7 +417,7 @@ export default function Settings({
                   onChange={(e) => setInviteRole(e.target.value as GrantableRole)}
                 >
                   <option value="editor">Editor</option>
-                  <option value="viewer">Viewer</option>
+                  <option value="viewer">Supervisor / guest</option>
                 </select>
                 <button className={styles.signOut} onClick={handleCopyInvite}>
                   {inviteCopied ? <Icon name="check" className={styles.icon} /> : <Icon name="link" className={styles.icon} />}
@@ -426,6 +426,13 @@ export default function Settings({
               </div>
             )}
 
+            {myRole === "owner" && (
+              <p className={styles.fine}>
+                <strong>Editors</strong> change everything. <strong>Supervisors / guests</strong> see every page, board
+                and milestone, and can comment — on a page, a paragraph, or a task — but can’t edit anything. Use it for
+                a supervisor, a teacher or a client reviewing the work.
+              </p>
+            )}
             {memberError && <p className={styles.memberError}>{memberError}</p>}
           </section>
 

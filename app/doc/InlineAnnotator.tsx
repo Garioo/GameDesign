@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/app/components/Icon";
+import type { ProfileInfo } from "@/lib/docsRepo";
+import { MentionTextarea } from "./Comments";
 import styles from "./InlineAnnotator.module.css";
 
 export type AnnotationKind = "comment" | "suggest";
@@ -27,9 +29,18 @@ type Spot = { range: Range; block: HTMLElement; rect: DOMRect; quote: string };
 export default function InlineAnnotator({
   rootRef,
   onSubmit,
+  people = [],
+  openFor,
+  suggest = true,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   onSubmit: (req: AnnotationRequest) => Promise<void>;
+  /** Workspace people offered by @ in the comment field (mentions notify them). */
+  people?: ProfileInfo[];
+  /** Open the comment form over a whole block's text (block menu → Comment). */
+  openFor?: { block: HTMLElement | null; at: number } | null;
+  /** Offer "Suggest edit" (off for people who can only comment). */
+  suggest?: boolean;
 }) {
   const [spot, setSpot] = useState<Spot | null>(null);
   const [form, setForm] = useState<(Spot & { kind: AnnotationKind; blocked: boolean }) | null>(null);
@@ -57,6 +68,24 @@ export default function InlineAnnotator({
     const left = Math.max(margin, Math.min(form.rect.left, window.innerWidth - w - margin));
     setFormPos({ top, left });
   }, [form, error]);
+
+  // "Comment on this block": select its whole text and open the form.
+  const openAt = openFor?.at;
+  useEffect(() => {
+    const block = openFor?.block;
+    if (!block || !block.isConnected) return;
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    const quote = range.toString();
+    if (!quote.trim()) return;
+    setError("");
+    setBody("");
+    setReplacement("");
+    setSpot(null);
+    setForm({ range, block, rect: block.getBoundingClientRect(), quote, kind: "comment", blocked: false });
+    // Only a new request (its timestamp) opens the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAt]);
 
   // Track the selection while no form is open.
   useEffect(() => {
@@ -91,7 +120,8 @@ export default function InlineAnnotator({
       if (!busy && !formRef.current?.contains(e.target as Node)) setForm(null);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) setForm(null);
+      // The @-mention list handles (and prevents) its own Escape first.
+      if (e.key === "Escape" && !busy && !e.defaultPrevented) setForm(null);
     };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
@@ -180,15 +210,16 @@ export default function InlineAnnotator({
         {!blocked && (
           <label className={styles.label}>
             {form.kind === "suggest" ? "Note (optional)" : `On “${form.quote.length > 60 ? form.quote.slice(0, 60) + "…" : form.quote}”`}
-            <textarea
+            <MentionTextarea
+              className={styles.field}
               autoFocus={form.kind === "comment"}
               rows={form.kind === "suggest" ? 2 : 3}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder={form.kind === "suggest" ? "Why this change?" : "Write a comment"}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
-              }}
+              onChange={setBody}
+              people={people}
+              menuBelow
+              placeholder={form.kind === "suggest" ? "Why this change? Type @ to mention someone" : "Write a comment — type @ to mention someone"}
+              onSubmit={() => void submit()}
             />
           </label>
         )}
@@ -219,9 +250,11 @@ export default function InlineAnnotator({
       <button type="button" onClick={() => open("comment")}>
         <Icon name="comment" /> Comment
       </button>
-      <button type="button" onClick={() => open("suggest")}>
-        <Icon name="pencil" /> Suggest edit
-      </button>
+      {suggest && (
+        <button type="button" onClick={() => open("suggest")}>
+          <Icon name="pencil" /> Suggest edit
+        </button>
+      )}
     </div>,
     document.body,
   );

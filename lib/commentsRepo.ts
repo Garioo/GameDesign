@@ -25,6 +25,8 @@ export interface CommentRow {
   quote?: string | null; // the text that was selected
   suggestion?: string | null; // proposed replacement ('' = delete); null = plain comment
   suggestion_status?: "accepted" | "rejected" | null;
+  // A comment on a whole block, without a mark in the text (supabase/migrate-block-comments.sql).
+  block_id?: string | null;
 }
 
 /** What a comment thread hangs off: a page or a board task. */
@@ -107,6 +109,26 @@ export async function addInlineComment(
     throw new Error(error.code === "PGRST204" || error.code === "42703"
       ? "Inline comments need a database update. Apply supabase/migrate-inline-suggestions.sql in Supabase."
       : `addInlineComment failed: ${error.message}`);
+  }
+}
+
+/**
+ * Comment on a block without marking its text — how supervisors and other
+ * viewers (who can't edit the page) point at a specific paragraph.
+ */
+export async function addBlockComment(
+  pageId: string,
+  author: string,
+  input: { blockId: string; quote: string; body: string },
+): Promise<void> {
+  const body = cleanText(input.body, LIMITS.comment, "Comment");
+  if (!body) throw new Error("Write a comment first.");
+  const quote = input.quote.replace(/\s+/g, " ").trim().slice(0, 2000) || "(this block)";
+  const { error } = await supabase.from("comments").insert({ page_id: pageId, author, body, block_id: input.blockId, quote });
+  if (error) {
+    throw new Error(error.code === "PGRST204" || error.code === "42703" || /comments_inline_shape/.test(error.message)
+      ? "Commenting on a block needs a database update. Apply supabase/migrate-block-comments.sql in Supabase."
+      : `addBlockComment failed: ${error.message}`);
   }
 }
 

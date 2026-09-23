@@ -12,6 +12,9 @@ import CalendarFeedsDialog from "./CalendarFeedsDialog";
 import PlanningHeader from "../board/PlanningHeader";
 import { PlanningIcon } from "../board/PlanningIcons";
 import styles from "./calendar.module.css";
+import { useShortcuts } from "@/lib/shortcuts";
+import Link from "next/link";
+import { usePlanning } from "../board/TaskPlanning";
 
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -116,6 +119,35 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
     setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
     setSelected(dayKey(now));
   }
+  // Milestones (from the board's planning data) show on their due dates.
+  const planning = usePlanning();
+  const milestonesOn = (date: string) => (planning?.milestones ?? []).filter((m) => m.dueDate === date);
+  const milestoneLink = (m: { id: string; name: string; completedAt: string | null }, compact: boolean) => (
+    <Link key={m.id} href={`/milestones#m-${m.id}`} className={`${compact ? styles.milestoneFlag : styles.milestoneRow} ${m.completedAt ? styles.milestoneDone : ""}`} title={`Milestone: ${m.name}`}>
+      <span className={styles.milestoneDiamond} aria-hidden="true" />
+      <span>{m.name}</span>
+    </Link>
+  );
+
+  // Keyboard shortcuts (lib/shortcuts.ts; press ? for the list).
+  useShortcuts([
+    { id: "cal-today", keys: "t", label: "Go to today", group: "Calendar", run: goToToday },
+    { id: "cal-prev", keys: "ArrowLeft", label: `Previous ${view}`, group: "Calendar", run: () => shiftMonth(-1) },
+    { id: "cal-next", keys: "ArrowRight", label: `Next ${view}`, group: "Calendar", run: () => shiftMonth(1) },
+    { id: "cal-prev-j", keys: "k", label: `Previous ${view}`, group: "Calendar", palette: false, run: () => shiftMonth(-1) },
+    { id: "cal-next-j", keys: "j", label: `Next ${view}`, group: "Calendar", palette: false, run: () => shiftMonth(1) },
+    { id: "cal-month", keys: "m", label: "Month view", group: "Calendar", enabled: view !== "month", run: () => setView("month") },
+    { id: "cal-week", keys: "w", label: "Week view", group: "Calendar", enabled: view !== "week", run: () => setView("week") },
+    { id: "cal-day", keys: "d", label: "Day view", group: "Calendar", enabled: view !== "day", run: () => setView("day") },
+    { id: "cal-new", keys: "n", label: "New event", group: "Calendar", enabled: canEdit, run: () => setEditingEvent(null) },
+    {
+      id: "cal-filter",
+      keys: "f",
+      label: "Search events",
+      group: "Calendar",
+      run: () => document.querySelector<HTMLInputElement>(".planning-search input")?.focus(),
+    },
+  ]);
   function standaloneButton(event: CalendarEvent | FeedEvent, compact = false) {
     return <button key={event.id} className={`${compact ? `${styles.event} ${styles.standaloneEvent}` : styles.agendaTask} ${feedClass(event)}`} onClick={() => setEditingEvent(event)} title={`${event.title} · ${eventRange(event)}${eventTime(event)}`}>
       <PlanningIcon name="calendar" />
@@ -139,6 +171,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
         </div>
         {view === "day" ? <div className={styles.daySchedule}>
           <div className={styles.daySectionHead}><h3>Events</h3>{canEdit && <button className={styles.addEvent} onClick={() => setEditingEvent(null)}><PlanningIcon name="plus" /> Add event on this date</button>}</div>
+          {milestonesOn(selected).map((m) => milestoneLink(m, false))}
           {eventsOn(selected).map(event => <div key={event.id} className={styles.dayEventRow}><time>{eventCoversDate(event, selected) && event.date !== selected ? "Continues" : eventTime(event)}</time>{standaloneButton(event)}</div>)}
           {!eventsOn(selected).length && <p className={styles.empty}>No events on this date.</p>}
         </div> : <div className={`${styles.monthScroll} ${view === "week" ? styles.weekView : ""}`}>
@@ -155,6 +188,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
                   return <div key={key} className={`${styles.day} ${canEdit ? styles.clickableDay : ""} ${view === "month" && date.getMonth() !== month.getMonth() ? styles.outside : ""} ${key === selected ? styles.selected : ""} ${column >= 5 ? styles.weekend : ""}`}>
                     {canEdit && <button type="button" className={styles.dateTarget} aria-label={`Add event on ${date.toLocaleDateString("en", { dateStyle: "full" })}`} onClick={selectDate} />}
                     {column === 0 && <span className={styles.weekNumber} title={`Week ${weekOf(date)}`}>W{weekOf(date)}</span>}
+                    {milestonesOn(key).slice(0, 1).map((m) => milestoneLink(m, true))}
                     <button className={`${styles.date} ${key === today ? styles.today : ""}`} aria-label={`${date.toLocaleDateString("en", { dateStyle: "full" })}, ${standalone.length} events`} aria-pressed={key === selected} aria-current={key === today ? "date" : undefined} onClick={selectDate}>{date.getDate()}</button>
                     <div style={{ height: lanes * 26 }} aria-hidden="true" />
                   </div>;
@@ -178,6 +212,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
       {view !== "day" && <aside className={styles.agenda} aria-label="Calendar agenda">
         <div className={styles.agendaHeading}><span>Daily agenda · Week {weekOf(anchor)}</span><h2>{selectedLabel}</h2></div>
         {canEdit && <button className={styles.addEvent} onClick={() => setEditingEvent(null)}><PlanningIcon name="plus" /> Add event on this date</button>}
+        {milestonesOn(selected).map((m) => milestoneLink(m, false))}
         {eventsOn(selected).map(event => standaloneButton(event))}
         {!eventsOn(selected).length && <p className={styles.empty}>No events on this date{search ? " match your search" : ""}.</p>}
       </aside>}

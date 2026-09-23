@@ -67,7 +67,7 @@ interface Row {
 
 export async function listActivity(
   workspaceId: string,
-  { limit = 30, before, pageId, cardId }: { limit?: number; before?: string; pageId?: string; cardId?: string } = {},
+  { limit = 30, before, after, pageId, cardId }: { limit?: number; before?: string; after?: string; pageId?: string; cardId?: string } = {},
 ): Promise<ActivityItem[]> {
   let q = supabase
     .from("activity")
@@ -79,6 +79,7 @@ export async function listActivity(
     .order("created_at", { ascending: false })
     .limit(limit);
   if (before) q = q.lt("created_at", before);
+  if (after) q = q.gte("created_at", after);
   if (pageId) q = q.eq("page_id", pageId);
   if (cardId) q = q.eq("card_id", cardId);
   const { data, error } = await q;

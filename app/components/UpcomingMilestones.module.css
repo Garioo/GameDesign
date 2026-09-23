@@ -1,0 +1,103 @@
+/* Upcoming milestones on Home (UpcomingMilestones.tsx). */
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
+}
+.row:hover {
+  border-color: var(--ember-tint2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(42, 36, 30, 0.06);
+}
+.diamond {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  transform: rotate(45deg);
+  border-radius: 3px;
+  background: var(--ink-soft);
+}
+.u_soon .diamond {
+  background: var(--ember);
+}
+.u_overdue .diamond {
+  background: var(--danger);
+}
+.main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 14px;
+}
+.bar {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--grad-ember, var(--ember));
+}
+.meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.blocked {
+  color: var(--danger);
+  font-weight: 600;
+}
+.when {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+.u_soon .when {
+  background: var(--ember-tint);
+  color: var(--ember-deep);
+}
+.u_overdue .when {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+.empty {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-faint);
+}
+.empty a {
+  color: var(--ember-deep);
+}
+.skeleton {
+  height: 64px;
+  border-radius: var(--r-lg);
+  background: var(--line-soft);
+}

@@ -105,7 +105,7 @@ interface PageRow {
   updated_at: string;
 }
 
-const blockContent = (b: Block): BlockRow["content"] => {
+export const blockContent = (b: Block): BlockRow["content"] => {
   const c: BlockRow["content"] = { text: b.text };
   if (b.rows) c.rows = b.rows;
   if (b.src) c.src = b.src;
@@ -139,6 +139,10 @@ const rowToBlock = (r: BlockRow): Block => ({
   ...(r.content?.curve ? { curve: r.content.curve } : {}),
   ...(r.content?.driveFile ? { driveFile: r.content.driveFile } : {}),
 });
+
+/** A block from stored content (e.g. a version-history snapshot). */
+export const contentToBlock = (id: string, type: string, content: BlockRow["content"]): Block =>
+  rowToBlock({ id, page_id: "", type, content: content ?? {}, position: 0 });
 
 /** Load the whole workspace into the in-memory DesignDoc[] the UI expects. */
 export async function loadWorkspace(workspaceId: string): Promise<DesignDoc[]> {

@@ -33,8 +33,8 @@
   position: fixed;
   z-index: 70;
   width: 320px;
-  max-height: calc(100dvh - 24px);
-  overflow: auto;
+  /* visible, so the @-mention list can hang below the comment field */
+  overflow: visible;
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -68,7 +68,8 @@
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
-.label textarea {
+.label textarea,
+.field {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
@@ -81,7 +82,8 @@
   border-radius: 6px;
   padding: 8px 10px;
 }
-.label textarea:focus-visible {
+.label textarea:focus-visible,
+.field:focus-visible {
   outline: 2px solid var(--ember);
   outline-offset: 1px;
 }

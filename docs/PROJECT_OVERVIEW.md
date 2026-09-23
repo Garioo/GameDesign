@@ -90,7 +90,7 @@ on all tables.** Tables:
 | `comments`        | Threaded discussion (page_id, parent_id)                 |
 | `milestones`      | Project timeline                                         |
 | `activity`        | Team activity feed, written only by triggers (`migrate-activity.sql`) |
-| `page_edits`      | Per-block text edit history with author, written only by a trigger (`migrate-page-edits.sql`) |
+| `page_edits`      | Per-block edit log with author, for version history, written only by a trigger (`migrate-page-edits.sql`) |
 
 ## Real-time patterns
 
@@ -136,7 +136,10 @@ trade-off between "feels instant" and "doesn't hammer the database."
    22. `migrate-card-completed-at.sql` — `card_completions` (when each task was finished), kept by triggers as tasks enter/leave done stages; feeds the Team scoreboard on Home. A separate table so the migration never writes `board_cards`, whose guards require a signed-in member. Apply after `migrate-activity.sql` (the backfill reads the activity feed).
    23. `migrate-event-attendees.sql` — attendees on calendar events: workspace members (who get an `event` notification when added) and outside guests by name. Apply after `migrate-calendar-event-ranges.sql` and `migrate-activity.sql` (it extends the notification kinds).
    24. `migrate-inline-suggestions.sql` — inline comments and suggested edits on page text: anchor/quote/suggestion columns on `comments` and `settle_suggestion()` (editors accept or reject). Apply after `migrate-card-comments.sql`.
-   25. `migrate-page-edits.sql` — page edit history: a trigger on `blocks` records who changed each block's text, and from what to what, in `page_edits`. Independent of the other migrations.
+   25. `migrate-page-edits.sql` — page version history: a trigger on `blocks` records who changed each block, with its content before and after, in `page_edits`. Independent of the other migrations.
+   26. `migrate-project-planning.sql` — task dependencies (`card_dependencies`, "blocked by"), milestones (the base `milestones` table, now with description / board / reached, and `board_cards.milestone_id`), and recurring tasks (`recurring_tasks`, `set_task_recurrence()`, `spawn_recurring_tasks()`). Apply after `migrate-phase-planning.sql`.
+   27. `migrate-block-comments.sql` — comments on a whole block without marking its text (`comments.block_id`), so supervisors / guests (the `viewer` role) can comment on a paragraph. Apply after `migrate-inline-suggestions.sql`.
+   28. `migrate-page-shares.sql` — share one page with people outside the workspace: `page_shares` links (editors create / revoke), and `shared_page()` / `comment_on_shared_page()` & co., which let whoever has the link read that page and (signed in) comment on it — nothing else. Apply after `migrate-page-trash.sql` and `migrate-block-comments.sql`.
 
    All of them are written to be safe to rerun, so applying the whole list again after a new one
    is added won't touch existing data.

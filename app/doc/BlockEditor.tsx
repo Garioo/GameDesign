@@ -11,6 +11,7 @@ import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
 import { linkifyText, safeLinkHref } from "@/lib/webLinks";
 import { blocksToHtml, blocksToPlainText, parseCopiedBlocks } from "@/lib/blockClipboard";
 import InlineAnnotator, { type AnnotationRequest } from "./InlineAnnotator";
+import type { ProfileInfo } from "@/lib/docsRepo";
 import "./BlockEditor.css";
 
 // True when the editor renders for a viewer: blocks display normally but
@@ -214,7 +215,7 @@ const ANCHOR_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 const ANCHOR_ATTR: Record<string, string> = { MARK: "data-comment", DEL: "data-suggestion" };
 
 
-function sanitizeHtml(html: string): string {
+export function sanitizeHtml(html: string): string {
   if (!/[<&]/.test(html)) return html;
   const root = document.createElement("div");
   root.innerHTML = html;
@@ -450,6 +451,9 @@ export default function BlockEditor({
   onAnnotate,
   openAnchors,
   onAnnotationClick,
+  people,
+  onBlockComment,
+  blockThreads,
   apiRef,
 }: {
   blocks: Block[];
@@ -474,6 +478,13 @@ export default function BlockEditor({
   openAnchors?: Set<string>;
   // A comment highlight or suggestion was clicked in the text.
   onAnnotationClick?: (anchor: string) => void;
+  // Workspace people, for @-mentions in inline comments.
+  people?: ProfileInfo[];
+  // Comment on a block (or a quote from it) without marking the text — for
+  // people who can comment but not edit. Enables comments in read-only mode.
+  onBlockComment?: (c: { blockId: string; quote: string; body: string }) => Promise<void>;
+  // Open block comments (block id → comment ids), shown in the block's badge.
+  blockThreads?: Map<string, string[]>;
   apiRef?: MutableRefObject<BlockEditorApi | null>;
 }) {
   // Belt and braces: even if some affordance slips through, no change events
@@ -496,6 +507,8 @@ export default function BlockEditor({
   // selection can't span blocks — each one is its own contentEditable).
   const [selected, setSelected] = useState<string[]>([]);
   const selectAnchor = useRef<string | null>(null);
+  // "Comment on this block": opens the inline comment form over the block's whole text.
+  const [commentOn, setCommentOn] = useState<{ blockId: string; at: number } | null>(null);
   const pointerSelect = useRef<{ anchor: string; active: boolean } | null>(null);
 
   // Re-focus a block after a structural change has rendered.
@@ -594,6 +607,31 @@ export default function BlockEditor({
       ids.map((a) => `.blocks del[data-suggestion="${a}"]`).join(",") + "{text-decoration:line-through;text-decoration-color:var(--danger);background:var(--suggestion-mark);cursor:pointer}"
     );
   }, [openAnchors]);
+
+  // Open threads anchored in each block, in text order, for the block's comment badge.
+  const threadsByBlock = useMemo(() => {
+    const out = new Map<string, string[]>();
+    for (const [blockId, ids] of blockThreads ?? []) out.set(blockId, [...ids]);
+    if (!openAnchors?.size) return out;
+    for (const b of blocks) {
+      if (!b.text || !b.text.includes("data-")) continue;
+      const found: { at: number; anchor: string }[] = [];
+      for (const a of openAnchors) {
+        const at = Math.max(b.text.indexOf(`data-comment="${a}"`), b.text.indexOf(`data-suggestion="${a}"`));
+        if (at >= 0) found.push({ at, anchor: a });
+      }
+      if (found.length) out.set(b.id, [...found.sort((x, y) => x.at - y.at).map((f) => f.anchor), ...(out.get(b.id) ?? [])]);
+    }
+    return out;
+  }, [blocks, openAnchors, blockThreads]);
+
+  // Read-only commenting: the quote/body go to the page's block comments.
+  const commentOnBlock = async (req: AnnotationRequest) => {
+    const blockId = req.block.closest<HTMLElement>(".blk[data-block-id]")?.dataset.blockId;
+    if (!blockId || !onBlockComment) throw new Error("Couldn't find that paragraph. Try again.");
+    await onBlockComment({ blockId, quote: req.quote, body: req.body });
+  };
+  const canCommentBlocks = (!!onAnnotate && !readOnly) || (readOnly && !!onBlockComment);
 
   const filtered = (q: string) =>
     MENU.filter((m) => m.label.toLowerCase().includes(q.toLowerCase()));
@@ -1103,6 +1141,13 @@ export default function BlockEditor({
       if (e.key === "Backspace" && slash.query === "") setSlash(null);
     }
 
+    // Esc with no menu open leaves the text, so page shortcuts (press ?) work.
+    if (e.key === "Escape") {
+      e.preventDefault();
+      dropTextFocus();
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleEnter(id);
@@ -1238,6 +1283,16 @@ export default function BlockEditor({
           onToggleMenu={() => setMenuFor((m) => (m === b.id ? null : b.id))}
           onDuplicate={() => duplicateBlock(b.id)}
           onDelete={() => deleteBlock(b.id)}
+          threads={threadsByBlock.get(b.id) ?? []}
+          onOpenThread={onAnnotationClick}
+          onComment={
+            canCommentBlocks && !isChromeBlock(b.type) && b.text.replace(/<[^>]*>/g, "").trim()
+              ? () => {
+                  setMenuFor(null);
+                  setCommentOn({ blockId: b.id, at: Date.now() });
+                }
+              : undefined
+          }
           onDragStart={() => setDragId(b.id)}
           onDragEnd={() => {
             setDragId(null);
@@ -1252,7 +1307,23 @@ export default function BlockEditor({
         />
       ))}
       {annotationCss && <style>{annotationCss}</style>}
-      {onAnnotate && !readOnly && <InlineAnnotator rootRef={rootRef} onSubmit={annotate} />}
+      {onAnnotate && !readOnly && (
+        <InlineAnnotator
+          rootRef={rootRef}
+          onSubmit={annotate}
+          people={people}
+          openFor={commentOn ? { block: refs.current.get(commentOn.blockId) ?? null, at: commentOn.at } : null}
+        />
+      )}
+      {readOnly && onBlockComment && (
+        <InlineAnnotator
+          rootRef={rootRef}
+          onSubmit={commentOnBlock}
+          people={people}
+          suggest={false}
+          openFor={commentOn ? { block: refs.current.get(commentOn.blockId) ?? null, at: commentOn.at } : null}
+        />
+      )}
     </div>
     </ReadOnlyCtx.Provider>
   );
@@ -1294,6 +1365,9 @@ function BlockRow({
   onToggleMenu,
   onDuplicate,
   onDelete,
+  threads,
+  onOpenThread,
+  onComment,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -1332,6 +1406,11 @@ function BlockRow({
   onToggleMenu: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** Anchors of open comment threads in this block. */
+  threads: string[];
+  onOpenThread?: (anchor: string) => void;
+  /** Start a comment on the whole block (absent when you can't comment). */
+  onComment?: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
   onDragOver: () => void;
@@ -1557,6 +1636,11 @@ function BlockRow({
 
       {!readOnly && menuOpen && (
         <div className="blk-menu" contentEditable={false}>
+          {onComment && (
+            <button onMouseDown={(e) => { e.preventDefault(); onComment(); }}>
+              <Icon name="comment" /> Comment
+            </button>
+          )}
           <button onMouseDown={(e) => { e.preventDefault(); onDuplicate(); }}>
             <ICopy /> Duplicate
           </button>
@@ -1567,6 +1651,34 @@ function BlockRow({
       )}
 
       {main}
+
+      {(threads.length > 0 || onComment) && (
+        <div className={"blk-aside" + (threads.length ? " has-threads" : "")} contentEditable={false}>
+          {threads.length > 0 ? (
+            <button
+              type="button"
+              className="blk-thread-badge"
+              title={threads.length === 1 ? "1 open comment" : `${threads.length} open comments`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onOpenThread?.(threads[0])}
+            >
+              <Icon name="comment" />
+              {threads.length}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="blk-comment-btn"
+              title="Comment on this block"
+              aria-label="Comment on this block"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onComment}
+            >
+              <Icon name="comment" />
+            </button>
+          )}
+        </div>
+      )}
 
       {slash && (
         <div ref={menuRef} className={"slash-menu" + menuClass} style={menuStyle} contentEditable={false}>

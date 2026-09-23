@@ -3,9 +3,10 @@ import { plainLinkedText } from "./pageLinks";
 import { loadBoards } from "./boardRepo";
 import { listCalendarEvents } from "./calendarEventsRepo";
 import { listCanvases } from "./canvasRepo";
-import { loadWorkspace } from "./docsRepo";
+import { listMembers, loadWorkspace } from "./docsRepo";
+import { listMilestones } from "./planningRepo";
 
-export type SearchKind = "page" | "canvas" | "board" | "card" | "event";
+export type SearchKind = "page" | "canvas" | "board" | "card" | "event" | "person" | "milestone";
 
 /** One thing the ⌘K palette can jump to. */
 export interface SearchItem {
@@ -17,6 +18,9 @@ export interface SearchItem {
   /** Extra text searched when the title doesn't match (page bodies, card descriptions). */
   body?: string;
   href: string;
+  /** Tasks only: who it's assigned to, and whether it sits in a done stage. */
+  ownerIds?: string[];
+  done?: boolean;
 }
 
 /** Plain searchable text of a page: block text without inline HTML, plus table cells. */
@@ -49,12 +53,14 @@ const safely = <T>(p: Promise<T[]>): Promise<T[]> =>
  * already has live page data (the doc editor) and supplies its own items.
  */
 export async function loadSearchIndex(workspaceId: string, { skipPages = false } = {}): Promise<SearchItem[]> {
-  const [docs, canvases, boards, events] = await Promise.all([
+  const [docs, canvases, boards, events, people] = await Promise.all([
     skipPages ? Promise.resolve([]) : safely(loadWorkspace(workspaceId)),
     safely(listCanvases(workspaceId)),
     safely(loadBoards(workspaceId)),
     safely(listCalendarEvents(workspaceId)),
+    safely(listMembers(workspaceId)),
   ]);
+  const milestones = await safely(listMilestones(workspaceId));
 
   const items: SearchItem[] = pageItems(docs);
   for (const c of canvases) {
@@ -72,6 +78,8 @@ export async function loadSearchIndex(workspaceId: string, { skipPages = false }
           hint: `${b.name} · ${col.name}`,
           body: [card.sub ? plainLinkedText(card.sub) : "", card.tags.join(" ")].filter(Boolean).join("\n"),
           href: `/board?board=${board}&card=${encodeURIComponent(card.id)}`,
+          ownerIds: card.ownerIds,
+          done: !!col.isCompleted,
         });
       }
     }
@@ -85,6 +93,19 @@ export async function loadSearchIndex(workspaceId: string, { skipPages = false }
       body: [e.location, e.notes ? plainLinkedText(e.notes) : ""].filter(Boolean).join("\n"),
       href: `/calendar?date=${e.date}`,
     });
+  }
+  for (const m of milestones) {
+    items.push({
+      key: `milestone:${m.id}`,
+      kind: "milestone",
+      title: m.name,
+      hint: m.completedAt ? "Reached" : m.dueDate ? `Due ${m.dueDate}` : "Milestone",
+      body: m.description || undefined,
+      href: `/milestones#m-${m.id}`,
+    });
+  }
+  for (const p of people) {
+    items.push({ key: `person:${p.id}`, kind: "person", title: p.name, hint: "Their work", href: `/work?person=${encodeURIComponent(p.id)}` });
   }
   return items;
 }

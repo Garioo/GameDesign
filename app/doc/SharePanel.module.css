@@ -1,0 +1,159 @@
+/* The page's Share menu (SharePanel.tsx): member link and guest links. */
+
+.wrap {
+  position: relative;
+  display: flex;
+}
+.panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 55;
+  width: min(380px, calc(100vw - 24px));
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-menu);
+  animation: sharePop 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes sharePop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+.block {
+  padding: 10px 12px 12px;
+}
+.block + .block {
+  border-top: 1px solid var(--line-soft);
+}
+.block h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.fine {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.fine strong {
+  color: var(--ink);
+}
+.primary,
+.secondary,
+.quiet,
+.danger,
+.more {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.primary {
+  padding: 6px 12px;
+  border: 0;
+  background: var(--ember);
+  color: #fff;
+}
+.primary:disabled,
+.more:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.secondary {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.secondary:hover {
+  background: var(--line-soft);
+}
+.quiet {
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+}
+.quiet:hover {
+  color: var(--ink);
+}
+.danger {
+  padding: 4px 10px;
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+}
+.more {
+  margin-top: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ember-deep);
+  text-align: left;
+}
+.more:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.link {
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.urlRow {
+  display: flex;
+  gap: 6px;
+}
+.url {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+}
+.linkFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.linkFoot .check {
+  margin-bottom: 0;
+}
+.check input {
+  accent-color: var(--ember);
+}
+.confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.error {
+  margin: 4px 12px 10px;
+  font-size: 12.5px;
+  color: var(--danger);
+}

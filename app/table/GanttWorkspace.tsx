@@ -40,6 +40,9 @@ import {
   type PhaseResult,
   type PhaseSnapshot,
 } from "@/lib/phaseRepo";
+import { useShortcuts } from "@/lib/shortcuts";
+import { listMilestones } from "@/lib/planningRepo";
+import type { Milestone } from "@/lib/planning";
 import "../board/planning.css";
 import "./phases.css";
 
@@ -274,18 +277,22 @@ export default function GanttWorkspace() {
     return () => media.removeEventListener("change", update);
   }, []);
   const canEdit = !!session && session.role !== "viewer";
+  // Milestones drawn as markers on the timeline (empty until the planning migration is applied).
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
 
   const refresh = useCallback(async (project: string) => {
     const sequence = ++refreshSequence.current;
-    const [next, items, cats] = await Promise.all([
+    const [next, items, cats, ms] = await Promise.all([
       loadPhases(project),
       loadBoards(project),
       listCategories(project),
+      listMilestones(project).catch(() => [] as Milestone[]),
     ]);
     if (sequence !== refreshSequence.current) return;
     setSnapshot(next);
     setBoards(items);
     setCategories(cats);
+    setMilestones(ms);
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -363,6 +370,7 @@ export default function GanttWorkspace() {
       "board_categories",
       "planning_phases",
       "phase_dependencies",
+      "milestones",
     ],
     async () => {
       if (session && !mutationRef.current && !dragRef.current && !draftRef.current)
@@ -431,11 +439,14 @@ export default function GanttWorkspace() {
       ];
     });
   const today = dayNumber(localToday());
-  const dates = active.flatMap((p) =>
-    [p.effective_start, p.effective_end]
-      .filter((d): d is string => !!d)
-      .map(dayNumber),
-  );
+  const dates = [
+    ...active.flatMap((p) =>
+      [p.effective_start, p.effective_end]
+        .filter((d): d is string => !!d)
+        .map(dayNumber),
+    ),
+    ...milestones.filter((m) => m.dueDate).map((m) => dayNumber(m.dueDate!)),
+  ];
   const first = Math.min(today - 7, ...dates) - 3;
   const last = Math.max(today + 35, ...dates) + 5;
   const days = last - first + 1;
@@ -564,6 +575,47 @@ export default function GanttWorkspace() {
       width: Math.max(1, end - start + 1) * preferences.zoom,
     };
   }
+
+  // Keyboard shortcuts (lib/shortcuts.ts; press ? for the list).
+  const setZoom = (zoom: number) => setPreferences((p) => ({ ...p, zoom }));
+  useShortcuts([
+    {
+      id: "gantt-today",
+      keys: "t",
+      label: "Scroll to today",
+      group: "Gantt",
+      run: () => scrollRef.current?.scrollTo({ left: Math.max(0, (today - first) * preferences.zoom - 80), behavior: "smooth" }),
+    },
+    { id: "gantt-new", keys: "n", label: "New phase", group: "Gantt", enabled: canEdit, run: () => setStageBoard(null) },
+    {
+      id: "gantt-filter",
+      keys: "f",
+      label: "Find a phase",
+      group: "Gantt",
+      run: () => document.querySelector<HTMLInputElement>('input[aria-label="Search phases"]')?.focus(),
+    },
+    { id: "gantt-links", keys: "l", label: "Show or hide dependencies", group: "Gantt", run: () => setShowLinks((v) => !v) },
+    { id: "gantt-zoom-1", keys: "1", label: "Compact scale", group: "Gantt", enabled: preferences.zoom !== 24, run: () => setZoom(24) },
+    { id: "gantt-zoom-2", keys: "2", label: "Days scale", group: "Gantt", enabled: preferences.zoom !== 40, run: () => setZoom(40) },
+    { id: "gantt-zoom-3", keys: "3", label: "Detailed scale", group: "Gantt", enabled: preferences.zoom !== 64, run: () => setZoom(64) },
+    {
+      id: "gantt-pan-left",
+      keys: "ArrowLeft",
+      label: "Scroll back a week",
+      group: "Gantt",
+      palette: false,
+      run: () => scrollRef.current?.scrollBy({ left: -7 * preferences.zoom, behavior: "smooth" }),
+    },
+    {
+      id: "gantt-pan-right",
+      keys: "ArrowRight",
+      label: "Scroll forward a week",
+      group: "Gantt",
+      palette: false,
+      run: () => scrollRef.current?.scrollBy({ left: 7 * preferences.zoom, behavior: "smooth" }),
+    },
+  ]);
+
   return (
     <div
       className="phase-workspace planning-app"
@@ -1088,6 +1140,23 @@ export default function GanttWorkspace() {
                 >
                   <span>Today</span>
                 </div>
+                {milestones
+                  .filter((m) => m.dueDate)
+                  .map((m) => (
+                    <div
+                      key={m.id}
+                      className={`phase-milestone${m.completedAt ? " is-reached" : ""}`}
+                      style={{
+                        left: labelWidth + (dayNumber(m.dueDate!) - first) * preferences.zoom + preferences.zoom / 2,
+                        height: rows.length * ROW_HEIGHT,
+                      }}
+                    >
+                      <Link href={`/milestones#m-${m.id}`} title={`Milestone: ${m.name} · ${m.dueDate}`}>
+                        <span className="phase-milestone-diamond" aria-hidden="true" />
+                        {m.name}
+                      </Link>
+                    </div>
+                  ))}
                 <svg
                   className="phase-arrows"
                   style={{ left: labelWidth }}

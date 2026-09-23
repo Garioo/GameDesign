@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
+import { useFollowed } from "@/lib/follow";
 import styles from "./LiveCursors.module.css";
 
 /* ---------------------------------------------------------------------------
@@ -148,6 +149,10 @@ export default function LiveCursors({ pageId, me }: { pageId: string; me: Me | n
   const meRef = useRef(me);
   meRef.current = me;
   const [drawn, setDrawn] = useState<Drawn[]>([]);
+  // Following someone (top bar → Follow): keep the block they're in on screen.
+  const followed = useFollowed();
+  const followedRef = useRef(followed);
+  followedRef.current = followed;
   const [layerBox, setLayerBox] = useState<{ left: number; width: number } | null>(null);
 
   // The editor root (.blocks) is the previous sibling in the page's <article>.
@@ -201,6 +206,16 @@ export default function LiveCursors({ pageId, me }: { pageId: string; me: Me | n
       measure();
     });
   }, [measure]);
+
+  const followBlock = useCallback(
+    (blockId: string) => {
+      const el = editorRoot()?.querySelector<HTMLElement>(`.blk[data-block-id="${CSS.escape(blockId)}"]`);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.top < TOPBAR + 40 || r.bottom > window.innerHeight - 120) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+    [editorRoot],
+  );
 
   /* ---------- channel ---------- */
   const last = useRef<{ sent: number; key: string; timer: ReturnType<typeof setTimeout> | null }>({
@@ -261,6 +276,9 @@ export default function LiveCursors({ pageId, me }: { pageId: string; me: Me | n
         const prev = map.get(m.tab);
         const moved = !prev || prev.blockId !== m.blockId || prev.start !== m.start || prev.end !== m.end;
         map.set(m.tab, { ...m, moved: moved ? Date.now() : prev.moved });
+        if (m.blockId && m.userId === followedRef.current?.key && prev?.blockId !== m.blockId) {
+          followBlock(m.blockId);
+        }
         redraw();
       })
       .on("presence", { event: "sync" }, () => {
@@ -288,7 +306,14 @@ export default function LiveCursors({ pageId, me }: { pageId: string; me: Me | n
       setDrawn([]);
       supabase.removeChannel(channel);
     };
-  }, [pageId, tab, myId, redraw, sendNow]);
+  }, [pageId, tab, myId, redraw, sendNow, followBlock]);
+
+  // Starting to follow someone who's already here: go to them straight away.
+  useEffect(() => {
+    if (!followed) return;
+    const r = [...remotes.current.values()].find((x) => x.userId === followed.key && x.blockId);
+    if (r?.blockId) followBlock(r.blockId);
+  }, [followed, followBlock]);
 
   /* ---------- listeners ---------- */
   // Our caret moved (clicks, arrows, typing, selecting).

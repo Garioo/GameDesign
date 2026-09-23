@@ -164,6 +164,7 @@
   cursor: pointer;
 }
 .mentionOptionActive { background: var(--ember-tint); }
+.mentionMenuBelow { bottom: auto; top: calc(100% + 6px); }
 
 .actions {
   display: flex;

@@ -74,10 +74,20 @@ test("edits outside the window start a new row; undone edits and add-then-delete
     await db.query("delete from blocks where id = $1", [id(21)]);
     assert.equal((await edits(db)).length, 1);
 
+    await db.query("insert into blocks(id, page_id, type, content, position) values ($1, $2, 'h2', '{\"text\":\"Top\"}', -1)", [id(22), id(10)]);
     await db.query("delete from blocks where id = $1", [id(20)]);
+    const prev = (await db.query("select prev_block_id from page_edits where kind = 'removed'")).rows[0];
+    assert.equal(prev.prev_block_id, id(22)); // the block above it
+    await db.exec(`reset role; delete from page_edits where block_id = '${id(22)}';`);
     assert.deepEqual((await edits(db)).map((r) => [r.kind, r.before_text, r.after_text]), [
       ["added", "", "Draft"],
       ["removed", "Draft", ""],
+    ]);
+    // Snapshots: null means the block didn't exist on that side.
+    const snaps = (await db.query("select before_content, after_content from page_edits order by created_at")).rows;
+    assert.deepEqual(snaps, [
+      { before_content: null, after_content: { text: "Draft" } },
+      { before_content: { text: "Draft" }, after_content: null },
     ]);
   } finally {
     await db.close();
@@ -97,6 +107,12 @@ test("tables are recorded as text, system writes and page deletes are skipped", 
       [id(21), id(10), JSON.stringify({ text: "", rows: [["Stat", "Value"], ["HP", "100"]] })],
     );
     assert.equal((await edits(db))[0].after_text, "Stat | Value\nHP | 100");
+    await db.query(
+      "update blocks set type = 'image', content = $2, position = 3 where id = $1",
+      [id(21), JSON.stringify({ text: "Cap", src: "data:image/png;base64,AAAA" })],
+    );
+    const row = (await db.query("select after_content, position from page_edits")).rows[0];
+    assert.deepEqual(row, { after_content: { text: "Cap" }, position: 3 }); // data URL left out
 
     await db.exec(`delete from pages where id = '${id(10)}'`);
     assert.deepEqual(await edits(db), []); // cascaded away with the page

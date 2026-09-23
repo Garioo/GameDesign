@@ -4,7 +4,7 @@ import Icon from "@/app/components/Icon";
 import MultiSelectPicker from "@/app/components/MultiSelectPicker";
 import { loadSchedule, mutateSchedule, type ScheduleSnapshot } from '@/lib/ganttRepo';
 
-import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef, type CSSProperties, type DragEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { useCloseDetailsOnOutsideClick } from "@/lib/useCloseDetailsOnOutsideClick";
@@ -33,6 +33,10 @@ import type { MentionTarget } from "@/app/doc/mentions";
 import { plainLinkedText } from "@/lib/pageLinks";
 import { loadLinkTargets } from "@/lib/linkTargets";
 import LinkedText from "@/app/components/LinkedText";
+import { useShortcuts } from "@/lib/shortcuts";
+import { blockedIds, type CardDependency, type Milestone, type RecurringRule } from "@/lib/planning";
+import { loadPlanning, spawnRecurring } from "@/lib/planningRepo";
+import { PlanningCtx, TaskBadges, TaskPlanningSection, type BoardTask, type PlanningState } from "./TaskPlanning";
 import PageLinkTextarea from "./PageLinkTextarea";
 import {
   boardEndDate,
@@ -478,6 +482,7 @@ function Card({ card, people, subtasks, onDragStart, onDragEnd, dropState, onCli
       )}
       <div className="card-title">{card.title}</div>
       {card.sub && <div className="card-sub">{plainLinkedText(card.sub)}</div>}
+      <TaskBadges taskId={card.id} milestoneId={card.milestoneId} recurrenceId={card.recurrenceId} />
       <div className="card-foot">
         <div className="card-owner">
           {owners.length > 0 ? (
@@ -760,6 +765,8 @@ function CardModal(props: CardModalProps) {
                   : <p className={cardStyles.muted}>Unassigned</p>}
               </div>
 
+              <TaskPlanningSection taskId={card.id} onOpenCard={onOpenCard} editable={false} />
+
               {card.tags.length > 0 && (
                 <div className={cardStyles.section}>
                   <div className="modal-label">Tags</div>
@@ -911,6 +918,9 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
             <button className="modal-cancel" disabled={!chosenCanvas || canvasBusy || saving} onClick={() => openCanvas(chosenCanvas)}>Link and open</button>
           </div>}
         </div>
+        <div className="modal-field">
+          <TaskPlanningSection taskId={card.id} editable />
+        </div>
         {saveError && <p role="alert" className="gantt-error">{saveError}</p>}
         <div className="modal-actions">
           <button
@@ -952,6 +962,8 @@ export default function BoardWorkspace() {
   // Boards shown in the combined view; null = every board (new ones included).
   const [boardFilter, setBoardFilter] = useState<string[] | null>(null);
   const [phaseSnapshot,setPhaseSnapshot]=useState<PhaseSnapshot|null>(null);
+  // Milestones, dependencies and repeating tasks (supabase/migrate-project-planning.sql).
+  const [plan, setPlan] = useState<{ milestones: Milestone[]; dependencies: CardDependency[]; recurring: RecurringRule[]; missing: boolean }>({ milestones: [], dependencies: [], recurring: [], missing: false });
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [stageBoard,setStageBoard]=useState<BoardData|null|undefined>(undefined);
   const [search,setSearch]=useState('');
@@ -1004,6 +1016,14 @@ export default function BoardWorkspace() {
         if (cancelled) return;
         setBoards(loaded);
         setPhaseSnapshot(phases);
+        // Planning loads beside the board; repeating tasks that are due get created first.
+        void (async () => {
+          const made = s.role !== "viewer" ? await spawnRecurring(s.workspaceId).catch(() => 0) : 0;
+          const [p, fresh] = await Promise.all([loadPlanning(s.workspaceId), made ? loadBoards(s.workspaceId) : Promise.resolve(null)]);
+          if (cancelled) return;
+          setPlan(p);
+          if (fresh) setBoards(fresh);
+        })().catch(console.error);
         let remembered: string | null = null;
         try {
           remembered = localStorage.getItem(`gd-board:${s.workspaceId}`);
@@ -1042,6 +1062,29 @@ export default function BoardWorkspace() {
       setBoards(fresh); setCategories(cats); setPhaseSnapshot(phases);
       setActiveBoardId(cur => cur && fresh.some(b => b.id === cur) ? cur : fresh[0]?.id ?? null);
     });
+  const refreshPlan = useCallback(async () => {
+    if (!session) return;
+    const [p, fresh] = await Promise.all([loadPlanning(session.workspaceId), loadBoards(session.workspaceId)]);
+    setPlan(p);
+    setBoards(fresh);
+  }, [session]);
+  useSidebarLiveUpdates(loading ? null : session?.workspaceId ?? null, ["card_dependencies", "milestones", "recurring_tasks"], refreshPlan);
+  // Every task with its stage, for badges and the dependency picker.
+  const planning = useMemo<PlanningState | null>(() => {
+    if (!session) return null;
+    const tasks = new Map<string, BoardTask>();
+    for (const b of boards) for (const c of b.cols) for (const k of c.cards) {
+      tasks.set(k.id, { id: k.id, title: k.title || "Untitled task", done: !!c.isCompleted, milestoneId: k.milestoneId ?? null, recurrenceId: k.recurrenceId ?? null, boardName: b.name, stage: c.name });
+    }
+    return {
+      workspaceId: session.workspaceId,
+      canEdit: session.role !== "viewer",
+      ...plan,
+      tasks,
+      blocked: blockedIds(plan.dependencies, tasks),
+      refresh: refreshPlan,
+    };
+  }, [session, boards, plan, refreshPlan]);
 
 
   useEffect(() => {
@@ -1294,6 +1337,44 @@ export default function BoardWorkspace() {
     ).sort(byPriority),
   }));
 
+  // Keyboard shortcuts (lib/shortcuts.ts; press ? for the list). The calendar
+  // renders through this workspace too and registers its own.
+  const onBoard = !isCalendar && !loading && !error;
+  const stepBoard = (delta: number) => {
+    if (boards.length < 2) return;
+    const i = combined ? -1 : boards.findIndex((b) => b.id === activeBoardId);
+    const next = boards[(i + delta + boards.length) % boards.length] ?? boards[0];
+    setAllBoards(false);
+    setActiveBoardId(next.id);
+  };
+  useShortcuts([
+    {
+      id: "board-new-task",
+      keys: "n",
+      label: "New task",
+      group: "Board",
+      enabled: onBoard && canEdit && boards.length > 0,
+      run: () => {
+        const add = document.querySelector<HTMLButtonElement>(".col .add-card-btn");
+        add?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        add?.click();
+      },
+    },
+    { id: "board-new-board", keys: "shift+n", label: "New board", group: "Board", enabled: onBoard && canEdit, run: handleAddBoard },
+    {
+      id: "board-filter",
+      keys: "f",
+      label: "Filter tasks",
+      group: "Board",
+      enabled: onBoard,
+      run: () => document.querySelector<HTMLInputElement>(".planning-search input")?.focus(),
+    },
+    { id: "board-next", keys: "]", label: "Next board", group: "Board", enabled: onBoard && boards.length > 1, run: () => stepBoard(1) },
+    { id: "board-prev", keys: "[", label: "Previous board", group: "Board", enabled: onBoard && boards.length > 1, run: () => stepBoard(-1) },
+    { id: "board-all", keys: "0", label: "All boards together", group: "Board", enabled: onBoard && boards.length > 1 && !combined, run: () => setAllBoards(true) },
+    { id: "board-list", keys: "s", label: "Show or hide the boards list", group: "Board", enabled: onBoard, run: () => setNavigationOpen((v) => !v) },
+  ]);
+
   if (loading || error) {
     return (
       <>
@@ -1308,7 +1389,7 @@ export default function BoardWorkspace() {
   }
 
   return (
-    <>
+    <PlanningCtx.Provider value={planning}>
       <style>{css}</style>
       <div className={`board-app planning-app${navigationOpen ? " navigation-open" : ""}`}>
 
@@ -1319,6 +1400,11 @@ export default function BoardWorkspace() {
           selfKey={session?.userId}
           workspaceId={session?.workspaceId}
         >
+          {session && !canEdit && (
+            <span className="review-chip" title="You can see every board and task and comment on tasks, but not change them.">
+              View &amp; comment
+            </span>
+          )}
           <button
             className="share-btn"
             onClick={async () => {
@@ -1458,6 +1544,6 @@ export default function BoardWorkspace() {
           />
         )}
       </div>
-    </>
+    </PlanningCtx.Provider>
   );
 }

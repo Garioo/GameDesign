@@ -47,6 +47,43 @@
 .blk-handle:active { cursor: grabbing; }
 .blk-plus:hover, .blk-handle:hover { background: var(--line-soft); color: var(--ink-soft); }
 
+/* right margin: open-comment badge, or a hover "comment on this block" button */
+.blk-aside {
+  position: absolute;
+  right: -40px; top: 3px;
+  display: flex;
+}
+.blk-comment-btn, .blk-thread-badge {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  height: 24px; min-width: 24px; padding: 0 5px;
+  border: none; border-radius: var(--r-sm);
+  font: inherit; font-size: 11.5px; font-weight: 700; line-height: 1;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), opacity var(--t-fast), transform var(--t-fast);
+}
+.blk-comment-btn svg, .blk-thread-badge svg { width: 14px; height: 14px; }
+.blk-comment-btn {
+  background: none; color: var(--ink-faint);
+  opacity: 0;
+}
+.blk:hover .blk-comment-btn, .blk-comment-btn:focus-visible { opacity: 1; }
+.blk-comment-btn:hover { background: var(--line-soft); color: var(--ink-soft); }
+.blk-thread-badge {
+  background: var(--comment-mark); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--comment-mark-line);
+}
+.blk-thread-badge:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: no-preference) {
+  .blk-thread-badge { animation: threadBadgeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+}
+@keyframes threadBadgeIn {
+  from { transform: scale(0.4); opacity: 0; }
+}
+@media (max-width: 860px) {
+  .blk-aside { right: 0; top: -8px; }
+  .blk-comment-btn { display: none; }
+}
+
 /* block options menu (opened from the drag handle) */
 .blk-menu {
   position: absolute;
@@ -773,3 +810,10 @@
   cursor: pointer;
 }
 .curve-copy:hover { color: var(--ember-deep); border-color: var(--ember-tint2); background: var(--ember-tint); }
+
+/* A block a comment points at, flashed when you jump to it from the rail. */
+.blk.blk-flash { animation: blkFlash 1.4s ease-out; border-radius: 6px; }
+@keyframes blkFlash {
+  0%, 30% { background: var(--comment-mark); box-shadow: 0 0 0 4px var(--comment-mark); }
+  100% { background: transparent; box-shadow: 0 0 0 4px transparent; }
+}

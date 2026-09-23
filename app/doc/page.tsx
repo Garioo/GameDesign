@@ -10,6 +10,7 @@ import BlockEditor, { type BlockEditorApi } from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import TopBar from "@/app/components/TopBar";
 import { useSitePresence } from "@/lib/useSitePresence";
+import { useShortcuts } from "@/lib/shortcuts";
 import Dock from "@/app/components/Dock";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, signOutAndClear, type SessionInfo } from "@/lib/session";
@@ -37,7 +38,8 @@ import {
 import type { SearchConfig } from "@/app/components/GlobalSearch";
 import { pageItems } from "@/lib/searchIndex";
 import TrashDialog from "./TrashDialog";
-import EditHistory from "./EditHistory";
+import VersionHistory from "./VersionHistory";
+import SharePanel from "./SharePanel";
 import UndoToast from "@/app/components/UndoToast";
 import { HistoryToggle } from "@/app/components/ActivityFeed";
 import Comments from "./Comments";
@@ -56,6 +58,7 @@ import {
   deleteComment,
   editComment,
   listComments,
+  addBlockComment,
   setCommentResolved,
   settleSuggestion,
   type CommentRow,
@@ -204,10 +207,9 @@ function DocPageInner() {
   const [tagEditing, setTagEditing] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [shareCopied, setShareCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
-  const [editHistoryOpen, setEditHistoryOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; onUndo?: () => void } | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
   // Inline comments / suggested edits: the editor's live-DOM handle, which
@@ -218,6 +220,15 @@ function DocPageInner() {
     () => new Set(comments.filter((c) => !c.parent_id && c.anchor && !c.resolved_at).map((c) => c.anchor!)),
     [comments],
   );
+  // Open comments on whole blocks (supervisors' comments, which don't mark the text).
+  const blockThreads = useMemo(() => {
+    const out = new Map<string, string[]>();
+    for (const c of comments) {
+      if (c.parent_id || !c.block_id || c.resolved_at) continue;
+      out.set(c.block_id, [...(out.get(c.block_id) ?? []), c.id]);
+    }
+    return out;
+  }, [comments]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Wide screens: the docked sidebar can be hidden to give the page the room
   // (remembered in this browser). Narrow screens use the drawer (sidebarOpen).
@@ -235,17 +246,6 @@ function DocPageInner() {
       return !hidden;
     });
   }, []);
-  // ⌘\ / Ctrl+\ toggles the sidebar, as in most editors.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleSidebar]);
   const [railOpen, setRailOpen] = useState(false);
   const [draftRecovery, setDraftRecovery] = useState<BlockDraft & { pageId: string } | null>(null);
   const draftChecked = useRef<Set<string>>(new Set());
@@ -1063,6 +1063,90 @@ function DocPageInner() {
     updatePagePlacement(updates).catch(console.error);
   };
 
+  // ---- keyboard shortcuts (lib/shortcuts.ts; press ? for the list) ----
+  // Pages in sidebar order: sections by position, each page followed by its subpages.
+  const pageOrder = useMemo(() => {
+    const byPos = (a: DesignDoc, b: DesignDoc) => (a.position ?? 0) - (b.position ?? 0);
+    const out: string[] = [];
+    const walk = (d: DesignDoc) => {
+      out.push(d.id);
+      docs.filter((c) => c.parentId === d.id).sort(byPos).forEach(walk);
+    };
+    for (const sec of [...sections].sort((a, b) => a.position - b.position)) {
+      docs.filter((d) => d.sectionId === sec.id && !d.parentId).sort(byPos).forEach(walk);
+    }
+    for (const d of docs) if (!out.includes(d.id)) out.push(d.id);
+    return out;
+  }, [docs, sections]);
+  const stepPage = (delta: number) => {
+    if (!active || pageOrder.length < 2) return;
+    const i = pageOrder.indexOf(active.id);
+    openPage(pageOrder[(i + delta + pageOrder.length) % pageOrder.length]);
+  };
+  const copyPageLink = () => {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => setToast({ message: "Link to this page copied." }))
+      .catch(() => setToast({ message: "Couldn’t copy the link." }));
+  };
+  // Page keys pause while version history covers the page (it has its own).
+  const onPage = !versionHistoryOpen;
+  useShortcuts([
+    { id: "doc-sidebar", keys: "mod+\\", label: "Show or hide the sidebar", group: "Page", run: toggleSidebar },
+    { id: "doc-next", keys: "j", label: "Next page", group: "Page", enabled: onPage && pageOrder.length > 1, run: () => stepPage(1) },
+    { id: "doc-prev", keys: "k", label: "Previous page", group: "Page", enabled: onPage && pageOrder.length > 1, run: () => stepPage(-1) },
+    {
+      id: "doc-edit",
+      keys: "e",
+      label: "Write in the page",
+      group: "Page",
+      enabled: onPage && canEdit && !!active,
+      run: () => {
+        const texts = document.querySelectorAll<HTMLElement>(".blocks .blk-text");
+        const last = texts[texts.length - 1];
+        if (!last) return;
+        last.focus();
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        last.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      },
+    },
+    {
+      id: "doc-comment",
+      keys: "c",
+      label: "Comment on the page",
+      group: "Page",
+      enabled: onPage && !!session && !!active,
+      run: () => {
+        if (window.matchMedia("(max-width: 1180px)").matches) setRailOpen(true);
+        setTimeout(() => {
+          const box = document.querySelector<HTMLTextAreaElement>(".rail textarea");
+          box?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          box?.focus();
+        }, 60);
+      },
+    },
+    { id: "doc-history", keys: "h", label: "Version history", group: "Page", enabled: onPage && !!session && !!active, run: () => setVersionHistoryOpen(true) },
+    { id: "doc-link", keys: "y", label: "Copy link to this page", group: "Page", enabled: onPage && !!active, run: copyPageLink },
+    {
+      id: "doc-new-section",
+      keys: "shift+n",
+      label: "New section",
+      group: "Page",
+      enabled: onPage && canEdit,
+      run: () => {
+        const name = window.prompt("New section name");
+        if (name && name.trim()) void handleNewSection(name.trim());
+      },
+    },
+    { id: "doc-trash", keys: "g x", label: "Open the trash", group: "Navigation", enabled: onPage && canEdit, run: () => setTrashOpen(true) },
+    { id: "doc-settings", keys: "mod+,", label: "Settings", group: "General", run: () => setSettingsOpen(true) },
+  ]);
+
   if (loading) {
     return (
       <div className="app">
@@ -1123,6 +1207,11 @@ function DocPageInner() {
         menuLabel={sidebarHidden ? "Show sidebar (⌘\\)" : "Hide sidebar (⌘\\)"}
         workspaceId={session?.workspaceId}
       >
+        {session && !canEdit && (
+          <span className="review-chip" title="You can read everything and comment — select text or use the comment icon beside a paragraph.">
+            View &amp; comment
+          </span>
+        )}
         <span className={"save-state save-" + saveState}>
           {saveState === "saving" && "Saving…"}
           {saveState === "saved" && "Saved"}
@@ -1145,26 +1234,13 @@ function DocPageInner() {
         </button>
         <button
           className="share-btn settings-btn"
-          title="Edit history — who wrote what"
-          aria-label="Edit history"
-          onClick={() => setEditHistoryOpen(true)}
+          title="Version history — who wrote what"
+          aria-label="Version history"
+          onClick={() => setVersionHistoryOpen(true)}
         >
           <Clock className="settings-gear" />
         </button>
-        <button
-          className="share-btn"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(window.location.href);
-              setShareCopied(true);
-              setTimeout(() => setShareCopied(false), 1500);
-            } catch (e) {
-              console.error(e);
-            }
-          }}
-        >
-          {shareCopied ? "Copied!" : "Share"}
-        </button>
+        <SharePanel key={active.id} pageId={active.id} canEdit={canEdit} />
         <button
           className="share-btn settings-btn"
           title="Settings"
@@ -1359,6 +1435,17 @@ function DocPageInner() {
               onChange={(b) => update(active.id, { blocks: b })}
               apiRef={editorApi}
               openAnchors={openAnchors}
+              people={people}
+              blockThreads={blockThreads}
+              onBlockComment={
+                session && !canEdit
+                  ? async (c) => {
+                      const pageId = active.id;
+                      await addBlockComment(pageId, session.userId, c);
+                      listComments(pageId).then(setComments).catch(console.error);
+                    }
+                  : undefined
+              }
               onAnnotate={
                 canEdit && session
                   ? async (a) => {
@@ -1432,9 +1519,16 @@ function DocPageInner() {
             canEdit={canEdit}
             focusAnchor={focusAnchor}
             onJump={(anchor) => {
-              document
-                .querySelector(`.blocks [data-comment="${anchor}"], .blocks [data-suggestion="${anchor}"]`)
-                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+              // Block comments jump to their block ("block:<id>"); inline ones to their mark.
+              const el = anchor.startsWith("block:")
+                ? document.querySelector(`.blocks .blk[data-block-id="${CSS.escape(anchor.slice(6))}"]`)
+                : document.querySelector(`.blocks [data-comment="${anchor}"], .blocks [data-suggestion="${anchor}"]`);
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              if (el && anchor.startsWith("block:")) {
+                el.classList.remove("blk-flash");
+                void (el as HTMLElement).offsetWidth;
+                el.classList.add("blk-flash");
+              }
             }}
             onSettle={(c, accept) => {
               if (!c.anchor) return;
@@ -1473,16 +1567,27 @@ function DocPageInner() {
       {/* ---------------- floating dock (global chrome) ---------------- */}
       <Dock
         search={docSearch}
-        onNew={canEdit ? () => handleNewPage(activeSectionId, active.group) : undefined}
+        onNew={canEdit && !versionHistoryOpen ? () => handleNewPage(activeSectionId, active.group) : undefined}
+        newLabel="New page"
       />
 
-      {editHistoryOpen && session && (
-        <EditHistory
+      {versionHistoryOpen && session && (
+        <VersionHistory
           key={active.id}
           workspaceId={session.workspaceId}
           pageId={active.id}
           pageTitle={active.title}
-          onClose={() => setEditHistoryOpen(false)}
+          blocks={active.blocks}
+          canEdit={canEdit}
+          onRestore={(blocks) => {
+            update(active.id, { blocks });
+            setToast({ message: "Version restored." });
+          }}
+          onRestoreBlock={(blocks) => {
+            update(active.id, { blocks });
+            setToast({ message: "Block restored." });
+          }}
+          onClose={() => setVersionHistoryOpen(false)}
         />
       )}
       {trashOpen && (

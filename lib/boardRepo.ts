@@ -24,6 +24,10 @@ export interface BoardCard {
   columnId?: string;
   parentId?: string | null;
   timelinePosition?: number;
+  /** The milestone it counts towards (supabase/migrate-project-planning.sql). */
+  milestoneId?: string | null;
+  /** The repeat rule that created it, or that it was turned into. */
+  recurrenceId?: string | null;
   dragging?: boolean;
 }
 
@@ -69,6 +73,8 @@ interface CardRow {
   owners: string[] | null;
   canvas_id?: string | null;
   deadline: string | null;
+  milestone_id?: string | null;
+  recurrence_id?: string | null;
   position: number;
 }
 
@@ -112,6 +118,8 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       columnId: r.column_id,
       parentId: r.parent_id ?? null,
       timelinePosition: r.timeline_position,
+      milestoneId: r.milestone_id ?? null,
+      recurrenceId: r.recurrence_id ?? null,
     };
     (cardsByCol.get(r.column_id) ?? cardsByCol.set(r.column_id, []).get(r.column_id)!).push(card);
   }
@@ -281,6 +289,25 @@ export async function moveCard(
 export async function setCardPriority(cardId: string, priority: string | null): Promise<void> {
   const { error } = await supabase.from("board_cards").update({ priority }).eq("id", cardId);
   if (error) throw new Error(`setCardPriority failed: ${error.message}`);
+}
+
+/**
+ * Add or remove one person on a task, starting from its latest owners so a
+ * teammate's concurrent change to the list isn't lost. Returns the new list.
+ * Adding someone notifies them (board_cards_notify_assignment trigger).
+ */
+export async function setCardOwner(cardId: string, userId: string, assigned: boolean): Promise<string[]> {
+  const { data, error } = await supabase.from("board_cards").select("owners").eq("id", cardId).maybeSingle();
+  if (error) throw new Error(`setCardOwner failed: ${error.message}`);
+  if (!data) throw new Error("That task no longer exists.");
+  const owners: string[] = (data as { owners: string[] | null }).owners ?? [];
+  const next = assigned ? (owners.includes(userId) ? owners : [...owners, userId]) : owners.filter((o) => o !== userId);
+  if (next.length === owners.length && next.every((o, i) => o === owners[i])) return owners;
+  const { data: updated, error: upErr } = await supabase.from("board_cards").update({ owners: next }).eq("id", cardId).select("id");
+  if (upErr) throw new Error(`setCardOwner failed: ${upErr.message}`);
+  // RLS filters instead of erroring: no row back means you can't edit tasks here.
+  if (!updated?.length) throw new Error("Only editors can change who a task is assigned to.");
+  return next;
 }
 
 /** Persist a board's column order. */
