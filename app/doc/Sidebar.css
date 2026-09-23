@@ -192,11 +192,6 @@
 .nav-icon { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.85; }
 .nav-item:not(.is-active) .nav-icon { color: var(--ink-faint); }
 .nav-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-status { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #cfc6b8; }
-.nav-status.status-wip { background: var(--ember); }
-.nav-status.status-review { background: #d9a441; }
-.nav-status.status-done { background: var(--online); }
-.nav-item.is-active .nav-status { box-shadow: 0 0 0 2px var(--ember-tint); }
 
 .new-page {
   margin-top: var(--sp-3);

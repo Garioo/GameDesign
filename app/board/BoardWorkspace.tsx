@@ -27,9 +27,11 @@ import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
-import { listMembers, listPageTargets, listSections, type ProfileInfo } from "@/lib/docsRepo";
-import { mentionHref, type MentionTarget } from "@/app/doc/mentions";
-import { splitPageLinks, stripPageLinks } from "@/lib/pageLinks";
+import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
+import type { MentionTarget } from "@/app/doc/mentions";
+import { plainLinkedText } from "@/lib/pageLinks";
+import { loadLinkTargets } from "@/lib/linkTargets";
+import LinkedText from "@/app/components/LinkedText";
 import PageLinkTextarea from "./PageLinkTextarea";
 import {
   boardEndDate,
@@ -474,7 +476,7 @@ function Card({ card, people, subtasks, onDragStart, onDragEnd, dropState, onCli
         </div>
       )}
       <div className="card-title">{card.title}</div>
-      {card.sub && <div className="card-sub">{stripPageLinks(card.sub)}</div>}
+      {card.sub && <div className="card-sub">{plainLinkedText(card.sub)}</div>}
       <div className="card-foot">
         <div className="card-owner">
           {owners.length > 0 ? (
@@ -741,7 +743,7 @@ function CardModal(props: CardModalProps) {
               <div className={cardStyles.section}>
                 <div className="modal-label">Description</div>
                 {card.sub
-                  ? <p className={cardStyles.description}><Linkified text={card.sub} targets={props.linkTargets} /></p>
+                  ? <p className={cardStyles.description}><LinkedText text={card.sub} targets={props.linkTargets} /></p>
                   : canEdit
                     ? <button type="button" className={cardStyles.linkBtn} onClick={() => setEditing(true)}><Icon name="plus" /> Add a description</button>
                     : <p className={cardStyles.muted}>No description.</p>}
@@ -787,18 +789,6 @@ function CardModal(props: CardModalProps) {
 }
 
 /** Turns bare http(s) URLs in plain text into links. */
-/** A description with its page/canvas links and web URLs made clickable. */
-function Linkified({ text, targets = [] }: { text: string; targets?: MentionTarget[] }) {
-  const titleOf = new Map(targets.map((t) => [t.ref, t.title]));
-  return <>{splitPageLinks(text).map((seg, i) => seg.link
-    ? <Link key={i} href={mentionHref(seg.link.ref)} className={cardStyles.pageLink}>
-        <Icon name={seg.link.ref.startsWith("canvas:") ? "grid" : seg.link.ref.startsWith("section:") ? "folder" : "file"} />
-        {titleOf.get(seg.link.ref) ?? seg.link.title}
-      </Link>
-    : seg.text.split(/(https?:\/\/[^\s]+)/g).map((part, j) =>
-        j % 2 ? <a key={`${i}-${j}`} href={part} target="_blank" rel="noopener noreferrer">{part}</a> : part))}</>;
-}
-
 /** The editable form, mounted fresh on each Edit so it starts from the latest task data. */
 function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, canEdit, boards, linkTargets, onDone }: CardModalProps & { onDone: () => void }) {
   const [title, setTitle] = useState(card.title);
@@ -853,7 +843,8 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
         </div>
         <div className="modal-field">
           <label className="modal-label">Description</label>
-          <PageLinkTextarea className="modal-textarea" value={sub} onChange={setSub} targets={linkTargets} />
+          <PageLinkTextarea className="modal-textarea" value={sub} onChange={setSub} targets={linkTargets} formatShortcuts
+            hint="Type [[ or @ to link a page, section, canvas, board or task · ⌘B bold · ⌘I italic" />
         </div>
         <div className="modal-field">
           <label className="modal-label">Tags</label>
@@ -981,17 +972,12 @@ export default function BoardWorkspace() {
     const ws = session?.workspaceId;
     if (!ws || !openCardId) return;
     let active = true;
-    Promise.all([listPageTargets(ws), listCanvases(ws), listSections(ws)])
-      .then(([pages, canvases, sections]) => {
-        if (!active) return;
-        setLinkTargets([
-          ...pages.map((p): MentionTarget => ({ ref: p.id, title: p.title, group: p.group, kind: "page" })),
-          ...canvases.map((c): MentionTarget => ({ ref: `canvas:${c.id}`, title: c.name, group: "Canvas", kind: "canvas" })),
-          ...sections.map((s): MentionTarget => ({ ref: `section:${s.id}`, title: s.name, group: "Section", kind: "section" })),
-        ]);
-      })
+    loadLinkTargets(ws, boards)
+      .then((targets) => { if (active) setLinkTargets(targets.filter((t) => t.ref !== `task:${openCardId}`)); })
       .catch(console.error);
     return () => { active = false; };
+    // Boards are passed in rather than refetched; their titles refresh on the next open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.workspaceId, openCardId]);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
@@ -1200,7 +1186,7 @@ export default function BoardWorkspace() {
     const params = new URLSearchParams({ c: canvas.id });
     if (canvas.created) {
       const lines = [card.title];
-      if (card.sub) lines.push("", stripPageLinks(card.sub));
+      if (card.sub) lines.push("", plainLinkedText(card.sub));
       const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map(t => "#" + t).join("  ");
       if (meta) lines.push("", meta);
       params.set("note", lines.join("\n"));

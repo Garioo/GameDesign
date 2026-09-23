@@ -78,54 +78,25 @@
   margin-bottom: 34px;
 }
 
-/* meta card */
-.meta-card {
-  /* Its entrance animation makes it a stacking context, which traps the owner /
-     link menus' z-index inside it; the blocks below animate too and would paint
-     over those menus. Lift the whole card above the page text — and above the
-     floating dock (40) so long menus stay clickable, but under the drawer
+/* page meta: tags and links as one slim line under the subtitle */
+.page-meta {
+  /* Its entrance animation makes it a stacking context, which traps the links
+     menu's z-index inside it; the blocks below animate too and would paint
+     over that menu. Lift the line above the page text — and above the
+     floating dock (40) so a long menu stays clickable, but under the drawer
      backdrop (44) on small screens. */
   position: relative;
   z-index: 41;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2xl);
-  padding: 4px 22px;
-  margin-bottom: 36px;
-  box-shadow: var(--shadow-card);
-}
-.meta-row {
-  display: flex; align-items: center;
-  min-height: 50px;
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 10px 28px;
+  padding-bottom: 20px;
+  margin-bottom: 28px;
   border-bottom: 1px solid var(--line-soft);
 }
-.meta-row:last-child { border-bottom: none; }
-.meta-key { width: 120px; flex-shrink: 0; font-size: 14px; color: var(--ink-soft); }
-
-.status-pill {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-size: 13.5px; font-weight: 600; color: var(--ember-deep);
-  background: var(--ember-tint);
-  padding: 6px 10px 6px 12px; border-radius: var(--r-md); cursor: pointer;
-}
-.status-pill.status-todo { color: var(--ink-soft); background: var(--line-soft); }
-.status-pill.status-review { color: #9a6e16; background: #f7ecd2; }
-.status-pill.status-done { color: #2f7d55; background: #e2f1e8; }
-.status-pill:focus-within { box-shadow: 0 0 0 2px var(--ember-tint2); }
-.status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.status-select {
-  font: inherit; font-size: 13.5px; font-weight: 600; color: inherit;
-  background: none; border: none; cursor: pointer; appearance: none;
-  -webkit-appearance: none; padding-right: 2px;
-}
-.status-select:focus { outline: none; }
-.status-chevron { width: 14px; height: 14px; opacity: 0.7; }
-
-.owner { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; }
-.owner-avatar {
-  width: 24px; height: 24px; border-radius: 50%;
-  display: grid; place-items: center;
-  color: #fff; font-size: 10px; font-weight: 600;
+.page-meta-group { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.page-meta-key {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
 .tags { display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
@@ -154,34 +125,17 @@
   border-radius: 7px; padding: 3px 9px; width: 90px; outline: none;
 }
 
-/* owner picker */
-.owner-wrap { position: relative; display: inline-flex; }
-.owner-btn {
-  font: inherit; background: none; border: none; cursor: pointer;
-  padding: 4px 6px; border-radius: var(--r-md); transition: background var(--t-fast);
+/* The editor's own menus ("/", "@", a block's options) live inside .blocks,
+   whose entrance animation makes it a stacking context below the tags/links
+   line (41). While one is open, lift the editor above it and the dock (40),
+   still under the top bar (50). */
+.doc .blocks:has(.slash-menu, .blk-menu) {
+  position: relative;
+  z-index: 42;
 }
-.owner-btn:hover { background: var(--line-soft); }
-.owner-menu {
-  /* above the floating dock (z-40), which otherwise swallows clicks on
-     the bottom options when the list reaches the lower viewport */
-  position: absolute; left: 0; top: calc(100% + 4px); z-index: 50;
-  min-width: 200px;
-  max-height: min(320px, 40vh); overflow-y: auto;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
-  box-shadow: var(--shadow-menu);
-  padding: 5px;
-}
-.owner-menu button {
-  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
-  padding: 7px 9px; border: none; background: none; border-radius: 7px;
-  font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer;
-}
-.owner-menu button:hover { background: var(--line-soft); }
-.owner-menu .owner-clear { color: var(--ink-faint); border-top: 1px solid var(--line-soft); border-radius: 0 0 7px 7px; margin-top: 3px; padding-top: 9px; }
 
-/* While a meta-card dropdown is open, mute the editor behind it so blocks
+/* While the links dropdown is open, mute the editor behind it so blocks
    don't flash their hover tint / gutter handles underneath the menu. */
-.doc:has(.owner-menu) .blocks,
 .doc:has(.link-menu) .blocks {
   pointer-events: none;
 }
@@ -316,14 +270,14 @@
   .doc-crumb,
   .doc-title,
   .doc-subtitle,
-  .meta-card,
+  .page-meta,
   .blocks {
     animation: riseIn .5s var(--ease-rise) both;
   }
   .doc-crumb    { animation-delay: .04s; }
   .doc-title    { animation-delay: .11s; }
   .doc-subtitle { animation-delay: .18s; }
-  .meta-card    { animation-delay: .25s; }
+  .page-meta    { animation-delay: .25s; }
   .blocks       { animation-delay: .32s; }
 
   .rail-head { animation: fadeIn .5s ease both .28s; }

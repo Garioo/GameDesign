@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import Icon from "@/app/components/Icon";
 import { BLOCK_TONES, type Block, type BlockTone, type BlockType, type CurveData } from "./data";
 import GoogleDriveBlock from "./GoogleDriveBlock";
@@ -9,6 +9,7 @@ import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
 import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
 import { linkifyText, safeLinkHref } from "@/lib/webLinks";
+import { blocksToHtml, blocksToPlainText, parseCopiedBlocks } from "@/lib/blockClipboard";
 import InlineAnnotator, { type AnnotationRequest } from "./InlineAnnotator";
 import "./BlockEditor.css";
 
@@ -490,6 +491,12 @@ export default function BlockEditor({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
+  // Block selection: whole blocks picked by dragging across blocks, shift-click
+  // or ⌘A twice, so several can be copied / cut / deleted at once (text
+  // selection can't span blocks — each one is its own contentEditable).
+  const [selected, setSelected] = useState<string[]>([]);
+  const selectAnchor = useRef<string | null>(null);
+  const pointerSelect = useRef<{ anchor: string; active: boolean } | null>(null);
 
   // Re-focus a block after a structural change has rendered.
   useEffect(() => {
@@ -784,6 +791,116 @@ export default function BlockEditor({
     }
   };
 
+  const blockIdAt = (target: EventTarget | null) =>
+    (target instanceof Element ? target : null)?.closest<HTMLElement>(".blk[data-block-id]")?.dataset.blockId ?? null;
+  const selectRange = (fromId: string, toId: string) => {
+    const a = blocks.findIndex((b) => b.id === fromId);
+    const b = blocks.findIndex((x) => x.id === toId);
+    if (a === -1 || b === -1) return;
+    setSelected(blocks.slice(Math.min(a, b), Math.max(a, b) + 1).map((x) => x.id));
+  };
+  // Leave text editing so the browser's own caret / selection don't compete.
+  const dropTextFocus = () => {
+    window.getSelection()?.removeAllRanges();
+    const active = document.activeElement as HTMLElement | null;
+    if (active && rootRef.current?.contains(active)) active.blur();
+  };
+  const clearSelection = () => {
+    setSelected([]);
+    selectAnchor.current = null;
+  };
+  const deleteSelected = () => {
+    // Read through the ref: the document listeners below keep the closure
+    // from when the selection started, not its latest contents.
+    const gone = new Set(selectedRef.current);
+    const cur = readBlocks();
+    const first = cur.findIndex((b) => gone.has(b.id));
+    const next = cur.filter((b) => !gone.has(b.id));
+    clearSelection();
+    if (next.length === 0) {
+      const nb: Block = { id: newId(), type: "text", text: "" };
+      onChange([nb]);
+      setFocusReq({ id: nb.id, pos: "start" });
+      return;
+    }
+    onChange(next);
+    const focus = next[Math.max(0, first - 1)];
+    if (focus && !isChromeBlock(focus.type)) setFocusReq({ id: focus.id, pos: "end" });
+  };
+  /** Insert copied blocks after `afterId` (replacing it if it's an empty text block). */
+  const insertBlocks = (afterId: string | null, copied: Omit<Block, "id">[]) => {
+    const cur = readBlocks();
+    const fresh: Block[] = copied.map((b) => ({ ...JSON.parse(JSON.stringify(b)), id: newId() }));
+    let idx = afterId ? cur.findIndex((b) => b.id === afterId) : cur.length - 1;
+    if (idx === -1) idx = cur.length - 1;
+    const replace = cur[idx] && cur[idx].type === "text" && !cur[idx].text.trim();
+    const next = [...cur];
+    next.splice(replace ? idx : idx + 1, replace ? 1 : 0, ...fresh);
+    onChange(next);
+    const last = [...fresh].reverse().find((b) => !isChromeBlock(b.type));
+    if (last) setFocusReq({ id: last.id, pos: "end" });
+  };
+
+  // While blocks are selected: copy / cut / delete / Escape work on them, and
+  // any click or typing ends the selection.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  useEffect(() => {
+    if (!selected.length) return;
+    const chosen = () => {
+      const ids = new Set(selectedRef.current);
+      return readBlocks().filter((b) => ids.has(b.id));
+    };
+    const onCopy = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      e.preventDefault();
+      const picked = chosen();
+      e.clipboardData.setData("text/plain", blocksToPlainText(picked));
+      e.clipboardData.setData("text/html", blocksToHtml(picked));
+      if (e.type === "cut" && !readOnly) deleteSelected();
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (readOnly) return;
+      const copied = parseCopiedBlocks(e.clipboardData?.getData("text/html") ?? "");
+      if (!copied) return;
+      e.preventDefault();
+      const ids = selectedRef.current;
+      clearSelection();
+      insertBlocks(ids[ids.length - 1] ?? null, copied);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); clearSelection(); return; }
+      if ((e.key === "Backspace" || e.key === "Delete") && !readOnly) { e.preventDefault(); deleteSelected(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setSelected(blocks.map((b) => b.id));
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key === "Shift") return; // ⌘C / ⌘X / ⌘V go through the events above
+      if (e.key.length === 1 || e.key === "Enter") clearSelection();
+    };
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("cut", onCopy);
+    document.addEventListener("paste", onPaste);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("cut", onCopy);
+      document.removeEventListener("paste", onPaste);
+      document.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected.length > 0, readOnly, blocks]);
+  // Clicking outside the editor ends a block selection.
+  useEffect(() => {
+    if (!selected.length) return;
+    const onDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) clearSelection();
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [selected.length]);
+
   const duplicateBlock = (id: string) => {
     const cur = readBlocks();
     const idx = cur.findIndex((b) => b.id === id);
@@ -886,6 +1003,19 @@ export default function BlockEditor({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, id: string) => {
+    // ⌘A: first press selects this block's text (browser default); pressed
+    // again with all of it selected — or in an empty block — selects every block.
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "a") {
+      const el = refs.current.get(id);
+      const sel = window.getSelection();
+      const all = el ? textLength(el) : 0;
+      if (!all || (sel && sel.toString().length >= all)) {
+        e.preventDefault();
+        dropTextFocus();
+        setSelected(blocks.map((b) => b.id));
+        return;
+      }
+    }
     // ⌘B / ⌘I / ⌘E inline formatting
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
       const k = e.key.toLowerCase();
@@ -1006,7 +1136,49 @@ export default function BlockEditor({
     <ReadOnlyCtx.Provider value={readOnly}>
     <div
       ref={rootRef}
-      className={"blocks" + (readOnly ? " read-only" : "")}
+      className={"blocks" + (readOnly ? " read-only" : "") + (selected.length ? " is-block-selecting" : "")}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        const id = blockIdAt(e.target);
+        const onControl = (e.target as HTMLElement).closest?.(".blk-gutter, .blk-menu, .slash-menu, button, input, select, textarea");
+        // Shift-click: select every block from the anchor (focused block or
+        // the last selection start) to this one.
+        const anchor = selectAnchor.current ?? focusedId;
+        if (e.shiftKey && id && anchor && !onControl) {
+          e.preventDefault();
+          dropTextFocus();
+          selectAnchor.current = anchor;
+          selectRange(anchor, id);
+          return;
+        }
+        if (selected.length) clearSelection();
+        pointerSelect.current = id && !onControl ? { anchor: id, active: false } : null;
+      }}
+      onPointerMove={(e) => {
+        const drag = pointerSelect.current;
+        if (!drag || !(e.buttons & 1)) return;
+        const over = blockIdAt(document.elementFromPoint(e.clientX, e.clientY));
+        // Dragging out of the block you started in switches to selecting blocks.
+        if (!drag.active && (!over || over === drag.anchor)) return;
+        if (!drag.active) {
+          drag.active = true;
+          selectAnchor.current = drag.anchor;
+          dropTextFocus();
+        } else {
+          window.getSelection()?.removeAllRanges();
+        }
+        if (over) selectRange(drag.anchor, over);
+      }}
+      onPointerUp={() => { pointerSelect.current = null; }}
+      onPasteCapture={(e) => {
+        // Blocks copied from a page paste back as blocks, after the one being edited.
+        if (readOnly) return;
+        const copied = parseCopiedBlocks(e.clipboardData.getData("text/html"));
+        if (!copied) return;
+        e.preventDefault();
+        e.stopPropagation();
+        insertBlocks(blockIdAt(e.target), copied);
+      }}
       onClick={(e) => {
         const note = (e.target as HTMLElement).closest?.("mark[data-comment], del[data-suggestion]");
         if (note) onAnnotationClick?.(note.getAttribute("data-comment") ?? note.getAttribute("data-suggestion") ?? "");
@@ -1041,6 +1213,7 @@ export default function BlockEditor({
           menuOpen={menuFor === b.id}
           dragging={dragId === b.id}
           dropTarget={dropId === b.id && dragId !== null && dragId !== b.id}
+          selected={selected.includes(b.id)}
           slash={slash && slash.id === b.id ? slash : null}
           menuItems={slash && slash.id === b.id ? filtered(slash.query) : []}
           mention={mention && mention.id === b.id ? mention : null}
@@ -1100,6 +1273,7 @@ function BlockRow({
   menuOpen,
   dragging,
   dropTarget,
+  selected,
   slash,
   menuItems,
   mention,
@@ -1136,6 +1310,8 @@ function BlockRow({
   menuOpen: boolean;
   dragging: boolean;
   dropTarget: boolean;
+  /** Part of a multi-block selection. */
+  selected: boolean;
   slash: Slash | null;
   menuItems: MenuItem[];
   mention: Mention | null;
@@ -1163,6 +1339,32 @@ function BlockRow({
 }) {
   const readOnly = useContext(ReadOnlyCtx);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  // The "/" and "@" menus open below the block, or above it when the space
+  // between the block and the floating dock / window bottom is too short —
+  // and never grow taller than the room they have.
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPlace, setMenuPlace] = useState<{ above: boolean; maxHeight: number } | null>(null);
+  const pickerOpen = !!slash || !!mention;
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    const row = menu?.closest<HTMLElement>(".blk");
+    if (!pickerOpen || !menu || !row) {
+      setMenuPlace(null);
+      return;
+    }
+    const rect = row.getBoundingClientRect();
+    const dock = document.querySelector(".dock-wrap")?.getBoundingClientRect();
+    const bottomLimit = (dock && dock.top > window.innerHeight / 2 ? dock.top : window.innerHeight) - 8;
+    const topLimit = (document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0) + 8;
+    const below = bottomLimit - rect.bottom - 6;
+    const above = rect.top - topLimit - 6;
+    const wanted = Math.min(menu.scrollHeight, 320);
+    const placeAbove = below < wanted && above > below;
+    setMenuPlace({ above: placeAbove, maxHeight: Math.max(96, Math.min(320, placeAbove ? above : below)) });
+  }, [pickerOpen, menuItems.length, mentionItems.length]);
+  const menuClass = menuPlace?.above ? " is-above" : "";
+  const menuStyle = menuPlace ? { maxHeight: menuPlace.maxHeight } : undefined;
 
   // Keep DOM content in sync with state without disturbing the caret.
   // Compared on the sanitized form so browser HTML normalization can't loop.
@@ -1315,8 +1517,10 @@ function BlockRow({
         "blk blk-" +
         block.type +
         (dragging ? " is-dragging" : "") +
-        (dropTarget ? " is-drop" : "")
+        (dropTarget ? " is-drop" : "") +
+        (selected ? " is-selected" : "")
       }
+      data-block-id={block.id}
       onDragOver={(e) => {
         if (readOnly) return;
         e.preventDefault();
@@ -1365,7 +1569,7 @@ function BlockRow({
       {main}
 
       {slash && (
-        <div className="slash-menu" contentEditable={false}>
+        <div ref={menuRef} className={"slash-menu" + menuClass} style={menuStyle} contentEditable={false}>
           {menuItems.length === 0 && (
             <div className="slash-empty">No matching blocks</div>
           )}
@@ -1391,7 +1595,7 @@ function BlockRow({
       )}
 
       {mention && (
-        <div className="slash-menu mention-menu" contentEditable={false}>
+        <div ref={menuRef} className={"slash-menu mention-menu" + menuClass} style={menuStyle} contentEditable={false}>
           {mentionItems.length === 0 && (
             <div className="slash-empty">No matching pages</div>
           )}
@@ -1404,7 +1608,7 @@ function BlockRow({
                 onPickMention(t);
               }}
             >
-              <span className="slash-glyph">{t.kind === "canvas" ? <IGrid /> : <IPage />}</span>
+              <span className="slash-glyph">{t.kind === "canvas" ? <IGrid /> : t.kind === "section" ? <Icon name="folder" /> : <IPage />}</span>
               <span className="slash-copy">
                 <span className="slash-label">{t.title}</span>
                 <span className="slash-hint">{t.group}</span>

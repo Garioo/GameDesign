@@ -13,6 +13,15 @@
   padding: 2px 0;
 }
 .blk.is-drop { box-shadow: 0 -2px 0 var(--ember); }
+/* multi-block selection (drag across blocks, shift-click, ⌘A twice) */
+.blk.is-selected {
+  background: color-mix(in srgb, var(--ember) 13%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ember) 13%, transparent);
+}
+.blocks.is-block-selecting .blk-text { caret-color: transparent; }
+.blocks.is-block-selecting .blk-text::selection,
+.blocks.is-block-selecting .blk-text *::selection { background: transparent; }
 .blk.is-dragging { opacity: 0.4; }
 .blk-callout, .blk-quote { margin: 7px 0; }
 
@@ -347,6 +356,8 @@
   padding: 6px;
   max-height: 320px; overflow-y: auto;
 }
+/* not enough room below the block (floating dock / window edge): open upwards */
+.slash-menu.is-above { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 6px; }
 .slash-empty { padding: 12px 10px; font-size: 13px; color: var(--ink-faint); }
 .slash-item {
   display: flex; align-items: center; gap: 11px;

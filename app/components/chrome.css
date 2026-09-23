@@ -12,7 +12,11 @@
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 30;
+  /* Above all page content (the doc's details card sits at 41), the floating
+     dock (40) and the slide-in drawers (44–45, which start below the bar), so
+     its dropdowns — notifications, settings — are never covered. Dialogs use
+     60+ and stay on top of it. */
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;

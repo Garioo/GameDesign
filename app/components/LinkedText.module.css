@@ -1,0 +1,20 @@
+/* a [[link]] to a page, section, canvas, board or task inside plain text */
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--ember-tint);
+  color: var(--ember-deep);
+  font-weight: 600;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+.link:hover {
+  background: var(--ember-tint2);
+}
+.link svg {
+  width: 0.9em;
+  height: 0.9em;
+}

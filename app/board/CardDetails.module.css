@@ -406,23 +406,3 @@
   cursor: default;
 }
 
-/* page / canvas link inside a task description */
-.pageLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  border-radius: 5px;
-  background: var(--ember-tint);
-  color: var(--ember-deep);
-  font-weight: 600;
-  text-decoration: none;
-  vertical-align: baseline;
-}
-.pageLink:hover {
-  background: var(--ember-tint2);
-}
-.pageLink svg {
-  width: 0.9em;
-  height: 0.9em;
-}

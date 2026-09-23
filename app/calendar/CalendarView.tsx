@@ -7,6 +7,7 @@ import { calendarWeekLayout, eventCoversDate, eventEndDate, eventSpan } from "@/
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { dayNumber, isoWeek } from "@/lib/gantt";
 import EventDialog from "./EventDialog";
+import { plainLinkedText } from "@/lib/pageLinks";
 import CalendarFeedsDialog from "./CalendarFeedsDialog";
 import PlanningHeader from "../board/PlanningHeader";
 import { PlanningIcon } from "../board/PlanningIcons";
@@ -85,7 +86,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   const allEvents: (CalendarEvent | FeedEvent)[] = [...standaloneEvents, ...Object.values(feedEvents).flat()];
   const feedClass = (event: CalendarEvent | FeedEvent) => "feed" in event ? styles.feedEvent : "";
   const failedFeeds = Object.keys(feedErrors).length;
-  const matchingEvents = allEvents.filter(event => `${event.title} ${event.location} ${event.notes} ${"feed" in event ? `${event.feed.label} ${event.category}` : ""}`.toLowerCase().includes(search.toLowerCase()));
+  const matchingEvents = allEvents.filter(event => `${event.title} ${event.location} ${plainLinkedText(event.notes)} ${"feed" in event ? `${event.feed.label} ${event.category}` : ""}`.toLowerCase().includes(search.toLowerCase()));
   const eventsOn = (date: string) => matchingEvents.filter(event => eventCoversDate(event, date)).sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? "") || a.title.localeCompare(b.title));
   const eventRange = (event: CalendarEvent) => eventEndDate(event) !== event.date ? `${event.date} – ${eventEndDate(event)} · ` : "";
   const eventTime = (event: CalendarEvent) => event.start_time ? `${event.start_time.slice(0, 5)}${event.end_time ? `–${event.end_time.slice(0, 5)}` : ""}` : "All day";

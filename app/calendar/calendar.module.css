@@ -68,6 +68,13 @@
 .eventDialog button:not(.planning-primary) { background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 9px 12px; border-radius: 6px; cursor: pointer; }
 .eventDialog button:disabled { opacity: .5; cursor: default; }
 .eventDialog .eventError { margin: 14px 0; }
+/* read view shown before editing */
+.eventFacts { display: grid; gap: 18px; margin: 0 0 20px; }
+.eventFacts dt { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.eventFacts dd { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.eventFacts a { color: var(--ember-deep); }
+.eventNotes { white-space: pre-wrap; }
+.notesField { display: grid; gap: 7px; }
 
 /* attendees: members toggle on/off; guests are free-text names */
 .attendees { display: grid; gap: 8px; }

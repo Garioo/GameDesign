@@ -29,7 +29,6 @@ import {
   saveBlocks,
   savePage,
   seedIfEmpty,
-  setPageOwner,
   updatePagePlacement,
   type ProfileInfo,
   type SectionInfo,
@@ -66,7 +65,6 @@ import {
   type MentionTarget,
 } from "./mentions";
 import {
-  STATUS_LABEL,
   type Block,
   type DesignDoc,
   type Status,
@@ -89,7 +87,6 @@ function relativeTime(iso?: string): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
-const STATUS_ORDER: Status[] = ["todo", "wip", "review", "done"];
 
 /* ---------- inline icon set (lucide-flavoured, no deps) ---------- */
 type IconProps = { className?: string };
@@ -112,11 +109,6 @@ const LinkIcon = ({ className }: IconProps) => (
 const Grid = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-  </svg>
-);
-const ChevronDown = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m6 9 6 6 6-6" />
   </svg>
 );
 const PanelInfo = ({ className }: IconProps) => (
@@ -182,25 +174,18 @@ function DocPageInner() {
   const [people, setPeople] = useState<ProfileInfo[]>([]);
   const [canvases, setCanvases] = useState<CanvasInfo[]>([]);
   const [focusTitleId, setFocusTitleId] = useState<string | null>(null);
-  const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
-  const ownerWrapRef = useRef<HTMLSpanElement>(null);
   const linkWrapRef = useRef<HTMLSpanElement>(null);
 
-  // Close the meta-card dropdowns on outside click or Escape (instead of
-  // mouse-leave, which dismissed them mid-reach).
+  // Close the links dropdown on outside click or Escape (instead of
+  // mouse-leave, which dismissed it mid-reach).
   useEffect(() => {
-    if (!ownerMenuOpen && !linkMenuOpen) return;
+    if (!linkMenuOpen) return;
     const onDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (ownerMenuOpen && !ownerWrapRef.current?.contains(t)) setOwnerMenuOpen(false);
-      if (linkMenuOpen && !linkWrapRef.current?.contains(t)) setLinkMenuOpen(false);
+      if (!linkWrapRef.current?.contains(e.target as Node)) setLinkMenuOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOwnerMenuOpen(false);
-        setLinkMenuOpen(false);
-      }
+      if (e.key === "Escape") setLinkMenuOpen(false);
     };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
@@ -208,7 +193,7 @@ function DocPageInner() {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [ownerMenuOpen, linkMenuOpen]);
+  }, [linkMenuOpen]);
   const [tagDraft, setTagDraft] = useState("");
   const [tagEditing, setTagEditing] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -657,7 +642,7 @@ function DocPageInner() {
 
   // Incoming backlinks: pages that reference the current page, either through
   // an inline @-mention in their body (shown with the mentioning block as a
-  // snippet) or via their meta-card "Links to" list. One entry per source page.
+  // snippet) or via their "Links" list. One entry per source page.
   const backlinks: Backlink[] = active
     ? docs.flatMap((d): Backlink[] => {
         if (d.id === active.id) return [];
@@ -931,18 +916,6 @@ function DocPageInner() {
         : []),
       { key: "settings", label: "Settings", hint: "profile · workspace · account", icon: "settings" as const, run: () => setSettingsOpen(true) },
     ],
-  };
-
-  const handleSetOwner = (p: ProfileInfo | null) => {
-    setOwnerMenuOpen(false);
-    if (!canEdit) return;
-    const patch: Partial<DesignDoc> = p
-      ? { ownerId: p.id, owner: p.initials, ownerName: p.name, ownerColor: p.color }
-      : { ownerId: undefined, owner: "—", ownerName: "Unassigned", ownerColor: "#a59a8c" };
-    setDocs((prev) => prev.map((d) => (d.id === active.id ? { ...d, ...patch } : d)));
-    suppress.current[active.id] = Date.now() + 1500;
-    trackSave(() => setPageOwner(active.id, p?.id ?? null));
-    broadcast(`p:${active.id}`, { t: "page", id: active.id, page: patch });
   };
 
   const addTag = (raw: string) => {
@@ -1268,67 +1241,10 @@ function DocPageInner() {
             />
 
             {/* meta card */}
-            <div className="meta-card">
-              <div className="meta-row">
-                <span className="meta-key">Status</span>
-                <label className={"status-pill status-" + active.status}>
-                  <span className="status-dot" />
-                  <select
-                    className="status-select"
-                    value={active.status}
-                    disabled={!canEdit}
-                    onChange={(e) =>
-                      update(active.id, { status: e.target.value as Status })
-                    }
-                  >
-                    {STATUS_ORDER.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="status-chevron" />
-                </label>
-              </div>
-              <div className="meta-row">
-                <span className="meta-key">Owner</span>
-                <span className="owner-wrap" ref={ownerWrapRef}>
-                  <button
-                    className="owner owner-btn"
-                    disabled={!canEdit}
-                    onClick={() => canEdit && setOwnerMenuOpen((o) => !o)}
-                  >
-                    <span className="owner-avatar" style={{ background: active.ownerColor }}>
-                      {active.owner}
-                    </span>
-                    {active.ownerName}
-                    <ChevronDown className="status-chevron" />
-                  </button>
-                  {ownerMenuOpen && (
-                    <div className="owner-menu">
-                      {session && (
-                        <button onClick={() => handleSetOwner({ id: session.userId, name: session.name, initials: session.initials, color: session.color })}>
-                          <span className="owner-avatar" style={{ background: session.color }}>{session.initials}</span>
-                          Assign to me
-                        </button>
-                      )}
-                      {people
-                        .filter((p) => p.id !== session?.userId)
-                        .map((p) => (
-                          <button key={p.id} onClick={() => handleSetOwner(p)}>
-                            <span className="owner-avatar" style={{ background: p.color }}>{p.initials}</span>
-                            {p.name}
-                          </button>
-                        ))}
-                      <button className="owner-clear" onClick={() => handleSetOwner(null)}>
-                        Unassign
-                      </button>
-                    </div>
-                  )}
-                </span>
-              </div>
-              <div className="meta-row">
-                <span className="meta-key">Tags</span>
+            {/* Tags and links as one slim line (status and owner now live on board tasks). */}
+            <div className="page-meta">
+              <div className="page-meta-group">
+                <span className="page-meta-key">Tags</span>
                 <span className="tags">
                   {active.tags.map((t) => (
                     <span key={t} className={"tag" + (canEdit ? " tag-editable" : "")}>
@@ -1357,8 +1273,8 @@ function DocPageInner() {
                   )}
                 </span>
               </div>
-              <div className="meta-row">
-                <span className="meta-key">Links to</span>
+              <div className="page-meta-group">
+                <span className="page-meta-key">Links</span>
                 <span className="links">
                   {active.links.map((id) => {
                     // Canvas links are stored as "canvas:<id>"; page links are bare ids.

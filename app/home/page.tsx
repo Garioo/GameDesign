@@ -28,7 +28,7 @@ import { listRecentCommentMeta, type CommentMetaRow } from "@/lib/commentsRepo";
 import { loadBoards, loadCompletions, type Board } from "@/lib/boardRepo";
 import type { StatsPeriod } from "@/lib/teamStats";
 import { myTasks } from "@/lib/myWork";
-import { STATUS_LABEL, type DesignDoc, type Status } from "@/app/doc/data";
+import type { DesignDoc } from "@/app/doc/data";
 import { stripInlineHtml } from "@/app/doc/mentions";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
@@ -76,19 +76,6 @@ const Bubble = ({ className }: IconProps) => (
   </svg>
 );
 
-const STATUS_CLASS: Record<Status, string> = {
-  todo: styles.statusTodo,
-  wip: styles.statusWip,
-  review: styles.statusReview,
-  done: styles.statusDone,
-};
-/* legend dot colors for the hero's pages-by-status line ("to do" isn't shown) */
-const SEG_CLASS: Partial<Record<Status, string>> = {
-  wip: styles.segWip,
-  review: styles.segReview,
-  done: styles.segDone,
-};
-
 function timeOfDayGreeting(): string {
   const h = new Date().getHours();
   if (h < 5) return "Up late";
@@ -117,11 +104,6 @@ interface RecentPage {
   id: string;
   title: string;
   group: string;
-  status: Status;
-  owner: string;
-  ownerName: string;
-  ownerColor: string;
-  ownerId?: string;
   updatedAt?: string;
 }
 interface ForYouPage extends RecentPage {
@@ -140,10 +122,9 @@ interface MeDisplay {
   color: string;
 }
 interface Snapshot {
-  v: 2;
+  v: 3;
   me: MeDisplay | null;
   docCount: number;
-  statusCounts: Record<Status, number>;
   recent: RecentPage[];
   forYou: ForYouPage[];
   todos: TodoItem[];
@@ -159,7 +140,7 @@ function readSnapshot(workspaceId: string): Snapshot | null {
     const raw = localStorage.getItem(snapshotKey(workspaceId));
     if (!raw) return null;
     const snap = JSON.parse(raw) as Snapshot;
-    return snap?.v === 2 ? snap : null;
+    return snap?.v === 3 ? snap : null;
   } catch {
     return null;
   }
@@ -200,17 +181,10 @@ function buildSnapshot(
     id: d.id,
     title: d.title,
     group: d.group,
-    status: d.status,
-    owner: d.owner,
-    ownerName: d.ownerName,
-    ownerColor: d.ownerColor,
-    ownerId: d.ownerId,
     updatedAt: d.updatedAt,
   });
   const recent = sorted.slice(0, 12).map(toRecent);
 
-  const statusCounts: Record<Status, number> = { todo: 0, wip: 0, review: 0, done: 0 };
-  for (const d of docs) statusCounts[d.status] += 1;
 
   // Pages with recent comments from teammates (not your own echoes).
   const cutoff = Date.now() - ACTIVITY_WINDOW_MS;
@@ -243,10 +217,9 @@ function buildSnapshot(
     }
   }
   return {
-    v: 2,
+    v: 3,
     me,
     docCount: docs.length,
-    statusCounts,
     recent,
     forYou: forYou.slice(0, 12),
     todos: todos.slice(0, 30),
@@ -277,7 +250,7 @@ export default function HomeDashboard() {
   const [scorePeriod, setScorePeriod] = useState<StatsPeriod>("week");
   const [cached, setCached] = useState<Snapshot | null>(null);
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
-  const [recentFilter, setRecentFilter] = useState<"all" | "mine" | "foryou">("all");
+  const [recentFilter, setRecentFilter] = useState<"all" | "foryou">("all");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -499,20 +472,12 @@ export default function HomeDashboard() {
     }
   };
 
-  const recentMine =
-    session && snap
-      ? snap.recent.filter((r) => r.ownerId === session.userId)
-      : [];
   const recentShown: (RecentPage | ForYouPage)[] = (
-    recentFilter === "foryou"
-      ? (snap?.forYou ?? [])
-      : recentFilter === "mine" && session
-        ? recentMine
-        : (snap?.recent ?? [])
+    recentFilter === "foryou" ? (snap?.forYou ?? []) : (snap?.recent ?? [])
   ).slice(0, RECENT_SHOWN);
 
-  // "Continue" jumps to your own latest page, falling back to the team's.
-  const continuePage = recentMine[0] ?? snap?.recent[0];
+  // "Continue" jumps to the most recently edited page.
+  const continuePage = snap?.recent[0];
 
   return (
     <div className={styles.page}>
@@ -609,21 +574,6 @@ export default function HomeDashboard() {
                 </>
               )}
             </div>
-            {snap.docCount > 0 && (
-              <p className={styles.statusLegend} aria-label="Pages by status">
-                {(["wip", "review", "done"] as Status[])
-                  .filter((s) => snap.statusCounts[s] > 0)
-                  .map((s) => (
-                    <span key={s} className={styles.legendItem}>
-                      <span
-                        className={`${styles.legendDot} ${SEG_CLASS[s]}`}
-                        aria-hidden="true"
-                      />
-                      {snap.statusCounts[s]} {STATUS_LABEL[s].toLowerCase()}
-                    </span>
-                  ))}
-              </p>
-            )}
           </header>
 
           <div className={styles.columns}>
@@ -643,15 +593,6 @@ export default function HomeDashboard() {
                         onClick={() => setRecentFilter("all")}
                       >
                         All
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.filterBtn} ${
-                          recentFilter === "mine" ? styles.filterOn : ""
-                        }`}
-                        onClick={() => setRecentFilter("mine")}
-                      >
-                        Mine
                       </button>
                       <button
                         type="button"
@@ -676,9 +617,7 @@ export default function HomeDashboard() {
                 <div className={styles.recentList}>
                   {recentShown.length === 0 ? (
                     <p className={styles.empty}>
-                      {recentFilter === "mine" ? (
-                        <>No pages assigned to you yet.</>
-                      ) : recentFilter === "foryou" ? (
+                      {recentFilter === "foryou" ? (
                         <>No new comments.</>
                       ) : (
                         <>
@@ -708,20 +647,7 @@ export default function HomeDashboard() {
                             <Bubble className={styles.commentBubble} />
                             {d.commentCount}
                           </span>
-                        ) : (
-                          <span className={`${styles.statusPill} ${STATUS_CLASS[d.status]}`}>
-                            {STATUS_LABEL[d.status]}
-                          </span>
-                        )}
-                        <span
-                          className={`${styles.recentOwner} ${
-                            d.ownerId && onlineIds.has(d.ownerId) ? styles.online : ""
-                          }`}
-                          style={{ background: d.ownerColor }}
-                          title={d.ownerName}
-                        >
-                          {d.owner}
-                        </span>
+                        ) : null}
                         <span className={styles.recentWhen}>
                           {timeAgo("lastCommentAt" in d ? d.lastCommentAt : d.updatedAt)}
                         </span>

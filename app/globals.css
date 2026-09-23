@@ -145,8 +145,7 @@ body {
 /* the editable surfaces carry their own (inset) focus treatment */
 .editable:focus-visible,
 .blk-text:focus-visible,
-.tbl-cell:focus-visible,
-.status-select:focus-visible {
+.tbl-cell:focus-visible {
   outline: none;
 }
 

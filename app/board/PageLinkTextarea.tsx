@@ -6,17 +6,21 @@ import type { MentionTarget } from "@/app/doc/mentions";
 import {
   decodePageLinksForEditing,
   encodeEditedPageLinks,
+  linkIconName,
   type PageLink,
 } from "@/lib/pageLinks";
+import { toggleInlineMarker } from "@/lib/inlineMarkdown";
 import styles from "./PageLinkTextarea.module.css";
 
 // "[[query" anywhere, or "@query" at the start / after whitespace.
 const TRIGGER_RE = /(?:\[\[|(?:^|\s)@)([^[\]@\n]{0,40})$/;
 
 /**
- * A textarea where typing "[[" or "@" opens a list of pages, canvases and sections.
- * Picking one inserts `[[Title]]`; `value` / `onChange` carry the stored
- * `[[Title]](<ref>)` form (lib/pageLinks.ts).
+ * A textarea where typing "[[" or "@" opens a list of link targets (pages,
+ * sections, canvases, boards, tasks — whatever `targets` holds). Picking one
+ * inserts `[[Title]]`; `value` / `onChange` carry the stored `[[Title]](<ref>)`
+ * form (lib/pageLinks.ts). With `formatShortcuts`, ⌘B / ⌘I wrap the selection
+ * in **bold** / _italic_ (lib/inlineMarkdown.ts).
  */
 export default function PageLinkTextarea({
   value,
@@ -24,12 +28,20 @@ export default function PageLinkTextarea({
   targets,
   className,
   placeholder,
+  formatShortcuts = false,
+  rows,
+  maxLength,
+  hint = "Type [[ or @ to link a page, section, canvas, board or task.",
 }: {
   value: string;
   onChange: (value: string) => void;
   targets: MentionTarget[];
   className?: string;
   placeholder?: string;
+  formatShortcuts?: boolean;
+  rows?: number;
+  maxLength?: number;
+  hint?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ start: number; query: string; index: number } | null>(null);
@@ -73,11 +85,21 @@ export default function PageLinkTextarea({
         className={className}
         value={shown}
         placeholder={placeholder}
+        rows={rows}
+        maxLength={maxLength}
         onChange={(e) => {
           emit(e.target.value);
           readTrigger(e.target.value, e.target.selectionStart);
         }}
         onKeyDown={(e) => {
+          if (formatShortcuts && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && ["b", "i"].includes(e.key.toLowerCase())) {
+            e.preventDefault();
+            const el = e.currentTarget;
+            const next = toggleInlineMarker(el.value, el.selectionStart, el.selectionEnd, e.key.toLowerCase() === "b" ? "**" : "_");
+            emit(next.value);
+            requestAnimationFrame(() => el.setSelectionRange(next.start, next.end));
+            return;
+          }
           if (!menu || matches.length === 0) return;
           if (e.key === "ArrowDown") { e.preventDefault(); setMenu({ ...menu, index: (menu.index + 1) % matches.length }); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setMenu({ ...menu, index: (menu.index - 1 + matches.length) % matches.length }); }
@@ -86,7 +108,7 @@ export default function PageLinkTextarea({
         }}
         onBlur={() => setTimeout(() => setMenu(null), 120)} // after a mousedown pick registers
       />
-      <p className={styles.hint}>Type [[ or @ to link a page, canvas or section.</p>
+      {hint && <p className={styles.hint}>{hint}</p>}
       {menu && matches.length > 0 && (
         <div className={styles.menu} role="listbox" aria-label="Link a page">
           {matches.map((t, i) => (
@@ -98,7 +120,7 @@ export default function PageLinkTextarea({
               className={`${styles.option}${i === menu.index ? ` ${styles.optionActive}` : ""}`}
               onMouseDown={(e) => { e.preventDefault(); pick(t); }}
             >
-              <Icon name={t.kind === "canvas" ? "grid" : t.kind === "section" ? "folder" : "file"} className={styles.optionIcon} />
+              <Icon name={linkIconName(t.ref)} className={styles.optionIcon} />
               <span className={styles.optionTitle}>{t.title}</span>
               <span className={styles.optionGroup}>{t.group}</span>
             </button>

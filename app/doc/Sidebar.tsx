@@ -306,7 +306,6 @@ export default function Sidebar({
               <Dots className="row-dots-icon" />
             </button>
           )}
-          <span className={"nav-status status-" + doc.status} />
           {menu?.kind === "page" && menu.id === doc.id && (
             <div className="row-menu" onClick={(e) => e.stopPropagation()}>
               <button onMouseDown={(e) => { e.preventDefault(); startRename("page", doc.id, doc.title); }}>

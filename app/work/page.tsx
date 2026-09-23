@@ -7,12 +7,10 @@ import { useRouter } from "next/navigation";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import { loadBoards, moveCard, setCardPriority, type Board } from "@/lib/boardRepo";
 import { boardColor } from "@/lib/boardColors";
-import { listMembers, loadWorkspace, saveBlocks, type ProfileInfo } from "@/lib/docsRepo";
+import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
 import { listNotifications, markNotificationRead, notificationVerb, type NotificationRow } from "@/lib/notificationsRepo";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { groupByPriority, myTasks, priorityKey, type MyTask, type PriorityKey } from "@/lib/myWork";
-import type { DesignDoc } from "@/app/doc/data";
-import { stripInlineHtml } from "@/app/doc/mentions";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
@@ -36,32 +34,10 @@ function timeAgo(iso: string): string {
 
 const cardHref = (t: MyTask) => `/board?board=${encodeURIComponent(t.board.id)}&card=${encodeURIComponent(t.card.id)}`;
 
-interface Todo {
-  pageId: string;
-  pageTitle: string;
-  blockId: string;
-  text: string;
-}
-
-/** Open to-do blocks on pages the user owns. */
-function myTodos(docs: DesignDoc[], userId: string): Todo[] {
-  const out: Todo[] = [];
-  for (const d of docs) {
-    if (d.ownerId !== userId) continue;
-    for (const b of d.blocks) {
-      if (b.type !== "todo" || b.checked) continue;
-      const text = stripInlineHtml(b.text);
-      if (text) out.push({ pageId: d.id, pageTitle: d.title, blockId: b.id, text });
-    }
-  }
-  return out;
-}
-
 export default function MyWorkPage() {
   const router = useRouter();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [boards, setBoards] = useState<Board[] | null>(null);
-  const [docs, setDocs] = useState<DesignDoc[]>([]);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [members, setMembers] = useState<ProfileInfo[]>([]);
   // Whose work is shown: yourself by default, or any member (?person=<id>).
@@ -78,14 +54,13 @@ export default function MyWorkPage() {
       if (!s) { router.replace("/login"); return; }
       if (!s.onboarded || !s.workspaceId) { router.replace("/onboarding"); return; }
       setSession(s);
-      const [b, d, n, m] = await Promise.all([
+      const [b, n, m] = await Promise.all([
         loadBoards(s.workspaceId),
-        loadWorkspace(s.workspaceId),
         listNotifications(s.workspaceId).catch(() => [] as NotificationRow[]),
         listMembers(s.workspaceId).catch(() => [] as ProfileInfo[]),
       ]);
       if (cancelled) return;
-      setBoards(b); setDocs(d); setNotifications(n); setMembers(m);
+      setBoards(b); setNotifications(n); setMembers(m);
       const wanted = new URLSearchParams(window.location.search).get("person");
       if (wanted && m.some((p) => p.id === wanted)) setPersonId(wanted);
     })().catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
@@ -124,7 +99,6 @@ export default function MyWorkPage() {
   const open = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
   const groups = groupByPriority(open);
-  const todos = useMemo(() => (viewingId ? myTodos(docs, viewingId) : []), [docs, viewingId]);
   const unread = notifications.filter((n) => !n.read_at);
 
   async function changeStage(t: MyTask, columnId: string) {
@@ -162,20 +136,6 @@ export default function MyWorkPage() {
       setBoards(await loadBoards(workspaceId));
     } finally {
       setBusy(null);
-    }
-  }
-
-  async function completeTodo(t: Todo) {
-    const doc = docs.find((d) => d.id === t.pageId);
-    if (!doc) return;
-    const blocks = doc.blocks.map((b) => (b.id === t.blockId ? { ...b, checked: true } : b));
-    const prev = docs;
-    setDocs(docs.map((d) => (d.id === t.pageId ? { ...d, blocks } : d)));
-    try {
-      await saveBlocks(t.pageId, blocks);
-    } catch (e) {
-      console.error(e);
-      setDocs(prev);
     }
   }
 
@@ -274,7 +234,7 @@ export default function MyWorkPage() {
 
         {error && <p role="alert" className={styles.error}>{error}<button type="button" onClick={() => setError("")}>Dismiss</button></p>}
 
-        <div className={styles.columns}>
+        <div className={`${styles.columns}${isMe ? "" : ` ${styles.columnsSolo}`}`}>
           <section className={styles.tasks} aria-label={isMe ? "My tasks" : `${personName}’s tasks`}>
             {boards === null && <div className={styles.skeleton} />}
             {boards !== null && open.length === 0 && (
@@ -307,9 +267,9 @@ export default function MyWorkPage() {
             )}
           </section>
 
-          <aside className={styles.rail}>
-            {/* Notifications are private, so this panel is only ever your own. */}
-            {isMe && <section className={styles.panel} aria-label="Mentions and assignments">
+          {/* Notifications are private, so this panel is only ever your own. */}
+          {isMe && <aside className={styles.rail}>
+            <section className={styles.panel} aria-label="Mentions and assignments">
               <h2 className={styles.panelHead}>
                 Mentions &amp; assignments
                 {unread.length > 0 && <span className={styles.count}>{unread.length}</span>}
@@ -332,38 +292,8 @@ export default function MyWorkPage() {
                   ))}
                 </ul>
               )}
-            </section>}
-
-            <section className={styles.panel} aria-label={isMe ? "My open to-dos" : `${personName}’s open to-dos`}>
-              <h2 className={styles.panelHead}>
-                {isMe ? "To-dos on my pages" : `To-dos on ${personName}’s pages`}
-                {todos.length > 0 && <span className={styles.count}>{todos.length}</span>}
-              </h2>
-              {todos.length === 0 ? (
-                <p className={styles.muted}>{isMe ? "No open to-dos on pages you own." : `No open to-dos on pages ${personName} owns.`}</p>
-              ) : (
-                <ul className={styles.plainList}>
-                  {todos.slice(0, 12).map((t) => (
-                    <li key={t.blockId} className={styles.todo}>
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={false}
-                        aria-label={`Complete “${t.text}”`}
-                        className={styles.todoCheck}
-                        disabled={!canEdit}
-                        onClick={() => void completeTodo(t)}
-                      />
-                      <span className={styles.todoText}>
-                        {t.text}
-                        <Link href={`/doc?page=${t.pageId}`} className={styles.todoPage}>{t.pageTitle}</Link>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </section>
-          </aside>
+          </aside>}
         </div>
       </main>
 

@@ -1,5 +1,5 @@
 import type { DesignDoc } from "@/app/doc/data";
-import { stripPageLinks } from "./pageLinks";
+import { plainLinkedText } from "./pageLinks";
 import { loadBoards } from "./boardRepo";
 import { listCalendarEvents } from "./calendarEventsRepo";
 import { listCanvases } from "./canvasRepo";
@@ -70,7 +70,7 @@ export async function loadSearchIndex(workspaceId: string, { skipPages = false }
           kind: "card",
           title: card.title || "Untitled task",
           hint: `${b.name} · ${col.name}`,
-          body: [card.sub ? stripPageLinks(card.sub) : "", card.tags.join(" ")].filter(Boolean).join("\n"),
+          body: [card.sub ? plainLinkedText(card.sub) : "", card.tags.join(" ")].filter(Boolean).join("\n"),
           href: `/board?board=${board}&card=${encodeURIComponent(card.id)}`,
         });
       }
@@ -82,7 +82,7 @@ export async function loadSearchIndex(workspaceId: string, { skipPages = false }
       kind: "event",
       title: e.title,
       hint: e.end_date && e.end_date !== e.date ? `${e.date} → ${e.end_date}` : e.date,
-      body: [e.location, e.notes].filter(Boolean).join("\n"),
+      body: [e.location, e.notes ? plainLinkedText(e.notes) : ""].filter(Boolean).join("\n"),
       href: `/calendar?date=${e.date}`,
     });
   }

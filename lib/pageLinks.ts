@@ -1,14 +1,16 @@
 /* ---------------------------------------------------------------------------
- * Links to pages, canvases and sections inside plain-text fields (board task
- * descriptions). Stored inline as `[[Title]](<ref>)`, where <ref> is a page
- * id, "canvas:<id>" or "section:<id>" — the same refs page mentions use
- * (app/doc/mentions.ts).
+ * Links to pages, sections, canvases, boards and tasks inside plain-text
+ * fields (task descriptions, calendar notes). Stored inline as
+ * `[[Title]](<ref>)`, where <ref> is a page id or "canvas:", "section:",
+ * "board:" or "task:" + id — the refs app/doc/mentions.ts routes.
  * While editing, the text box shows just `[[Title]]`; the ids are kept aside
  * and put back on save (decodePageLinksForEditing / encodeEditedPageLinks).
  * ------------------------------------------------------------------------- */
 
+import { stripInlineMarkdown } from "./inlineMarkdown";
+
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
-const pageLinkRe = () => new RegExp(`\\[\\[([^\\]\\n]+)\\]\\]\\(((?:canvas:|section:)?${UUID})\\)`, "g");
+const pageLinkRe = () => new RegExp(`\\[\\[([^\\]\\n]+)\\]\\]\\(((?:canvas:|section:|board:|task:)?${UUID})\\)`, "g");
 
 export interface PageLink {
   title: string;
@@ -45,6 +47,11 @@ export function stripPageLinks(text: string): string {
   return text.replace(pageLinkRe(), (_m, title: string) => title);
 }
 
+/** Stored text as plain reading text: link titles, no **bold** / _italic_ markers. */
+export function plainLinkedText(text: string): string {
+  return stripInlineMarkdown(stripPageLinks(text));
+}
+
 /** What the text box shows: `[[Title]]`, plus the links it stood for. */
 export function decodePageLinksForEditing(text: string): { text: string; links: PageLink[] } {
   const links: PageLink[] = [];
@@ -66,4 +73,13 @@ export function encodeEditedPageLinks(text: string, links: PageLink[]): string {
     const ref = byTitle.get(title);
     return ref ? encodePageLink(title, ref) : whole;
   });
+}
+
+/** Icon for a link ref (names from app/components/Icon.tsx). */
+export function linkIconName(ref: string): "file" | "grid" | "folder" | "board" | "task" {
+  if (ref.startsWith("canvas:")) return "grid";
+  if (ref.startsWith("section:")) return "folder";
+  if (ref.startsWith("board:")) return "board";
+  if (ref.startsWith("task:")) return "task";
+  return "file";
 }
