@@ -292,6 +292,21 @@ const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 export const cleanSectionColor = (value: unknown): string | null =>
   typeof value === "string" && HEX_COLOR_RE.test(value) ? value : null;
 
+/** Live pages as link targets (id, title, section name) — no page bodies. */
+export async function listPageTargets(workspaceId: string): Promise<{ id: string; title: string; group: string }[]> {
+  const [pages, sections] = await Promise.all([
+    supabase.from("pages").select("id, title, section_id").eq("project_id", workspaceId).is("deleted_at", null).order("title"),
+    supabase.from("sections").select("id, name").eq("project_id", workspaceId),
+  ]);
+  if (pages.error) throw new Error(`listPageTargets failed: ${pages.error.message}`);
+  const names = new Map(((sections.data ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
+  return ((pages.data ?? []) as { id: string; title: string | null; section_id: string | null }[]).map((p) => ({
+    id: p.id,
+    title: p.title || "Untitled page",
+    group: (p.section_id && names.get(p.section_id)) || "Pages",
+  }));
+}
+
 /** List the workspace sections, ordered. */
 export async function listSections(workspaceId: string): Promise<SectionInfo[]> {
   const { data, error } = await supabase

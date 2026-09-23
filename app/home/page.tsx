@@ -46,25 +46,6 @@ const ArrowRight = ({ className }: IconProps) => (
     <path d="M5 12h14M13 6l6 6-6 6" />
   </svg>
 );
-const Doc = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <path d="M14 2v6h6M8 13h8M8 17h6" />
-  </svg>
-);
-const Shapes = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z" />
-    <rect x="3" y="14" width="7" height="7" rx="1" />
-    <circle cx="17.5" cy="17.5" r="3.5" />
-  </svg>
-);
-const Columns = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <path d="M9 3v18M15 3v18" />
-  </svg>
-);
 const Check = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M5 13l4 4L19 7" />
@@ -559,11 +540,6 @@ export default function HomeDashboard() {
               <span className={`${styles.skeleton} ${styles.skelStat}`} />
             </div>
           </header>
-          <div className={styles.destinations}>
-            <span className={`${styles.skeleton} ${styles.skelCard}`} />
-            <span className={`${styles.skeleton} ${styles.skelCard}`} />
-            <span className={`${styles.skeleton} ${styles.skelCard}`} />
-          </div>
           <div className={styles.columns}>
             <span className={`${styles.skeleton} ${styles.skelList}`} />
             <span className={`${styles.skeleton} ${styles.skelRail}`} />
@@ -649,51 +625,6 @@ export default function HomeDashboard() {
               </p>
             )}
           </header>
-
-          <nav className={styles.destinations}>
-            <Link href="/doc" className={styles.dest}>
-              <div className={styles.destHead}>
-                <span className={styles.destIcon}>
-                  <Doc />
-                </span>
-                <span className={styles.destNo}>
-                  <ArrowRight className={styles.destArrow} />
-                </span>
-              </div>
-              <h2 className={styles.destTitle}>Docs</h2>
-              <p className={styles.destBody}>
-                Pages for notes, specs and plans.
-              </p>
-            </Link>
-            <Link href="/doc/canvas" className={styles.dest}>
-              <div className={styles.destHead}>
-                <span className={styles.destIcon}>
-                  <Shapes />
-                </span>
-                <span className={styles.destNo}>
-                  <ArrowRight className={styles.destArrow} />
-                </span>
-              </div>
-              <h2 className={styles.destTitle}>Canvas</h2>
-              <p className={styles.destBody}>
-                A shared whiteboard for diagrams and sketches.
-              </p>
-            </Link>
-            <Link href="/board" className={styles.dest}>
-              <div className={styles.destHead}>
-                <span className={styles.destIcon}>
-                  <Columns />
-                </span>
-                <span className={styles.destNo}>
-                  <ArrowRight className={styles.destArrow} />
-                </span>
-              </div>
-              <h2 className={styles.destTitle}>Board</h2>
-              <p className={styles.destBody}>
-                Tasks organised into stages, with owners and due dates.
-              </p>
-            </Link>
-          </nav>
 
           <div className={styles.columns}>
             <div className={styles.main}>

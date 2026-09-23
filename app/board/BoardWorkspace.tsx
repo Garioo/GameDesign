@@ -27,7 +27,10 @@ import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
-import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
+import { listMembers, listPageTargets, type ProfileInfo } from "@/lib/docsRepo";
+import { mentionHref, type MentionTarget } from "@/app/doc/mentions";
+import { splitPageLinks, stripPageLinks } from "@/lib/pageLinks";
+import PageLinkTextarea from "./PageLinkTextarea";
 import {
   boardEndDate,
   copyBoard,
@@ -471,7 +474,7 @@ function Card({ card, people, subtasks, onDragStart, onDragEnd, dropState, onCli
         </div>
       )}
       <div className="card-title">{card.title}</div>
-      {card.sub && <div className="card-sub">{card.sub}</div>}
+      {card.sub && <div className="card-sub">{stripPageLinks(card.sub)}</div>}
       <div className="card-foot">
         <div className="card-owner">
           {owners.length > 0 ? (
@@ -634,6 +637,8 @@ type CardModalProps = {
   onSave: (card: CardData, snapshot: ScheduleSnapshot) => Promise<void>;
   onDelete: (card: CardData) => void;
   onMakeCanvas: (card: CardData, existingCanvasId?: string) => Promise<void>;
+  /** Pages and canvases a description can link to (also used for current titles). */
+  linkTargets: MentionTarget[];
 };
 
 /** Task dialog: a read-only view by default; editors switch to the form with Edit. */
@@ -736,7 +741,7 @@ function CardModal(props: CardModalProps) {
               <div className={cardStyles.section}>
                 <div className="modal-label">Description</div>
                 {card.sub
-                  ? <p className={cardStyles.description}><Linkified text={card.sub} /></p>
+                  ? <p className={cardStyles.description}><Linkified text={card.sub} targets={props.linkTargets} /></p>
                   : canEdit
                     ? <button type="button" className={cardStyles.linkBtn} onClick={() => setEditing(true)}><Icon name="plus" /> Add a description</button>
                     : <p className={cardStyles.muted}>No description.</p>}
@@ -782,13 +787,20 @@ function CardModal(props: CardModalProps) {
 }
 
 /** Turns bare http(s) URLs in plain text into links. */
-function Linkified({ text }: { text: string }) {
-  return <>{text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
-    i % 2 ? <a key={i} href={part} target="_blank" rel="noopener noreferrer">{part}</a> : part)}</>;
+/** A description with its page/canvas links and web URLs made clickable. */
+function Linkified({ text, targets = [] }: { text: string; targets?: MentionTarget[] }) {
+  const titleOf = new Map(targets.map((t) => [t.ref, t.title]));
+  return <>{splitPageLinks(text).map((seg, i) => seg.link
+    ? <Link key={i} href={mentionHref(seg.link.ref)} className={cardStyles.pageLink}>
+        <Icon name={seg.link.ref.startsWith("canvas:") ? "grid" : "file"} />
+        {titleOf.get(seg.link.ref) ?? seg.link.title}
+      </Link>
+    : seg.text.split(/(https?:\/\/[^\s]+)/g).map((part, j) =>
+        j % 2 ? <a key={`${i}-${j}`} href={part} target="_blank" rel="noopener noreferrer">{part}</a> : part))}</>;
 }
 
 /** The editable form, mounted fresh on each Edit so it starts from the latest task data. */
-function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, canEdit, boards, onDone }: CardModalProps & { onDone: () => void }) {
+function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, canEdit, boards, linkTargets, onDone }: CardModalProps & { onDone: () => void }) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
@@ -841,7 +853,7 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
         </div>
         <div className="modal-field">
           <label className="modal-label">Description</label>
-          <textarea className="modal-textarea" value={sub} onChange={(e) => setSub(e.target.value)} />
+          <PageLinkTextarea className="modal-textarea" value={sub} onChange={setSub} targets={linkTargets} />
         </div>
         <div className="modal-field">
           <label className="modal-label">Tags</label>
@@ -938,6 +950,7 @@ export default function BoardWorkspace() {
   const isCalendar = pathname.startsWith("/calendar");
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
+  const [linkTargets, setLinkTargets] = useState<MentionTarget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [online, setOnline] = useState<{ key: string; name: string; initials: string; color: string }[]>([]);
@@ -961,6 +974,24 @@ export default function BoardWorkspace() {
   const combined = allBoards && boards.length > 1;
   const [filterKind, setFilterKind] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
+  // Pages and canvases a task description can link to; reloaded whenever a
+  // task opens so newly created pages show up.
+  const openCardId = editingCard?.id ?? null;
+  useEffect(() => {
+    const ws = session?.workspaceId;
+    if (!ws || !openCardId) return;
+    let active = true;
+    Promise.all([listPageTargets(ws), listCanvases(ws)])
+      .then(([pages, canvases]) => {
+        if (!active) return;
+        setLinkTargets([
+          ...pages.map((p): MentionTarget => ({ ref: p.id, title: p.title, group: p.group, kind: "page" })),
+          ...canvases.map((c): MentionTarget => ({ ref: `canvas:${c.id}`, title: c.name, group: "Canvas", kind: "canvas" })),
+        ]);
+      })
+      .catch(console.error);
+    return () => { active = false; };
+  }, [session?.workspaceId, openCardId]);
   const drag = useRef<{ cardId: string | null; srcColId: string | null }>({ cardId: null, srcColId: null });
   const [dragState, setDragState] = useState<DragInfo | null>(null);
   const wsRef = useRef<string | null>(null);
@@ -1168,7 +1199,7 @@ export default function BoardWorkspace() {
     const params = new URLSearchParams({ c: canvas.id });
     if (canvas.created) {
       const lines = [card.title];
-      if (card.sub) lines.push("", card.sub);
+      if (card.sub) lines.push("", stripPageLinks(card.sub));
       const meta = [card.kind, ...(card.tags ?? [])].filter(Boolean).map(t => "#" + t).join("  ");
       if (meta) lines.push("", meta);
       params.set("note", lines.join("\n"));
@@ -1460,6 +1491,7 @@ export default function BoardWorkspace() {
             onSave={handleSaveCard}
             onDelete={handleDeleteCard}
             onMakeCanvas={handleMakeCanvas}
+            linkTargets={linkTargets}
           />
         )}
       </div>

@@ -31,6 +31,40 @@
   height: 2px;
   background: var(--ember);
 }
+/* person picker: whose work is shown */
+.people {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.personChip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.personChip:hover { background: var(--line-soft); color: var(--ink); }
+.personChip:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.personOn,
+.personOn:hover {
+  border-color: var(--ember);
+  background: var(--ember-tint);
+  color: var(--ink);
+}
+
 .eyebrow {
   margin: 0 0 8px;
   font-size: var(--text-xs);

@@ -80,6 +80,13 @@
 
 /* meta card */
 .meta-card {
+  /* Its entrance animation makes it a stacking context, which traps the owner /
+     link menus' z-index inside it; the blocks below animate too and would paint
+     over those menus. Lift the whole card above the page text — and above the
+     floating dock (40) so long menus stay clickable, but under the drawer
+     backdrop (44) on small screens. */
+  position: relative;
+  z-index: 41;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-2xl);

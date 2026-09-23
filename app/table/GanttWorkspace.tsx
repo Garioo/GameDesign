@@ -51,6 +51,15 @@ type Drag = {
   phase: Phase;
   snapshot: PhaseSnapshot;
 };
+/** Drawing dates onto an unscheduled phase: the day the drag began and the day under the pointer. */
+type Draft = {
+  id: string;
+  anchor: number;
+  current: number;
+  x: number;
+  moved: boolean;
+  snapshot: PhaseSnapshot;
+};
 /** `shown` lists the board ids to show; `null` means every phase, `[]` means none. */
 type Preferences = {
   shown: string[] | null;
@@ -249,6 +258,8 @@ export default function GanttWorkspace() {
   const [gap, setGap] = useState(0);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const draftRef = useRef<Draft | null>(null);
   const mutationRef = useRef(false);
   const refreshSequence = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -352,7 +363,7 @@ export default function GanttWorkspace() {
       "phase_dependencies",
     ],
     async () => {
-      if (session && !mutationRef.current && !dragRef.current)
+      if (session && !mutationRef.current && !dragRef.current && !draftRef.current)
         await refresh(session.workspaceId);
     },
   );
@@ -500,6 +511,38 @@ export default function GanttWorkspace() {
         d.snapshot,
       );
   }
+  // Unscheduled phases: press on the empty track and drag to draw its dates.
+  const dayAt = (e: PointerEvent<HTMLElement>) =>
+    first + Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left) / preferences.zoom);
+  function startDraft(e: PointerEvent<HTMLElement>, phase: Phase) {
+    if (!canEdit || busy || !snapshot || e.button !== 0 || (phase.effective_start && phase.effective_end)) return;
+    if ((e.target as HTMLElement).closest("button")) return; // the "Set dates" button opens the editor instead
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const day = dayAt(e);
+    const next = { id: phase.id, anchor: day, current: day, x: e.clientX, moved: false, snapshot };
+    draftRef.current = next;
+    setDraft(next);
+  }
+  function moveDraft(e: PointerEvent<HTMLElement>) {
+    const d = draftRef.current;
+    if (!d) return;
+    const next = { ...d, current: dayAt(e), moved: d.moved || Math.abs(e.clientX - d.x) > 4 };
+    draftRef.current = next;
+    setDraft(next);
+  }
+  function endDraft() {
+    const d = draftRef.current;
+    draftRef.current = null;
+    setDraft(null);
+    // A plain click isn't a drag — don't set dates by accident.
+    if (!d || !d.moved) return;
+    void mutate(
+      { op: "dates", id: d.id, start: dayKey(Math.min(d.anchor, d.current)), end: dayKey(Math.max(d.anchor, d.current)) },
+      d.snapshot,
+    );
+  }
+
   function range(phase: Phase) {
     let start = phase.effective_start ? dayNumber(phase.effective_start) : null,
       end = phase.effective_end ? dayNumber(phase.effective_end) : null;
@@ -947,9 +990,28 @@ export default function GanttWorkspace() {
                         </div>
                       </div>
                       <div
-                        className="phase-track"
+                        className={`phase-track${!r && canEdit ? " phase-track-drawable" : ""}`}
                         style={{ width }}
+                        onPointerDown={r ? undefined : (e) => startDraft(e, p)}
+                        onPointerMove={r ? undefined : moveDraft}
+                        onPointerUp={r ? undefined : endDraft}
+                        onPointerCancel={r ? undefined : () => { draftRef.current = null; setDraft(null); }}
+                        title={!r && canEdit ? "Drag across the timeline to set dates" : undefined}
                       >
+                        {!r && draft?.id === p.id && draft.moved && (
+                          <div
+                            className={`phase-bar phase-draft${!p.category_id ? " phase-parent-bar" : ""}`}
+                            style={{
+                              left: (Math.min(draft.anchor, draft.current) - first) * preferences.zoom,
+                              width: (Math.abs(draft.current - draft.anchor) + 1) * preferences.zoom,
+                            }}
+                            aria-hidden="true"
+                          >
+                            <span className="phase-draft-label">
+                              {dayKey(Math.min(draft.anchor, draft.current))} – {dayKey(Math.max(draft.anchor, draft.current))}
+                            </span>
+                          </div>
+                        )}
                         {r ? (
                           <div
                             className={`phase-bar${!p.category_id ? " phase-parent-bar" : ""}${drag?.id === p.id ? " dragging" : ""}`}
@@ -967,6 +1029,18 @@ export default function GanttWorkspace() {
                               className="phase-bar-fill"
                               style={{ width: `${percent}%` }}
                             />
+                            {/* The part of the bar before today, greyed out and fading into
+                                full colour at the today line. */}
+                            {(() => {
+                              const past = Math.min(r.width, (today - first) * preferences.zoom - r.left);
+                              return past > 0 ? (
+                                <span
+                                  className={`phase-bar-past${past >= r.width ? " is-all-past" : ""}`}
+                                  style={{ width: past + 1 }}
+                                  aria-hidden="true"
+                                />
+                              ) : null;
+                            })()}
                             {canEdit && (
                               <span
                                 className="phase-resize phase-resize-start"
@@ -994,6 +1068,7 @@ export default function GanttWorkspace() {
                             className="phase-unscheduled"
                             disabled={!canEdit || busy}
                             onClick={() => openEditor(p.id)}
+                            title="Or drag across the timeline"
                           >
                             <Icon name="plus" /> Set dates
                           </button>
@@ -1065,7 +1140,7 @@ export default function GanttWorkspace() {
             {busy
               ? "Saving…"
               : canEdit
-                ? "Drag bars to move · Drag edges to resize · Click a title to edit"
+                ? "Drag bars to move · Drag edges to resize · Drag on an empty row to set dates · Click a title to edit"
                 : "View only"}
           </span>
         </p>

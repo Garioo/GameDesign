@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import { loadBoards, moveCard, setCardPriority, type Board } from "@/lib/boardRepo";
 import { boardColor } from "@/lib/boardColors";
-import { loadWorkspace, saveBlocks } from "@/lib/docsRepo";
+import { listMembers, loadWorkspace, saveBlocks, type ProfileInfo } from "@/lib/docsRepo";
 import { listNotifications, markNotificationRead, notificationVerb, type NotificationRow } from "@/lib/notificationsRepo";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { groupByPriority, myTasks, priorityKey, type MyTask, type PriorityKey } from "@/lib/myWork";
@@ -63,6 +63,9 @@ export default function MyWorkPage() {
   const [boards, setBoards] = useState<Board[] | null>(null);
   const [docs, setDocs] = useState<DesignDoc[]>([]);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [members, setMembers] = useState<ProfileInfo[]>([]);
+  // Whose work is shown: yourself by default, or any member (?person=<id>).
+  const [personId, setPersonId] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -75,13 +78,16 @@ export default function MyWorkPage() {
       if (!s) { router.replace("/login"); return; }
       if (!s.onboarded || !s.workspaceId) { router.replace("/onboarding"); return; }
       setSession(s);
-      const [b, d, n] = await Promise.all([
+      const [b, d, n, m] = await Promise.all([
         loadBoards(s.workspaceId),
         loadWorkspace(s.workspaceId),
         listNotifications(s.workspaceId).catch(() => [] as NotificationRow[]),
+        listMembers(s.workspaceId).catch(() => [] as ProfileInfo[]),
       ]);
       if (cancelled) return;
-      setBoards(b); setDocs(d); setNotifications(n);
+      setBoards(b); setDocs(d); setNotifications(n); setMembers(m);
+      const wanted = new URLSearchParams(window.location.search).get("person");
+      if (wanted && m.some((p) => p.id === wanted)) setPersonId(wanted);
     })().catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
   }, [router]);
@@ -95,11 +101,30 @@ export default function MyWorkPage() {
   });
 
   const canEdit = !!session && session.role !== "viewer";
-  const tasks = useMemo(() => (boards && session ? myTasks(boards, session.userId) : []), [boards, session]);
+  const viewingId = personId ?? session?.userId ?? null;
+  const isMe = !!session && viewingId === session.userId;
+  const person = members.find((m) => m.id === viewingId);
+  const personName = isMe ? "you" : person?.name ?? "this member";
+  // You first, then everyone else by name.
+  const people = useMemo(() => {
+    const me = members.find((m) => m.id === session?.userId);
+    const others = members.filter((m) => m.id !== session?.userId).sort((a, b) => a.name.localeCompare(b.name));
+    return me ? [me, ...others] : others;
+  }, [members, session]);
+  const choosePerson = (id: string) => {
+    const next = id === session?.userId ? null : id;
+    setPersonId(next);
+    setShowDone(false);
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("person", next);
+    else url.searchParams.delete("person");
+    window.history.replaceState(window.history.state, "", url);
+  };
+  const tasks = useMemo(() => (boards && viewingId ? myTasks(boards, viewingId) : []), [boards, viewingId]);
   const open = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
   const groups = groupByPriority(open);
-  const todos = useMemo(() => (session ? myTodos(docs, session.userId) : []), [docs, session]);
+  const todos = useMemo(() => (viewingId ? myTodos(docs, viewingId) : []), [docs, viewingId]);
   const unread = notifications.filter((n) => !n.read_at);
 
   async function changeStage(t: MyTask, columnId: string) {
@@ -205,18 +230,39 @@ export default function MyWorkPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar crumbs={["My Work"]} workspaceId={session?.workspaceId}>
+      <TopBar crumbs={isMe || !person ? ["My Work"] : ["My Work", person.name]} workspaceId={session?.workspaceId}>
         <SettingsButton session={session} onSessionChange={setSession} />
       </TopBar>
 
       <main className={styles.shell}>
         <header className={styles.hero}>
-          <p className={styles.eyebrow}>My Work</p>
+          {people.length > 1 && (
+            <div className={styles.people} role="radiogroup" aria-label="Whose work to show">
+              {people.map((p) => {
+                const me = p.id === session?.userId;
+                const on = p.id === viewingId;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={`${styles.personChip}${on ? ` ${styles.personOn}` : ""}`}
+                    onClick={() => choosePerson(p.id)}
+                  >
+                    <span className={styles.avatar} style={{ background: p.color }}>{p.initials}</span>
+                    {me ? "Me" : p.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className={styles.eyebrow}>{isMe ? "My Work" : `${person?.name ?? "Member"}’s work`}</p>
           <h1 className={styles.title}>
             {boards === null
-              ? "Loading your tasks…"
+              ? "Loading tasks…"
               : open.length === 0
-                ? "Nothing assigned to you right now."
+                ? `Nothing assigned to ${personName} right now.`
                 : `${open.length} open ${open.length === 1 ? "task" : "tasks"}`}
           </h1>
           {boards !== null && open.length > 0 && (
@@ -229,11 +275,15 @@ export default function MyWorkPage() {
         {error && <p role="alert" className={styles.error}>{error}<button type="button" onClick={() => setError("")}>Dismiss</button></p>}
 
         <div className={styles.columns}>
-          <section className={styles.tasks} aria-label="My tasks">
+          <section className={styles.tasks} aria-label={isMe ? "My tasks" : `${personName}’s tasks`}>
             {boards === null && <div className={styles.skeleton} />}
             {boards !== null && open.length === 0 && (
               <div className={styles.empty}>
-                <p>When someone assigns you a task on a board, it shows up here, sorted by priority.</p>
+                <p>
+                  {isMe
+                    ? "When someone assigns you a task on a board, it shows up here, sorted by priority."
+                    : `Tasks assigned to ${personName} on a board show up here, sorted by priority.`}
+                </p>
                 <Link href="/board" className={styles.emptyLink}>Go to boards <Icon name="arrowRight" /></Link>
               </div>
             )}
@@ -258,7 +308,8 @@ export default function MyWorkPage() {
           </section>
 
           <aside className={styles.rail}>
-            <section className={styles.panel} aria-label="Mentions and assignments">
+            {/* Notifications are private, so this panel is only ever your own. */}
+            {isMe && <section className={styles.panel} aria-label="Mentions and assignments">
               <h2 className={styles.panelHead}>
                 Mentions &amp; assignments
                 {unread.length > 0 && <span className={styles.count}>{unread.length}</span>}
@@ -281,15 +332,15 @@ export default function MyWorkPage() {
                   ))}
                 </ul>
               )}
-            </section>
+            </section>}
 
-            <section className={styles.panel} aria-label="My open to-dos">
+            <section className={styles.panel} aria-label={isMe ? "My open to-dos" : `${personName}’s open to-dos`}>
               <h2 className={styles.panelHead}>
-                To-dos on my pages
+                {isMe ? "To-dos on my pages" : `To-dos on ${personName}’s pages`}
                 {todos.length > 0 && <span className={styles.count}>{todos.length}</span>}
               </h2>
               {todos.length === 0 ? (
-                <p className={styles.muted}>No open to-dos on pages you own.</p>
+                <p className={styles.muted}>{isMe ? "No open to-dos on pages you own." : `No open to-dos on pages ${personName} owns.`}</p>
               ) : (
                 <ul className={styles.plainList}>
                   {todos.slice(0, 12).map((t) => (

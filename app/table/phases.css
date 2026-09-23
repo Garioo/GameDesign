@@ -330,6 +330,26 @@
   box-shadow: 0 4px 10px #0002;
   z-index: 4;
 }
+/* Past part of a bar (before today): desaturated and dimmed, with a short
+   fade at the today line. A bar entirely in the past has no fade. */
+.phase-bar-past {
+  position: absolute;
+  /* reach over the bar's 1px border so the coloured edge greys out too */
+  inset: -1px auto -1px -1px;
+  border-radius: 4px 0 0 4px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--surface, #fffaf3) 45%, transparent);
+  -webkit-backdrop-filter: grayscale(0.85);
+  backdrop-filter: grayscale(0.85);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.phase-parent-bar .phase-bar-past { bottom: -3px; } /* its thicker underline */
+.phase-bar-past.is-all-past {
+  border-radius: 4px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 .phase-bar-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -372,6 +392,23 @@
 }
 .phase-resize-end {
   right: -2px;
+}
+/* Unscheduled rows: drag across the empty track to draw the phase's dates. */
+.phase-track-drawable { cursor: crosshair; touch-action: none; }
+.phase-draft {
+  pointer-events: none;
+  border-style: dashed;
+  z-index: 4;
+}
+.phase-draft-label {
+  position: sticky;
+  left: calc(var(--phase-label-width, 320px) + 6px);
+  display: inline-block;
+  padding: 6px 13px;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .phase-unscheduled {
   position: sticky;

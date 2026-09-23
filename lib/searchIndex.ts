@@ -1,4 +1,5 @@
 import type { DesignDoc } from "@/app/doc/data";
+import { stripPageLinks } from "./pageLinks";
 import { loadBoards } from "./boardRepo";
 import { listCalendarEvents } from "./calendarEventsRepo";
 import { listCanvases } from "./canvasRepo";
@@ -69,7 +70,7 @@ export async function loadSearchIndex(workspaceId: string, { skipPages = false }
           kind: "card",
           title: card.title || "Untitled task",
           hint: `${b.name} · ${col.name}`,
-          body: [card.sub, card.tags.join(" ")].filter(Boolean).join("\n"),
+          body: [card.sub ? stripPageLinks(card.sub) : "", card.tags.join(" ")].filter(Boolean).join("\n"),
           href: `/board?board=${board}&card=${encodeURIComponent(card.id)}`,
         });
       }
