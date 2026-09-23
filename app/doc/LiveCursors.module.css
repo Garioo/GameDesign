@@ -1,0 +1,116 @@
+/* Other people's carets and selections over the page text (LiveCursors.tsx).
+   Each person's colour comes in as --c. */
+
+/* Positions are measured against this box, so it only needs to sit over the
+   article; it never takes clicks. Under the editor's open menus (42). */
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sel {
+  position: absolute;
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  border-radius: 2px;
+}
+
+.caret {
+  position: absolute;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--c);
+  border-radius: 1px;
+  animation: blink 1.06s steps(1, end) infinite;
+  transition: left 80ms linear, top 80ms linear;
+}
+/* A caret that is moving stays solid, like a real one while typing. */
+.caret.moving {
+  animation: none;
+}
+@keyframes blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+/* Name flag: open while they move, then folds to a small dot on the caret. */
+.tag {
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  width: 6px;
+  height: 6px;
+  margin-bottom: -1px;
+  border-radius: 3px 3px 3px 0;
+  background: var(--c);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: width 140ms ease, height 140ms ease, padding 140ms ease;
+}
+.tagOpen {
+  width: auto;
+  height: 16px;
+  padding: 0 5px;
+}
+
+/* "↑ Mads" / "↓ Mads" at the window edge when a caret is out of view. */
+.edge {
+  position: fixed;
+  z-index: 45; /* over the dock (40), under the top bar (50) */
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+.edgeTop {
+  top: 68px; /* top bar (58) + breathing room */
+}
+.edgeBottom {
+  bottom: 18px;
+}
+.pill {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-menu);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.pill:hover {
+  transform: translateY(-1px);
+}
+.pillDot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c);
+  color: #fff;
+  font-size: 9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+    transition: none;
+  }
+  .tag {
+    transition: none;
+  }
+}

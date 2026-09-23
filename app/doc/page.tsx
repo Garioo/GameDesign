@@ -40,6 +40,7 @@ import TrashDialog from "./TrashDialog";
 import UndoToast from "@/app/components/UndoToast";
 import { HistoryToggle } from "@/app/components/ActivityFeed";
 import Comments from "./Comments";
+import LiveCursors from "./LiveCursors";
 import Settings from "./Settings";
 import {
   getWorkspaceInfo,
@@ -1365,6 +1366,7 @@ function DocPageInner() {
                 scheduleSaveBlocks(active.id, blocks);
               }}
             />
+            <LiveCursors key={active.id} pageId={active.id} me={session} />
           </article>
         </main>
 
