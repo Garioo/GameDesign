@@ -55,5 +55,7 @@ export async function loadFeedEvents(feed: CalendarFeed): Promise<FeedEvent[]> {
     ...event,
     id: `feed:${feed.id}:${uid}:${event.date}`,
     feed: { id: feed.id, label: feed.label },
+    attendees: [],
+    guests: [],
   }));
 }

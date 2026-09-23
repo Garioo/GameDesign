@@ -46,3 +46,38 @@ export function activeMentionQuery(text: string, caret: number): { start: number
   if (between.includes("(")) return null; // already inside a finished token
   return { start: at, query: between };
 }
+
+export interface KnownMention {
+  name: string;
+  userId: string;
+}
+
+/**
+ * What the comment box shows while you write: mention tokens become plain
+ * "@Name", and the people they point at are returned so the text can be
+ * encoded again with encodeEditedMentions.
+ */
+export function decodeMentionsForEditing(body: string): { text: string; mentions: KnownMention[] } {
+  const mentions: KnownMention[] = [];
+  const text = body.replace(PERSON_MENTION_RE, (_m, name: string, userId: string) => {
+    mentions.push({ name, userId });
+    return `@${name}`;
+  });
+  return { text, mentions };
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The inverse of decodeMentionsForEditing: every "@Name" of a known mention
+ * (followed by the end, whitespace or punctuation) becomes its token again.
+ * Longer names go first, so "@Bob Smith" wins over "@Bob".
+ */
+export function encodeEditedMentions(text: string, mentions: KnownMention[]): string {
+  const byName = new Map<string, string>();
+  for (const m of mentions) byName.set(m.name.replace(/[[\]]/g, ""), m.userId);
+  const names = Array.from(byName.keys()).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!names.length) return text;
+  const re = new RegExp(`@(${names.map(escapeRe).join("|")})(?=$|[\\s.,!?;:)\\]'"’])`, "g");
+  return text.replace(re, (_m, name: string) => encodePersonMention(name, byName.get(name)!));
+}

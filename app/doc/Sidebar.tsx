@@ -5,6 +5,7 @@ import LinkedDocuments from "./LinkedDocuments";
 import { useEffect, useState } from "react";
 import type { DesignDoc } from "./data";
 import type { SectionInfo } from "@/lib/docsRepo";
+import Icon from "@/app/components/Icon";
 import "./Sidebar.css";
 
 /* ---------- icons ---------- */
@@ -98,6 +99,26 @@ export default function Sidebar({
   const [renameText, setRenameText] = useState("");
   const [newSectionOpen, setNewSectionOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
+  // Collapsed sections, remembered per workspace in this browser.
+  const collapsedKey = `gd-sidebar-collapsed:${workspaceId}`;
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(collapsedKey) ?? "[]");
+      setCollapsed(new Set(Array.isArray(saved) ? saved.filter((x): x is string => typeof x === "string") : []));
+    } catch {
+      setCollapsed(new Set());
+    }
+  }, [collapsedKey]);
+  const setSectionCollapsed = (id: string, value: boolean) =>
+    setCollapsed((prev) => {
+      if (prev.has(id) === value) return prev;
+      const next = new Set(prev);
+      if (value) next.add(id);
+      else next.delete(id);
+      try { localStorage.setItem(collapsedKey, JSON.stringify([...next])); } catch { /* optional preference */ }
+      return next;
+    });
 
   useEffect(() => {
     if (!menu) return;
@@ -309,6 +330,8 @@ export default function Sidebar({
           const tops = topLevel(sec.id);
           const isRenaming = renaming?.kind === "section" && renaming.id === sec.id;
           const hasPages = docs.some((d) => d.sectionId === sec.id);
+          const pageCount = docs.filter((d) => d.sectionId === sec.id).length;
+          const isCollapsed = collapsed.has(sec.id);
           return (
             <div
               key={sec.id}
@@ -360,14 +383,31 @@ export default function Sidebar({
                     onBlur={commitRename}
                   />
                 ) : (
-                  <span>{sec.name}</span>
+                  <button
+                    type="button"
+                    className="nav-group-toggle"
+                    aria-expanded={!isCollapsed}
+                    title={isCollapsed ? `Show pages in ${sec.name}` : `Hide pages in ${sec.name}`}
+                    onClick={() => setSectionCollapsed(sec.id, !isCollapsed)}
+                  >
+                    <Icon name={isCollapsed ? "chevronRight" : "chevronDown"} className="nav-group-chevron" />
+                    <span className="nav-group-name">{sec.name}</span>
+                    {isCollapsed && (
+                      <span className="nav-group-count" aria-label={`${pageCount} ${pageCount === 1 ? "page" : "pages"}`}>
+                        {pageCount}
+                      </span>
+                    )}
+                  </button>
                 )}
                 {canEdit && (
                 <span className="nav-group-actions">
                   <button
                     className="nav-add"
                     title={`Add page to ${sec.name}`}
-                    onClick={() => onNewPage(sec.id, sec.name)}
+                    onClick={() => {
+                      setSectionCollapsed(sec.id, false);
+                      onNewPage(sec.id, sec.name);
+                    }}
                   >
                     <Plus className="nav-add-icon" />
                   </button>
@@ -406,8 +446,8 @@ export default function Sidebar({
                   </div>
                 )}
               </div>
-              {tops.map((doc) => renderPage(doc, 0))}
-              {tops.length === 0 && <div className="nav-empty">No pages yet</div>}
+              {!isCollapsed && tops.map((doc) => renderPage(doc, 0))}
+              {!isCollapsed && tops.length === 0 && <div className="nav-empty">No pages yet</div>}
             </div>
           );
         })}

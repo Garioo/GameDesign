@@ -52,7 +52,7 @@ export default function CategoryManager({
       <header>
         <div>
           <h2 id="categories-title">Categories</h2>
-          <p>Labels describe the work. Stages describe its progress.</p>
+          <p>Categories group tasks by type. Stages track their progress.</p>
         </div>
         <button disabled={busy} onClick={onClose}>
           Close

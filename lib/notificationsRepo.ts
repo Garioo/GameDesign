@@ -15,7 +15,7 @@ export interface NotificationRow {
   actor_name: string | null;
   actor_initials: string | null;
   actor_color: string | null;
-  kind: "mention" | "assignment" | "reply" | "page_owner";
+  kind: "mention" | "assignment" | "reply" | "page_owner" | "event";
   snippet: string;
   link: string;
   read_at: string | null;
@@ -38,6 +38,7 @@ export function notificationVerb(n: Pick<NotificationRow, "kind" | "link">): str
     case "mention": return onTask ? "mentioned you on a task" : "mentioned you in a comment";
     case "reply": return onTask ? "replied on a task thread" : "replied to a thread you're in";
     case "page_owner": return "made you owner of a page";
+    case "event": return "added you to an event";
     default: return "assigned you a task";
   }
 }

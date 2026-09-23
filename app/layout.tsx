@@ -13,7 +13,7 @@ const hanken = Hanken_Grotesk({
 
 export const metadata: Metadata = {
   title: "Foundry",
-  description: "Your team's living game design document.",
+  description: "A shared workspace for your team's docs, canvases, boards and plans.",
 };
 
 // Tint browser chrome (Safari window band, mobile status bar) to the app's

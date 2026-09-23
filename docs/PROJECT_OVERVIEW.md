@@ -133,6 +133,8 @@ trade-off between "feels instant" and "doesn't hammer the database."
    20. `migrate-activity.sql` — team activity feed (trigger-written `activity` rows) plus `reply` and `page_owner` notifications; apply after `migrate-page-trash.sql` and `migrate-card-comments.sql` (it redefines `trash_page`/`restore_page`).
    21. `migrate-calendar-feeds.sql` — subscribed Moodle calendars on the workspace calendar. The export link is hidden from normal reads (column grants) and read by `/api/calendar-feed` through `calendar_feed_url()`; apply after `migrate-calendar-events.sql`.
    22. `migrate-card-completed-at.sql` — `card_completions` (when each task was finished), kept by triggers as tasks enter/leave done stages; feeds the Team scoreboard on Home. A separate table so the migration never writes `board_cards`, whose guards require a signed-in member. Apply after `migrate-activity.sql` (the backfill reads the activity feed).
+   23. `migrate-event-attendees.sql` — attendees on calendar events: workspace members (who get an `event` notification when added) and outside guests by name. Apply after `migrate-calendar-event-ranges.sql` and `migrate-activity.sql` (it extends the notification kinds).
+   24. `migrate-inline-suggestions.sql` — inline comments and suggested edits on page text: anchor/quote/suggestion columns on `comments` and `settle_suggestion()` (editors accept or reject). Apply after `migrate-card-comments.sql`.
 
    All of them are written to be safe to rerun, so applying the whole list again after a new one
    is added won't touch existing data.

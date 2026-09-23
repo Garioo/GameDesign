@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Icon from "@/app/components/Icon";
 import { deletePageForever, listTrash, restorePage, type TrashedPage } from "@/lib/docsRepo";
 import styles from "./TrashDialog.module.css";
 
@@ -70,7 +71,7 @@ export default function TrashDialog({
             <p className={styles.sub}>Deleted pages are kept for 30 days.</p>
           </div>
           <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
-            ×
+            <Icon name="close" />
           </button>
         </div>
         {error && <div className={styles.error}>{error}</div>}

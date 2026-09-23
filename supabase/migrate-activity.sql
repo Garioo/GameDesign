@@ -267,9 +267,11 @@ grant execute on function public.trash_page(uuid) to authenticated;
 grant execute on function public.restore_page(uuid) to authenticated;
 
 -- ---- notifications: replies and page ownership ----
+-- 'event' belongs to migrate-event-attendees.sql; it's listed here too so
+-- rerunning this file after that one doesn't reject existing event rows.
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check
-  check (kind in ('mention', 'assignment', 'reply', 'page_owner'));
+  check (kind in ('mention', 'assignment', 'reply', 'page_owner', 'event'));
 
 -- Everyone else in the thread (root author + earlier repliers) hears about a
 -- reply, unless this reply already @-mentions them (they get the mention).

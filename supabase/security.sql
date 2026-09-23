@@ -65,9 +65,13 @@ alter table public.canvas_folders add constraint canvas_folders_limits check (
 ) not valid;
 
 -- comments -------------------------------------------------------------------
+-- A suggested edit (migrate-inline-suggestions.sql) may have an empty body:
+-- its note is optional. Kept identical there, so either file can be rerun.
+alter table public.comments add column if not exists suggestion text;
 alter table public.comments drop constraint if exists comments_limits;
 alter table public.comments add constraint comments_limits check (
   char_length(body) between 1 and 5000
+  or (body = '' and suggestion is not null)
 ) not valid;
 
 -- milestones / activity --------------------------------------------------------

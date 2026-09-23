@@ -15,13 +15,8 @@ import {
   type GrantableRole,
   type WorkspaceMember,
 } from "@/lib/workspacesRepo";
+import Icon from "@/app/components/Icon";
 import styles from "./Settings.module.css";
-
-const Flame = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-  </svg>
-);
 
 export default function Settings({
   open,
@@ -204,23 +199,17 @@ export default function Settings({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className={styles.head}>
-          <span className={styles.flame}>
-            <Flame />
-          </span>
-          <div className={styles.headText}>
-            <h2 className={styles.title}>Settings</h2>
-            <p className={styles.tagline}>Who you are around the fire — and the fire itself.</p>
-          </div>
+          <h2 className={styles.title}>Settings</h2>
           <button className={styles.close} title="Close" aria-label="Close" onClick={onClose}>
-            ×
+            <Icon name="close" className={styles.icon} />
           </button>
         </header>
 
         <div className={styles.body}>
-          {/* ---------- identity ---------- */}
-          <section className={`${styles.section} ${styles.s1}`}>
+          {/* ---------- profile ---------- */}
+          <section className={styles.section}>
             <div className={styles.sectionHead}>
-              <h3 className={styles.sectionTitle}>Identity</h3>
+              <h3 className={styles.sectionTitle}>Profile</h3>
               <span className={styles.rule} />
             </div>
 
@@ -284,7 +273,7 @@ export default function Settings({
           </section>
 
           {/* ---------- workspace ---------- */}
-          <section className={`${styles.section} ${styles.s2}`}>
+          <section className={styles.section}>
             <div className={styles.sectionHead}>
               <h3 className={styles.sectionTitle}>Workspace</h3>
               <span className={styles.rule} />
@@ -303,23 +292,23 @@ export default function Settings({
                   />
                 </label>
                 <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Genre</span>
+                  <span className={styles.fieldLabel}>Category</span>
                   <input
                     className={styles.input}
                     value={wsGenre}
                     maxLength={40}
                     onChange={(e) => setWsGenre(e.target.value)}
-                    placeholder="e.g. Cozy survival"
+                    placeholder="e.g. Game, Marketing, Research"
                   />
                 </label>
                 <label className={`${styles.field} ${styles.fieldWide}`}>
-                  <span className={styles.fieldLabel}>Tagline</span>
+                  <span className={styles.fieldLabel}>Description</span>
                   <input
                     className={styles.input}
                     value={wsTagline}
                     maxLength={120}
                     onChange={(e) => setWsTagline(e.target.value)}
-                    placeholder="A one-line pitch…"
+                    placeholder="What this workspace is for"
                   />
                 </label>
                 <label className={`${styles.field} ${styles.fieldWide}`}>
@@ -330,8 +319,8 @@ export default function Settings({
                     onChange={(e) => setWsRepo(e.target.value)}
                     placeholder={
                       repoOptions.length > 0
-                        ? "owner/repo — start typing to search"
-                        : "owner/repo (sign in with GitHub to browse)"
+                        ? "owner/repo"
+                        : "owner/repo — sign in with GitHub to pick from a list"
                     }
                     list="settings-repo-options"
                     spellCheck={false}
@@ -349,7 +338,7 @@ export default function Settings({
           </section>
 
           {/* ---------- members ---------- */}
-          <section className={`${styles.section} ${styles.s3}`}>
+          <section className={styles.section}>
             <div className={styles.sectionHead}>
               <h3 className={styles.sectionTitle}>Members</h3>
               <span className={styles.rule} />
@@ -385,7 +374,7 @@ export default function Settings({
                           Remove
                         </button>
                         <button className={styles.ashNo} onClick={() => setConfirmRemove(null)}>
-                          Keep
+                          Cancel
                         </button>
                       </span>
                     ) : ownerControls ? (
@@ -406,7 +395,7 @@ export default function Settings({
                           aria-label={`Remove ${m.name}`}
                           onClick={() => setConfirmRemove(m.id)}
                         >
-                          ×
+                          <Icon name="trash" className={styles.icon} />
                         </button>
                       </>
                     ) : (
@@ -431,7 +420,8 @@ export default function Settings({
                   <option value="viewer">Viewer</option>
                 </select>
                 <button className={styles.signOut} onClick={handleCopyInvite}>
-                  {inviteCopied ? "Copied!" : "Copy invite link"}
+                  {inviteCopied ? <Icon name="check" className={styles.icon} /> : <Icon name="link" className={styles.icon} />}
+                  {inviteCopied ? "Link copied" : "Copy invite link"}
                 </button>
               </div>
             )}
@@ -440,7 +430,7 @@ export default function Settings({
           </section>
 
           {/* ---------- account ---------- */}
-          <section className={`${styles.section} ${styles.s4}`}>
+          <section className={styles.section}>
             <div className={styles.sectionHead}>
               <h3 className={styles.sectionTitle}>Account</h3>
               <span className={styles.rule} />
@@ -452,6 +442,7 @@ export default function Settings({
                 {provider && <span className={styles.providerChip}>via {provider}</span>}
               </div>
               <button className={styles.signOut} onClick={onSignOut}>
+                <Icon name="logOut" className={styles.icon} />
                 Sign out
               </button>
             </div>
@@ -459,21 +450,21 @@ export default function Settings({
             <div className={styles.ash}>
               {myRole === "owner" ? (
                 <span className={styles.fine}>
-                  Owners can’t leave — transfer ownership to another member first.
+                  To leave, first make another member the owner.
                 </span>
               ) : confirmLeave ? (
                 <span className={styles.ashConfirm}>
-                  Leave this workspace and lose access to its pages?
+                  Leave this workspace? You'll lose access to its pages.
                   <button className={styles.ashYes} onClick={onLeave}>
                     Leave
                   </button>
                   <button className={styles.ashNo} onClick={() => setConfirmLeave(false)}>
-                    Stay
+                    Cancel
                   </button>
                 </span>
               ) : (
                 <button className={styles.ashLink} onClick={() => setConfirmLeave(true)}>
-                  Leave this workspace…
+                  Leave workspace
                 </button>
               )}
             </div>

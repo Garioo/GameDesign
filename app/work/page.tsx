@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Icon from "@/app/components/Icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ensureSession, type SessionInfo } from "@/lib/session";
@@ -233,7 +234,7 @@ export default function MyWorkPage() {
             {boards !== null && open.length === 0 && (
               <div className={styles.empty}>
                 <p>When someone assigns you a task on a board, it shows up here, sorted by priority.</p>
-                <Link href="/board" className={styles.emptyLink}>Go to boards →</Link>
+                <Link href="/board" className={styles.emptyLink}>Go to boards <Icon name="arrowRight" /></Link>
               </div>
             )}
             {groups.map((g) => (

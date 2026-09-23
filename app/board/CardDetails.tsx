@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type KeyboardEvent } from "react";
+import Icon from "@/app/components/Icon";
 import Comments from "@/app/doc/Comments";
 import {
   addComment,
@@ -177,7 +178,7 @@ export function SubtaskList({
           </button>
         </div>
       ) : (
-        <button type="button" className={styles.linkBtn} onClick={() => setAdding(true)}>+ Add subtask</button>
+        <button type="button" className={styles.linkBtn} onClick={() => setAdding(true)}><Icon name="plus" /> Add subtask</button>
       ))}
       {error && <p role="alert" className={styles.error}>{error}</p>}
     </div>
@@ -208,7 +209,7 @@ export function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: 
       {tags.map((t) => (
         <span key={t} className={styles.tag}>
           {t}
-          <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>×</button>
+          <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}><Icon name="close" /></button>
         </span>
       ))}
       <input

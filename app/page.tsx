@@ -57,23 +57,23 @@ const CanvasArrow = ({ className }: IconProps) => (
 const FEATURES = [
   {
     icon: <Doc />,
-    title: "Living docs",
-    body: "A block editor built for design docs — slash commands, tables, statuses and inline comments that keep specs current.",
+    title: "Docs",
+    body: "Write pages with headings, tables, to-dos and comments. Give each page a status and an owner.",
   },
   {
     icon: <Shapes />,
-    title: "Infinite canvas",
-    body: "Sketch systems, flows and level layouts on a shared canvas that lives right next to the words.",
+    title: "Canvas",
+    body: "Draw diagrams, flows and sketches together, and link them from any page.",
   },
   {
     icon: <Columns />,
-    title: "Production board",
-    body: "Turn decisions into work. Track every feature from idea to shipped on the team board.",
+    title: "Boards and Gantt",
+    body: "Track tasks through your own stages, and plan phases and deadlines on a timeline.",
   },
   {
     icon: <Branch />,
-    title: "GitHub-aware",
-    body: "Script blocks read straight from your repositories, so the doc never drifts from the build.",
+    title: "GitHub",
+    body: "Embed files from a linked repository in your pages and refresh them when the code changes.",
   },
 ];
 
@@ -97,15 +97,15 @@ export default function HomePage() {
         <div>
           <p className={styles.eyebrow}>Foundry</p>
           <h1 className={styles.title}>
-            Where your game <span className={styles.titleAccent}>takes shape</span>.
+            Docs, plans and tasks <span className={styles.titleAccent}>in one place</span>.
           </h1>
           <p className={styles.lede}>
-            Your team&apos;s living game design document — docs, canvases and
-            boards that stay in step with each other, and with the build.
+            A shared workspace for your team&apos;s documents, canvases, boards,
+            calendar and timeline.
           </p>
           <div className={styles.ctaRow}>
             <Link href="/login" className={styles.ctaPrimary}>
-              Start designing
+              Get started
               <ArrowRight className={styles.ctaArrow} />
             </Link>
             <span className={styles.ctaNote}>Sign in with Google or GitHub</span>
@@ -115,9 +115,9 @@ export default function HomePage() {
         {/* decorative product mock — hidden from assistive tech */}
         <div className={styles.mock} aria-hidden="true">
           <div className={styles.docCard}>
-            <p className={styles.docCrumb}>Systems · Combat</p>
+            <p className={styles.docCrumb}>Projects · Launch</p>
             <div className={styles.docHead}>
-              <span className={styles.docTitle}>Stamina &amp; posture</span>
+              <span className={styles.docTitle}>Launch plan</span>
               <span className={styles.statusPill}>In review</span>
             </div>
             <div className={styles.docBody}>
@@ -127,11 +127,11 @@ export default function HomePage() {
                 <span className={`${styles.checkbox} ${styles.checkboxDone}`}>
                   <Check />
                 </span>
-                <span className={styles.checkDone}>Dodging costs stamina</span>
+                <span className={styles.checkDone}>Agree on the release date</span>
               </div>
               <div className={styles.check}>
                 <span className={styles.checkbox} />
-                <span>Posture breaks open a riposte window</span>
+                <span>Write the announcement</span>
               </div>
               <span className={`${styles.line} ${styles.lineW60}`} />
             </div>
@@ -162,7 +162,7 @@ export default function HomePage() {
             <span className={styles.commentAvatar}>MA</span>
             <p className={styles.commentBody}>
               <span className={styles.commentName}>Maja</span>
-              Should parrying refund stamina instead?
+              Can we move the review to Thursday?
             </p>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function HomePage() {
 
       <footer className={styles.footer}>
         <span className={styles.footerBrand}>FOUNDRY</span>
-        <span>The team&apos;s living game design documents.</span>
+        <span>A shared workspace for teams.</span>
       </footer>
     </div>
   );

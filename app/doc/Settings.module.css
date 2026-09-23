@@ -1,7 +1,5 @@
-/* Settings dialog — opened from the topbar gear / ⌘K palette.
-   Proper form chrome: labeled fields on parchment wells (same vocabulary
-   as onboarding), hairline section rules, an ember glow off the header,
-   and a pinned footer with one Save for everything. */
+/* Settings dialog, opened from the topbar gear / ⌘K palette.
+   Header and footer stay pinned; one Save covers every section. */
 
 .backdrop {
   position: fixed;
@@ -20,9 +18,7 @@
   max-height: 82vh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(440px 220px at 82% -60px, var(--ember-tint) 0%, transparent 68%),
-    var(--surface);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-2xl);
   box-shadow: var(--shadow-modal);
@@ -43,28 +39,10 @@
 .head {
   flex: none;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--sp-3);
-  padding: 24px 30px 16px;
-}
-.flame {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--grad-ember);
-  color: #fff;
-  box-shadow: 0 6px 16px -6px rgba(192, 83, 28, 0.55);
-}
-.flame svg {
-  width: 18px;
-  height: 18px;
-}
-.headText {
-  flex: 1;
-  min-width: 0;
+  padding: 20px 24px 12px 30px;
 }
 .title {
   font-weight: 700;
@@ -73,20 +51,23 @@
   line-height: 1.2;
   color: var(--ink);
 }
-.tagline {
-  margin-top: 2px;
-  font-size: 12.5px;
-  color: var(--ink-faint);
+/* shared stroke icon for buttons in this dialog */
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 .close {
   flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
   border: none;
   background: none;
-  font-size: 22px;
-  line-height: 1;
   color: var(--ink-faint);
   cursor: pointer;
-  padding: 2px 7px;
+  padding: 0;
   border-radius: var(--r-sm);
   transition: color var(--t-fast), background var(--t-fast);
 }
@@ -98,12 +79,7 @@
 /* ---------------- sections ---------------- */
 .section {
   padding: 12px 0 16px;
-  animation: riseIn 0.4s var(--ease-rise) both;
 }
-.s1 { animation-delay: 0.05s; }
-.s2 { animation-delay: 0.12s; }
-.s3 { animation-delay: 0.19s; }
-.s4 { animation-delay: 0.26s; }
 
 .sectionHead {
   display: flex;
@@ -309,13 +285,14 @@
 }
 .memberRemove {
   flex: none;
-  width: 24px;
-  height: 24px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
   background: none;
-  border-radius: 50%;
-  font-size: 16px;
-  line-height: 1;
+  border-radius: var(--r-sm);
   color: var(--ink-faint);
   cursor: pointer;
   transition: color var(--t-fast), background var(--t-fast);
@@ -370,6 +347,9 @@
 }
 .signOut {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -386,7 +366,7 @@
   border-color: #d8cbb8;
 }
 
-/* the quiet ashes at the bottom — leaving lives here, understated */
+/* leave-workspace row */
 .ash {
   margin-top: 10px;
   padding-top: 12px;
@@ -529,8 +509,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dialog,
-  .section {
+  .dialog {
     animation: none;
   }
+}
+
+.memberRemove .icon,
+.signOut .icon {
+  width: 14px;
+  height: 14px;
 }

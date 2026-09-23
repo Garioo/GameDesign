@@ -19,6 +19,12 @@ export interface CommentRow {
   updated_at: string | null; // set when the body was edited
   resolved_at: string | null; // set on root comments when the thread is resolved
   resolved_by: string | null; // profiles.id of whoever resolved it
+  // Inline comments / suggested edits (supabase/migrate-inline-suggestions.sql).
+  // The anchor matches a <mark data-comment> / <del data-suggestion> in the page text.
+  anchor?: string | null;
+  quote?: string | null; // the text that was selected
+  suggestion?: string | null; // proposed replacement ('' = delete); null = plain comment
+  suggestion_status?: "accepted" | "rejected" | null;
 }
 
 /** What a comment thread hangs off: a page or a board task. */
@@ -78,6 +84,36 @@ export async function addComment(
     .from("comments")
     .insert({ [column]: id, author, body: text, parent_id: parentId });
   if (error) throw new Error(`addComment failed: ${error.message}`);
+}
+
+/**
+ * Post an inline comment or suggested edit on selected page text. The caller
+ * wraps the selection in matching markup once this succeeds. A suggestion's
+ * body is an optional note, so it may be empty.
+ */
+export async function addInlineComment(
+  pageId: string,
+  author: string,
+  input: { anchor: string; quote: string; body: string; suggestion: string | null },
+): Promise<void> {
+  const body = input.body.trim() ? cleanText(input.body, LIMITS.comment, "Comment") : "";
+  if (!body && input.suggestion === null) throw new Error("Write a comment first.");
+  const quote = input.quote.slice(0, 2000);
+  const suggestion = input.suggestion === null ? null : input.suggestion.slice(0, 2000);
+  const { error } = await supabase
+    .from("comments")
+    .insert({ page_id: pageId, author, body, anchor: input.anchor, quote, suggestion });
+  if (error) {
+    throw new Error(error.code === "PGRST204" || error.code === "42703"
+      ? "Inline comments need a database update. Apply supabase/migrate-inline-suggestions.sql in Supabase."
+      : `addInlineComment failed: ${error.message}`);
+  }
+}
+
+/** Accept or reject a suggested edit (editors only); also resolves the thread. */
+export async function settleSuggestion(id: string, status: "accepted" | "rejected"): Promise<void> {
+  const { error } = await supabase.rpc("settle_suggestion", { p_comment: id, p_status: status });
+  if (error) throw new Error(`settleSuggestion failed: ${error.message}`);
 }
 
 /** Edit a comment's body (the UI only offers this on the caller's own rows). */

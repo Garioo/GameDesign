@@ -220,6 +220,12 @@
 .planning-controls > select {
   max-width: 200px;
 }
+/* Shown instead of the board picker when the workspace has a single board. */
+.planning-controls .planning-board-name {
+  padding: 5px 9px;
+  font-size: 13px;
+  color: var(--ink);
+}
 .planning-app .planning-controls input:not([type="checkbox"]):not([type="range"]),
 .planning-app .planning-search {
   height: 36px;

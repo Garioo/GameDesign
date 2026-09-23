@@ -46,7 +46,7 @@ export default function LoginPage() {
     <main className="auth">
       <div className="auth-card">
         <h1 className="auth-title">Foundry</h1>
-        <p className="auth-sub">Sign in to open your team's design docs.</p>
+        <p className="auth-sub">Sign in to your workspace.</p>
 
         {error && <p className="auth-error">{error}</p>}
 
@@ -72,9 +72,6 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <p className="auth-fine">
-          By continuing you agree to keep your design docs tidy.
-        </p>
       </div>
     </main>
   );

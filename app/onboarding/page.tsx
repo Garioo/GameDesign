@@ -188,7 +188,7 @@ export default function OnboardingPage() {
     return (
       <div className={styles.page}>
         <div className={error ? styles.loadError : styles.loading}>
-          {error ?? "Stoking the embers…"}
+          {error ?? "Loading…"}
         </div>
       </div>
     );
@@ -221,9 +221,9 @@ export default function OnboardingPage() {
 
         {step === 0 && (
           <section className={styles.pane} key="profile">
-            <h1 className={styles.title}>Who&apos;s designing?</h1>
+            <h1 className={styles.title}>Set up your profile</h1>
             <p className={styles.sub}>
-              This is how teammates will see you across docs, canvases and the board.
+              Your name and colour are shown to teammates on pages, canvases and boards.
             </p>
             <div className={styles.identityRow}>
               <span className={styles.bigAvatar} style={{ background: color }}>
@@ -283,8 +283,8 @@ export default function OnboardingPage() {
             </h1>
             <p className={styles.sub}>
               {existing.length > 0
-                ? "You already have a place waiting — or start a fresh one."
-                : "A workspace holds one game's docs, canvases and board."}
+                ? "Join a workspace you’re in, or create a new one."
+                : "A workspace holds your team's pages, canvases and boards."}
             </p>
             {existing.length > 0 && (
               <div className={styles.wsOptions}>
@@ -320,17 +320,17 @@ export default function OnboardingPage() {
                     autoFocus={existing.length === 0}
                     maxLength={60}
                     onChange={(e) => setWsName(e.target.value)}
-                    placeholder="e.g. Longdusk"
+                    placeholder="e.g. Marketing team"
                   />
                 </label>
                 <label className={styles.label}>
-                  Genre <span className={styles.optional}>optional</span>
+                  Category <span className={styles.optional}>optional</span>
                   <input
                     className={styles.input}
                     value={wsGenre}
                     maxLength={40}
                     onChange={(e) => setWsGenre(e.target.value)}
-                    placeholder="e.g. Action RPG"
+                    placeholder="e.g. Game, Marketing, Research"
                   />
                 </label>
               </div>
@@ -340,13 +340,13 @@ export default function OnboardingPage() {
 
         {step === 2 && (
           <section className={styles.pane} key="invite">
-            <h1 className={styles.title}>Bring the team</h1>
+            <h1 className={styles.title}>Invite your team</h1>
             <p className={styles.sub}>
-              Anyone with this link can join your workspace. It&apos;s good for 14 days,
-              and you can mint a fresh one from Home whenever you need.
+              Anyone with this link can join your workspace. It expires after 14 days;
+              you can create a new one from Home.
             </p>
             <button type="button" className={styles.primary} onClick={copyInvite} disabled={busy}>
-              {copied ? "Link copied!" : inviteLink ? "Copy link again" : "Create invite link"}
+              {copied ? "Link copied" : inviteLink ? "Copy link again" : "Create invite link"}
             </button>
             {inviteLink && <code className={styles.linkBox}>{inviteLink}</code>}
           </section>
@@ -354,28 +354,27 @@ export default function OnboardingPage() {
 
         {step === 3 && (
           <section className={styles.pane} key="tour">
-            <h1 className={styles.title}>Three places to work</h1>
-            <p className={styles.sub}>Everything in your workspace lives in one of these.</p>
-            <div className={styles.tour}>
+            <h1 className={styles.title}>What’s in your workspace</h1>
+                        <div className={styles.tour}>
               <div className={styles.tourItem}>
                 <span className={styles.tourIcon}><Doc /></span>
                 <div>
                   <h2 className={styles.tourName}>Docs</h2>
-                  <p className={styles.tourBody}>The living design document — specs, systems and decisions.</p>
+                  <p className={styles.tourBody}>Pages for notes, specs and plans.</p>
                 </div>
               </div>
               <div className={styles.tourItem}>
                 <span className={styles.tourIcon}><Shapes /></span>
                 <div>
                   <h2 className={styles.tourName}>Canvas</h2>
-                  <p className={styles.tourBody}>Sketch flows, systems and level layouts together.</p>
+                  <p className={styles.tourBody}>A shared whiteboard for diagrams and sketches.</p>
                 </div>
               </div>
               <div className={styles.tourItem}>
                 <span className={styles.tourIcon}><Columns /></span>
                 <div>
                   <h2 className={styles.tourName}>Board</h2>
-                  <p className={styles.tourBody}>Track features from idea to shipped.</p>
+                  <p className={styles.tourBody}>Tasks organised into stages, with owners and due dates.</p>
                 </div>
               </div>
             </div>

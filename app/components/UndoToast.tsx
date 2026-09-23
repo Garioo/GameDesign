@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Icon from "@/app/components/Icon";
 import styles from "./UndoToast.module.css";
 
 /** A bottom-center notice with an optional Undo action that dismisses itself. */
@@ -36,7 +37,7 @@ export default function UndoToast({
         </button>
       )}
       <button type="button" className={styles.close} onClick={onDismiss} aria-label="Dismiss">
-        ×
+        <Icon name="close" />
       </button>
     </div>
   );

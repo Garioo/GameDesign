@@ -1,0 +1,121 @@
+/* Floating toolbar over selected page text, and the comment / suggest form. */
+
+/* Above the floating dock (z-index 40) and the editor chrome. */
+.toolbar {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--ink);
+  border-radius: var(--r-md, 8px);
+  box-shadow: 0 6px 18px rgba(42, 36, 30, 0.22);
+}
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--surface);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.toolbar button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.form {
+  position: fixed;
+  z-index: 70;
+  width: 320px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(42, 36, 30, 0.18);
+}
+.formTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.original {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  max-height: 72px;
+  overflow: auto;
+}
+.original del {
+  text-decoration-color: var(--danger);
+}
+.label {
+  display: grid;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.label textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.label textarea:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+}
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cancel,
+.submit {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cancel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.submit {
+  border: 1px solid var(--ember);
+  background: var(--ember);
+  color: #fff;
+}
+.cancel:disabled,
+.submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

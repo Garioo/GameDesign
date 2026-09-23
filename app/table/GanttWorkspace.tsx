@@ -8,6 +8,8 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from "react";
+import Icon from "@/app/components/Icon";
+import MultiSelectPicker from "@/app/components/MultiSelectPicker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
@@ -69,119 +71,6 @@ function byStartDate(a: Phase, b: Phase) {
   );
 }
 
-/** Checkbox dropdown for picking any subset of phases. The panel is positioned `fixed`
- *  from the trigger's rect because `.phase-toolbar` scrolls horizontally and would clip
- *  an absolutely positioned panel. */
-function PhasePicker({
-  phases,
-  selected,
-  onChange,
-}: {
-  phases: Phase[];
-  selected: string[] | null;
-  onChange: (boards: string[] | null) => void;
-}) {
-  const [open, setOpen] = useState<{ top: number; left: number } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: Event) => {
-      if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
-      if (e.type === "pointerdown" && rootRef.current?.contains(e.target as Node))
-        return;
-      setOpen(null);
-      if (e.type === "keydown") triggerRef.current?.focus();
-    };
-    const dismiss = () => setOpen(null);
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    window.addEventListener("resize", dismiss);
-    const toolbar = triggerRef.current?.closest(".phase-toolbar");
-    toolbar?.addEventListener("scroll", dismiss);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-      window.removeEventListener("resize", dismiss);
-      toolbar?.removeEventListener("scroll", dismiss);
-    };
-  }, [open]);
-  const label =
-    selected === null
-      ? "All phases"
-      : selected.length === 0
-        ? "No phases"
-        : selected.length === 1
-          ? (phases.find((p) => p.board_id === selected[0])?.title ??
-            "1 phase")
-          : `${selected.length} phases`;
-  const toggle = (id: string) => {
-    // From "all", unticking one phase narrows to everything except it.
-    const current = selected ?? phases.map((p) => p.board_id);
-    const next = current.includes(id)
-      ? current.filter((b) => b !== id)
-      : [...current, id];
-    // Ticking every phase is the same as "all", so later phases show up too.
-    onChange(next.length === phases.length ? null : next);
-  };
-  return (
-    <div className="phase-picker" ref={rootRef}>
-      <button
-        ref={triggerRef}
-        aria-label="Show phases"
-        aria-haspopup="true"
-        aria-expanded={!!open}
-        onClick={() => {
-          if (open) return setOpen(null);
-          const r = triggerRef.current!.getBoundingClientRect();
-          setOpen({ top: r.bottom + 6, left: r.left });
-        }}
-      >
-        {label} <span aria-hidden>▾</span>
-      </button>
-      {open && (
-        <div
-          className="phase-picker-panel"
-          role="group"
-          aria-label="Phases to show"
-          style={{ top: open.top, left: open.left }}
-        >
-          <label>
-            <input
-              type="checkbox"
-              checked={selected === null}
-              onChange={() => onChange(selected === null ? [] : null)}
-            />
-            All phases
-          </label>
-          <hr />
-          {phases.map((p) => (
-            <label key={p.id}>
-              <input
-                type="checkbox"
-                checked={selected === null || selected.includes(p.board_id)}
-                onChange={() => toggle(p.board_id)}
-              />
-              {p.title}
-            </label>
-          ))}
-          <div className="phase-picker-actions">
-            <button disabled={selected === null} onClick={() => onChange(null)}>
-              Select all
-            </button>
-            <button
-              disabled={selected?.length === 0}
-              onClick={() => onChange([])}
-            >
-              Remove all
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function PhaseEditor({
   phase,
   busy,
@@ -234,7 +123,7 @@ function PhaseEditor({
           onClick={onClose}
           aria-label="Close phase editor"
         >
-          ×
+          <Icon name="close" />
         </button>
       </header>
       <div className="stage-dialog-content">
@@ -674,10 +563,12 @@ export default function GanttWorkspace() {
         <div className="phase-toolbar">
           <div className="phase-show">
             Show
-            <PhasePicker
-              phases={main}
+            <MultiSelectPicker
+              items={main.map((p) => ({ id: p.board_id, label: p.title }))}
               selected={chosenBoards}
               onChange={(shown) => setPreferences((p) => ({ ...p, shown }))}
+              noun="phases"
+              ariaLabel="Phases to show"
             />
           </div>
           <input
@@ -747,7 +638,7 @@ export default function GanttWorkspace() {
                     className="planning-primary"
                     onClick={() => setStageBoard(null)}
                   >
-                    + New phase
+                    <Icon name="plus" /> New phase
                   </button>
                 </>
               )}
@@ -848,7 +739,7 @@ export default function GanttWorkspace() {
                 <div key={d.id} className="phase-link-item">
                   <span>
                     {a?.category_id ? `${a.board_name} / ` : ""}
-                    {a?.title} <b>→</b>{" "}
+                    {a?.title} <Icon name="arrowRight" />{" "}
                     {b?.category_id ? `${b.board_name} / ` : ""}
                     {b?.title}{" "}
                     <small>
@@ -1031,7 +922,7 @@ export default function GanttWorkspace() {
                             href={phaseBoardHref(p)}
                             aria-label={`Open ${p.title} board`}
                           >
-                            ↗
+                            <Icon name="arrowUpRight" />
                           </Link>
                         </div>
                         <div className="phase-progress-line">
@@ -1104,7 +995,7 @@ export default function GanttWorkspace() {
                             disabled={!canEdit || busy}
                             onClick={() => openEditor(p.id)}
                           >
-                            + Set dates
+                            <Icon name="plus" /> Set dates
                           </button>
                         )}
                       </div>

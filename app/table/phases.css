@@ -573,60 +573,13 @@
   font-size: 12px;
   color: var(--ink-soft);
 }
-.phase-picker > button {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--ink);
-}
-.phase-picker > button span {
-  margin-left: 4px;
-  opacity: 0.6;
-}
-/* Fixed, not absolute: .phase-toolbar scrolls horizontally and would clip the panel. */
-.phase-picker-panel {
-  position: fixed;
-  z-index: 40;
-  min-width: 220px;
-  max-width: min(320px, calc(100vw - 32px));
-  max-height: 60vh;
-  overflow: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(42, 36, 30, 0.10);
-  padding: 8px;
-  display: grid;
-  gap: 2px;
-  white-space: normal;
-}
-.phase-toolbar .phase-picker-panel label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
+/* Keep the generic .phase-toolbar label / .phase-main input rules off the
+   shared picker's options (MultiSelectPicker.module.css styles them). */
+.phase-toolbar .phase-show label {
   font-size: 13px;
   color: var(--ink);
-  cursor: pointer;
 }
-.phase-picker-panel label:hover {
-  background: var(--surface-2, rgba(0, 0, 0, 0.04));
-}
-.phase-main .phase-picker-panel input[type="checkbox"] {
+.phase-main .phase-show input[type="checkbox"] {
   padding: 0;
-  accent-color: var(--ember);
-}
-.phase-picker-panel hr {
   border: 0;
-  border-top: 1px solid var(--line);
-  margin: 4px 0;
-}
-.phase-picker-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
-}
-.phase-picker-actions button {
-  flex: 1;
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import LinkedDocuments from "./LinkedDocuments";
+import Icon from "@/app/components/Icon";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import BlockEditor from "./BlockEditor";
+import BlockEditor, { type BlockEditorApi } from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import TopBar from "@/app/components/TopBar";
 import Dock from "@/app/components/Dock";
@@ -47,10 +48,12 @@ import {
 } from "@/lib/settingsRepo";
 import {
   addComment,
+  addInlineComment,
   deleteComment,
   editComment,
   listComments,
   setCommentResolved,
+  settleSuggestion,
   type CommentRow,
 } from "@/lib/commentsRepo";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
@@ -213,6 +216,14 @@ function DocPageInner() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; onUndo?: () => void } | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
+  // Inline comments / suggested edits: the editor's live-DOM handle, which
+  // threads are open (only those are highlighted), and the thread to flash.
+  const editorApi = useRef<BlockEditorApi | null>(null);
+  const [focusAnchor, setFocusAnchor] = useState<{ anchor: string; at: number } | null>(null);
+  const openAnchors = useMemo(
+    () => new Set(comments.filter((c) => !c.parent_id && c.anchor && !c.resolved_at).map((c) => c.anchor!)),
+    [comments],
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [draftRecovery, setDraftRecovery] = useState<BlockDraft & { pageId: string } | null>(null);
@@ -1245,7 +1256,7 @@ function DocPageInner() {
                     <span key={t} className={"tag" + (canEdit ? " tag-editable" : "")}>
                       # {t}
                       {canEdit && (
-                        <button className="tag-remove" title="Remove tag" onClick={() => removeTag(t)}>×</button>
+                        <button className="tag-remove" title="Remove tag" onClick={() => removeTag(t)}><Icon name="close" /></button>
                       )}
                     </span>
                   ))}
@@ -1264,7 +1275,7 @@ function DocPageInner() {
                       onBlur={() => { if (tagDraft.trim()) addTag(tagDraft); setTagEditing(false); }}
                     />
                   ) : (
-                    <button className="tag-add" onClick={() => setTagEditing(true)}>+ Add</button>
+                    <button className="tag-add" onClick={() => setTagEditing(true)}><Icon name="plus" /> Add</button>
                   )}
                 </span>
               </div>
@@ -1286,7 +1297,7 @@ function DocPageInner() {
                           </button>
                           {canEdit && (
                             <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
-                              ×
+                              <Icon name="close" />
                             </button>
                           )}
                         </span>
@@ -1301,7 +1312,7 @@ function DocPageInner() {
                         </button>
                         {canEdit && (
                           <button className="link-remove" title="Remove link" onClick={() => removeLink(id)}>
-                            ×
+                            <Icon name="close" />
                           </button>
                         )}
                       </span>
@@ -1310,7 +1321,7 @@ function DocPageInner() {
                   {canEdit && (
                   <span className="link-add-wrap" ref={linkWrapRef}>
                     <button className="tag-add" onClick={() => setLinkMenuOpen((o) => !o)}>
-                      + Link
+                      <Icon name="plus" /> Link
                     </button>
                     {linkMenuOpen && (
                       <div className="link-menu">
@@ -1360,6 +1371,21 @@ function DocPageInner() {
               validRefs={validRefs}
               onNavigate={handleMentionNavigate}
               onChange={(b) => update(active.id, { blocks: b })}
+              apiRef={editorApi}
+              openAnchors={openAnchors}
+              onAnnotate={
+                canEdit && session
+                  ? async (a) => {
+                      const pageId = active.id;
+                      await addInlineComment(pageId, session.userId, a);
+                      listComments(pageId).then(setComments).catch(console.error);
+                    }
+                  : undefined
+              }
+              onAnnotationClick={(anchor) => {
+                setFocusAnchor({ anchor, at: Date.now() });
+                setRailOpen(true);
+              }}
               onLiveInput={(blockId, text, blocks) => {
                 // instant: per-block delta to other clients (no local re-render)
                 broadcast(`bt:${blockId}`, { t: "block", pageId: active.id, blockId, text });
@@ -1403,10 +1429,33 @@ function DocPageInner() {
             onAdd={(body, parentId) => {
               if (session) addComment(active.id, session.userId, body, parentId ?? null).catch(console.error);
             }}
-            onDelete={(id) => deleteComment(id).catch(console.error)}
+            onDelete={(id) => {
+              // Deleting an inline thread also drops its mark from the text.
+              const anchor = comments.find((c) => c.id === id)?.anchor;
+              if (anchor && canEdit) editorApi.current?.removeAnnotation(anchor);
+              deleteComment(id).catch(console.error);
+            }}
             onEdit={(id, body) => editComment(id, body).catch(console.error)}
             onResolve={(id, resolved) => {
               if (session) setCommentResolved(id, resolved).catch(console.error);
+            }}
+            canEdit={canEdit}
+            focusAnchor={focusAnchor}
+            onJump={(anchor) => {
+              document
+                .querySelector(`.blocks [data-comment="${anchor}"], .blocks [data-suggestion="${anchor}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+            onSettle={(c, accept) => {
+              if (!c.anchor) return;
+              const found = editorApi.current?.settleSuggestion(c.anchor, accept, c.suggestion ?? "") ?? false;
+              if (!found && accept) {
+                setToast({ message: "The original text has already changed, so nothing was replaced." });
+              }
+              const pageId = active.id;
+              settleSuggestion(c.id, accept ? "accepted" : "rejected")
+                .then(() => listComments(pageId).then(setComments))
+                .catch((e) => setToast({ message: e instanceof Error ? e.message : "Couldn’t update the suggestion." }));
             }}
           />
 

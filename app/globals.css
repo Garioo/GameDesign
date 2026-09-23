@@ -49,6 +49,10 @@
   --online:      #4caf7d;
   --danger:      #b0431f;
   --danger-tint: #fbe6dc;
+  /* inline comments (highlight) and suggested edits (struck-through) in page text */
+  --comment-mark:      #fbeeb8;
+  --comment-mark-line: #e2c25a;
+  --suggestion-mark:   #fbe6dc;
 
   /* legacy aliases still used by the landing screen */
   --accent: var(--ember);

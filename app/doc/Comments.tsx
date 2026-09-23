@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileInfo } from "@/lib/docsRepo";
 import type { CommentRow } from "@/lib/commentsRepo";
-import { activeMentionQuery, encodePersonMention, splitPersonMentions } from "@/lib/personMentions";
+import {
+  activeMentionQuery,
+  decodeMentionsForEditing,
+  encodeEditedMentions,
+  splitPersonMentions,
+  type KnownMention,
+} from "@/lib/personMentions";
 import styles from "./Comments.module.css";
 
 function timeAgo(iso: string): string {
@@ -47,8 +53,9 @@ function CommentBody({ body }: { body: string }) {
 
 /**
  * A textarea with @-mention autocomplete over the workspace's people. Typing
- * "@" plus a few letters of a name opens a list; picking one inserts the
- * `@[Name](user:<id>)` token the notifications trigger looks for.
+ * "@" plus a few letters of a name opens a list; picking one inserts "@Name".
+ * The textarea only ever shows "@Name" — `value` / `onChange` carry the stored
+ * `@[Name](user:<id>)` tokens the notifications trigger looks for.
  */
 function MentionTextarea({
   value,
@@ -77,16 +84,25 @@ function MentionTextarea({
     ? people.filter((p) => p.name.toLowerCase().includes(menu.query.toLowerCase())).slice(0, 6)
     : [];
 
+  // Everyone mentioned so far (picked here, or already in the value being
+  // edited), so the shown "@Name" text can be turned back into tokens.
+  const known = useRef<KnownMention[]>([]);
+  const { text: shown, mentions } = decodeMentionsForEditing(value);
+  for (const m of mentions) {
+    if (!known.current.some((k) => k.userId === m.userId && k.name === m.name)) known.current.push(m);
+  }
+  const emit = (text: string) => onChange(encodeEditedMentions(text, known.current));
+
   const pick = (p: ProfileInfo) => {
     if (!menu) return;
     const el = ref.current;
-    const caret = el?.selectionStart ?? value.length;
-    const token = encodePersonMention(p.name, p.id) + " ";
-    const next = value.slice(0, menu.start) + token + value.slice(caret);
-    onChange(next);
+    const caret = el?.selectionStart ?? shown.length;
+    const label = `@${p.name.replace(/[[\]]/g, "")} `;
+    if (!known.current.some((k) => k.userId === p.id)) known.current.push({ name: p.name.replace(/[[\]]/g, ""), userId: p.id });
+    emit(shown.slice(0, menu.start) + label + shown.slice(caret));
     setMenu(null);
     requestAnimationFrame(() => {
-      const pos = menu.start + token.length;
+      const pos = menu.start + label.length;
       el?.focus();
       el?.setSelectionRange(pos, pos);
     });
@@ -100,11 +116,13 @@ function MentionTextarea({
         rows={rows}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        value={value}
+        value={shown}
         onChange={(e) => {
-          onChange(e.target.value);
+          emit(e.target.value);
           const q = activeMentionQuery(e.target.value, e.target.selectionStart);
-          setMenu(q ? { ...q, index: 0 } : null);
+          // A finished mention ("@Name" right before the caret) isn't a new search.
+          const finished = q && known.current.some((k) => k.name === q.query);
+          setMenu(q && !finished ? { ...q, index: 0 } : null);
         }}
         onKeyDown={(e) => {
           if (menu && matches.length > 0) {
@@ -145,6 +163,10 @@ export default function Comments({
   onDelete,
   onEdit,
   onResolve,
+  canEdit = false,
+  onSettle,
+  onJump,
+  focusAnchor,
 }: {
   comments: CommentRow[];
   people: ProfileInfo[];
@@ -153,6 +175,14 @@ export default function Comments({
   onDelete: (id: string) => void;
   onEdit: (id: string, body: string) => void;
   onResolve: (id: string, resolved: boolean) => void;
+  // Inline comments / suggested edits on page text:
+  canEdit?: boolean;
+  /** Accept or reject a suggestion (editors only). */
+  onSettle?: (comment: CommentRow, accept: boolean) => void;
+  /** Scroll the page to the text a thread is attached to. */
+  onJump?: (anchor: string) => void;
+  /** Thread to scroll into view and flash (its text was clicked on the page). */
+  focusAnchor?: { anchor: string; at: number } | null;
 }) {
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -160,6 +190,13 @@ export default function Comments({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [showResolved, setShowResolved] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focusAnchor) return;
+    const el = listRef.current?.querySelector(`[data-anchor="${focusAnchor.anchor}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [focusAnchor]);
 
   const authorFor = useMemo(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
@@ -223,6 +260,7 @@ export default function Comments({
         <div className={styles.bubble}>
           <div className={styles.meta}>
             <span className={styles.author}>{a.name}</span>
+            {!isReply && c.suggestion != null && <span className={styles.kind}>suggested an edit</span>}
             <span className={styles.time}>{timeAgo(c.created_at)}</span>
             {c.updated_at && <span className={styles.time}>(edited)</span>}
           </div>
@@ -243,10 +281,44 @@ export default function Comments({
               </button>
             </div>
           ) : (
-            <CommentBody body={c.body} />
+            <>
+              {!isReply && c.anchor && c.quote != null && (
+                <button
+                  type="button"
+                  className={styles.quote}
+                  onClick={() => onJump?.(c.anchor!)}
+                  title="Show in the page"
+                >
+                  {c.suggestion != null ? (
+                    <>
+                      <del className={styles.quoteOld}>{c.quote}</del>
+                      {c.suggestion ? <ins className={styles.quoteNew}>{c.suggestion}</ins> : <span className={styles.quoteHint}>Delete this text</span>}
+                    </>
+                  ) : (
+                    <span className={styles.quoteText}>{c.quote}</span>
+                  )}
+                </button>
+              )}
+              {c.suggestion_status && (
+                <span className={c.suggestion_status === "accepted" ? styles.settledAccepted : styles.settledRejected}>
+                  {c.suggestion_status === "accepted" ? "Accepted" : "Rejected"}
+                </span>
+              )}
+              {c.body && <CommentBody body={c.body} />}
+            </>
           )}
           {!editing && (
             <div className={styles.actions}>
+              {!isReply && !resolved && c.suggestion != null && canEdit && onSettle && (
+                <>
+                  <button className={`${styles.action} ${styles.accept}`} onClick={() => onSettle(c, true)}>
+                    Accept
+                  </button>
+                  <button className={styles.action} onClick={() => onSettle(c, false)}>
+                    Reject
+                  </button>
+                </>
+              )}
               {!isReply && !resolved && (
                 <button
                   className={styles.action}
@@ -258,7 +330,7 @@ export default function Comments({
                   Reply
                 </button>
               )}
-              {!isReply && (
+              {!isReply && c.suggestion == null && (
                 <button className={styles.action} onClick={() => onResolve(c.id, !resolved)}>
                   {resolved ? "Reopen" : "Resolve"}
                 </button>
@@ -287,7 +359,15 @@ export default function Comments({
   };
 
   const renderThread = (c: CommentRow, resolved: boolean) => (
-    <div key={c.id} className={resolved ? `${styles.thread} ${styles.resolved}` : styles.thread}>
+    <div
+      key={c.anchor && focusAnchor?.anchor === c.anchor ? `${c.id}:${focusAnchor.at}` : c.id}
+      data-anchor={c.anchor ?? undefined}
+      className={[
+        styles.thread,
+        resolved ? styles.resolved : "",
+        c.anchor && focusAnchor?.anchor === c.anchor ? styles.focused : "",
+      ].join(" ")}
+    >
       {renderComment(c, false, resolved)}
       {(repliesByParent.get(c.id) ?? []).map((r) => renderComment(r, true, resolved))}
       {!resolved && replyTo === c.id && (
@@ -317,7 +397,7 @@ export default function Comments({
         <span className={styles.count}>{comments.length}</span>
       </div>
 
-      <div className={styles.list}>
+      <div className={styles.list} ref={listRef}>
         {openRoots.length === 0 && resolvedRoots.length === 0 && (
           <div className={styles.empty}>No comments yet.</div>
         )}

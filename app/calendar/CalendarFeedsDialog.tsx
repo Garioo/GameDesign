@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Icon from "@/app/components/Icon";
 import { addCalendarFeed, deleteCalendarFeed, type CalendarFeed } from "@/lib/calendarFeedsRepo";
 import styles from "./calendar.module.css";
 
@@ -25,7 +26,7 @@ export default function CalendarFeedsDialog({ project, feeds, canEdit, errors, o
   return <dialog ref={dialog} className={styles.eventDialog} onCancel={e => { e.preventDefault(); if (!busy) onClose(); }} aria-labelledby="feeds-dialog-title">
     <div className={styles.dialogHeading}>
       <div><h2 id="feeds-dialog-title">Subscribed calendars</h2><p>Events from these calendars show up for everyone in the workspace. They're read-only here — change them in Moodle.</p></div>
-      <button type="button" aria-label="Close subscribed calendars" disabled={busy} onClick={onClose}>×</button>
+      <button type="button" aria-label="Close subscribed calendars" disabled={busy} onClick={onClose}><Icon name="close" /></button>
     </div>
     {feeds.length > 0 && <ul className={styles.feedList}>
       {feeds.map(feed => <li key={feed.id}>

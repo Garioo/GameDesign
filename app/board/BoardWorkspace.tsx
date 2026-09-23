@@ -1,5 +1,7 @@
 "use client";
 import { parentChoices as hierarchyParentChoices } from "@/lib/taskHierarchy";
+import Icon from "@/app/components/Icon";
+import MultiSelectPicker from "@/app/components/MultiSelectPicker";
 import { loadSchedule, mutateSchedule, type ScheduleSnapshot } from '@/lib/ganttRepo';
 
 import { useEffect, useState, useRef, type CSSProperties, type DragEvent } from "react";
@@ -698,7 +700,7 @@ function CardModal(props: CardModalProps) {
               setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500);
             } catch (e) { console.error(e); }
           }}>{linkCopied ? "Copied!" : "Copy link"}</button>
-          <button className={cardStyles.close} onClick={onClose} aria-label="Close task details">×</button>
+          <button className={cardStyles.close} onClick={onClose} aria-label="Close task details"><Icon name="close" /></button>
         </div>
         {panel && <button className="gantt-sheet-toggle" onClick={()=>setExpanded(!expanded)}>{expanded ? "Reduce panel" : "Expand panel"}</button>}
         <div className={cardStyles.layout}>
@@ -708,7 +710,7 @@ function CardModal(props: CardModalProps) {
             <div className={cardStyles.view}>
               {parent && (
                 <button type="button" className={cardStyles.parentLink} onClick={() => onOpenCard(parent.id)}>
-                  ↖ Subtask of <strong>{parent.title}</strong>
+                  <Icon name="cornerLeftUp" /> Subtask of <strong>{parent.title}</strong>
                 </button>
               )}
               <h2 className={cardStyles.viewTitle}>{card.title}</h2>
@@ -736,7 +738,7 @@ function CardModal(props: CardModalProps) {
                 {card.sub
                   ? <p className={cardStyles.description}><Linkified text={card.sub} /></p>
                   : canEdit
-                    ? <button type="button" className={cardStyles.linkBtn} onClick={() => setEditing(true)}>+ Add a description</button>
+                    ? <button type="button" className={cardStyles.linkBtn} onClick={() => setEditing(true)}><Icon name="plus" /> Add a description</button>
                     : <p className={cardStyles.muted}>No description.</p>}
               </div>
 
@@ -760,7 +762,7 @@ function CardModal(props: CardModalProps) {
               <div className={cardStyles.section}>
                 <div className="modal-label">Canvas</div>
                 {card.canvasId
-                  ? <Link className={`modal-cancel ${cardStyles.canvasLink}`} href={`/doc/canvas?c=${card.canvasId}`}>Open linked canvas ↗</Link>
+                  ? <Link className={`modal-cancel ${cardStyles.canvasLink}`} href={`/doc/canvas?c=${card.canvasId}`}>Open linked canvas <Icon name="external" /></Link>
                   : canEdit
                     ? <button type="button" className="modal-cancel" disabled={canvasBusy} onClick={createCanvas}>{canvasBusy ? "Opening…" : "Open as canvas"}</button>
                     : <p className={cardStyles.muted}>No linked canvas.</p>}
@@ -943,6 +945,8 @@ export default function BoardWorkspace() {
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [allBoards, setAllBoards] = useState(true);
+  // Boards shown in the combined view; null = every board (new ones included).
+  const [boardFilter, setBoardFilter] = useState<string[] | null>(null);
   const [phaseSnapshot,setPhaseSnapshot]=useState<PhaseSnapshot|null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [stageBoard,setStageBoard]=useState<BoardData|null|undefined>(undefined);
@@ -983,7 +987,11 @@ export default function BoardWorkspace() {
         setBoards(loaded);
         setPhaseSnapshot(phases);
         let remembered: string | null = null;
-        try { remembered = localStorage.getItem(`gd-board:${s.workspaceId}`); } catch { /* optional preference */ }
+        try {
+          remembered = localStorage.getItem(`gd-board:${s.workspaceId}`);
+          const savedFilter = JSON.parse(localStorage.getItem(`gd-board-filter:${s.workspaceId}`) ?? "null");
+          if (Array.isArray(savedFilter)) setBoardFilter(savedFilter.filter((id): id is string => typeof id === "string"));
+        } catch { /* optional preference */ }
         const params=new URLSearchParams(window.location.search);
         const requested=params.get('board');
         if(requested)setAllBoards(false);
@@ -1053,6 +1061,20 @@ export default function BoardWorkspace() {
       try { localStorage.setItem(`gd-board:${session.workspaceId}`, activeBoardId); } catch { /* optional preference */ }
     }
   }, [session, activeBoardId]);
+
+  useEffect(() => {
+    if (!session) return;
+    try { localStorage.setItem(`gd-board-filter:${session.workspaceId}`, JSON.stringify(boardFilter)); } catch { /* optional preference */ }
+  }, [session, boardFilter]);
+
+  const visibleBoards = boardFilter === null ? boards : boards.filter((b) => boardFilter.includes(b.id));
+  const showAllBoards = () => { setAllBoards(true); setBoardFilter(null); };
+  // One ticked board opens it on its own; any other choice is the combined view.
+  const chooseBoards = (ids: string[] | null) => {
+    if (ids && ids.length === 1) { setAllBoards(false); setActiveBoardId(ids[0]); return; }
+    setAllBoards(true);
+    setBoardFilter(ids);
+  };
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const topbarBoard = combined ? undefined : activeBoard;
@@ -1266,9 +1288,13 @@ export default function BoardWorkspace() {
     subtaskStats.set(k.parentId, stat);
   }
 
+  // Subtasks live inside their parent task (details panel + done/total badge),
+  // not as cards of their own. Orphans whose parent isn't loaded still show.
+  const loadedCardIds = new Set(boards.flatMap((b) => b.cols.flatMap((c) => c.cards.map((k) => k.id))));
   const displayCols = visibleCols.map((c) => ({
     ...c,
     cards: c.cards.filter((k) =>
+      !(k.parentId && loadedCardIds.has(k.parentId)) &&
       k.title.toLowerCase().includes(search.toLowerCase()) &&
       (!ownerFilter || k.ownerIds.includes(ownerFilter)) &&
       (!filterKind || k.categoryId === filterKind)
@@ -1320,14 +1346,14 @@ export default function BoardWorkspace() {
           {/* sidebar: board list */}
           <aside className="sidebar">
             <div className="sidebar-label">Boards</div>
-            {boards.length > 1 && <button className={`sidebar-item${combined ? " active" : ""}`} onClick={() => {setAllBoards(true);}} title="All boards">
+            {boards.length > 1 && <button className={`sidebar-item${combined && boardFilter === null ? " active" : ""}`} onClick={showAllBoards} title="All boards">
               <span className="sidebar-dot" style={{ background: "var(--ember)" }} />
               <span className="sidebar-name">All boards</span>
             </button>}
             {boards.map((b) => (
               <button
                 key={b.id}
-                className={`sidebar-item${!combined && b.id === activeBoardId ? " active" : ""}`}
+                className={`sidebar-item${(!combined && b.id === activeBoardId) || (combined && boardFilter?.includes(b.id)) ? " active" : ""}`}
                 onClick={() => { setAllBoards(false); setActiveBoardId(b.id); }}
                 title={b.name}
               >
@@ -1347,24 +1373,25 @@ export default function BoardWorkspace() {
 
           <div className="main-col">
             {boardActionError&&<div role="alert" className="gantt-error">{boardActionError}<button onClick={()=>setBoardActionError('')}>Dismiss</button></div>}
-            {!isCalendar&&<PlanningHeader title={combined&&boards.length?'All boards':activeBoard?.name??'Your boards'} mode="board" boardId={combined?undefined:activeBoardId??undefined} canEdit={canEdit} onCreate={handleAddBoard} onNavigation={()=>setNavigationOpen(v=>!v)}>
-              <select aria-label="Choose board" value={combined?'all':activeBoard?.id??''} onChange={e=>{if(e.target.value==='all'){setAllBoards(true);}else{setAllBoards(false);setActiveBoardId(e.target.value);}}}>{!boards.length&&<option value="">No boards yet</option>}{boards.length>1&&<option value="all">All boards</option>}{boards.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+            {!isCalendar&&<PlanningHeader title={combined&&boards.length?(boardFilter===null?'All boards':`${visibleBoards.length} ${visibleBoards.length===1?'board':'boards'}`):activeBoard?.name??'Your boards'} mode="board" boardId={combined?undefined:activeBoardId??undefined} canEdit={canEdit} onCreate={handleAddBoard} onNavigation={()=>setNavigationOpen(v=>!v)}>
+              {boards.length>1?<MultiSelectPicker items={boards.map(b=>({id:b.id,label:b.name}))} selected={combined?boardFilter:activeBoard?[activeBoard.id]:null} onChange={chooseBoards} noun="boards" ariaLabel="Boards to show"/>:<span className="planning-board-name">{activeBoard?.name??'No boards yet'}</span>}
               <label className="planning-search"><PlanningIcon name="search"/><input aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={e=>setSearch(e.target.value)}/></label>
               <details className="planning-menu"><summary>Filters{filterKind||ownerFilter?' · Active':''}</summary><div><label>Category<select value={filterKind??''} onChange={e=>setFilterKind(e.target.value||null)}><option value="">All categories</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Owner<select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}><option value="">Everyone</option>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div></details>
               {canEdit&&activeBoard&&<details className="planning-menu planning-overflow"><summary><PlanningIcon name="more"/>More</summary><div>{!combined&&<button onClick={()=>handleManageStages(activeBoard)}>Manage stages</button>}<button onClick={()=>setCategoryManager(true)}>Manage categories</button>{!combined&&<button onClick={()=>handleCopyBoard(activeBoard)}>Copy board</button>}{!combined&&<button onClick={()=>handleDeleteBoard(activeBoard)}>Delete board</button>}</div></details>}
             </PlanningHeader>}
-            {!isCalendar&&!combined&&activeBoard&&<div className="board-phase-summary"><Link href={`/table?board=${activeBoard.id}`}>{phaseRangeLabel(phaseSnapshot?.phases.find(p=>p.board_id===activeBoard.id&&p.category_id===(filterKind||null)))} · Open {filterKind?'subphase':'phase'} in Gantt ↗</Link></div>}
-            {!isCalendar&&!boards.length&&<div className="planning-empty"><PlanningIcon name="board"/><h2>A place for your next idea</h2><p>Create a board with the stages that fit your team's workflow.</p>{canEdit&&<button className="planning-primary" onClick={handleAddBoard}>Create your first board</button>}</div>}
+            {!isCalendar&&!combined&&activeBoard&&<div className="board-phase-summary"><Link href={`/table?board=${activeBoard.id}`}>{phaseRangeLabel(phaseSnapshot?.phases.find(p=>p.board_id===activeBoard.id&&p.category_id===(filterKind||null)))} · Open {filterKind?'subphase':'phase'} in Gantt <Icon name="arrowUpRight" /></Link></div>}
+            {!isCalendar&&!boards.length&&<div className="planning-empty"><PlanningIcon name="board"/><h2>No boards yet</h2><p>Create a board with the stages that fit your team's workflow.</p>{canEdit&&<button className="planning-primary" onClick={handleAddBoard}>Create your first board</button>}</div>}
             {isCalendar ? <CalendarView canEdit={canEdit} project={session?.workspaceId ?? ""} onNavigation={()=>setNavigationOpen(v=>!v)} /> :
             <div className="board-scroll">
-              {(combined ? boards : activeBoard ? [activeBoard] : []).map((board) => {
+              {combined && !visibleBoards.length && <div className="planning-empty"><PlanningIcon name="board"/><h2>No boards selected</h2><p>Choose which boards to show in the board picker above.</p><button className="planning-primary" onClick={showAllBoards}>Show all boards</button></div>}
+              {(combined ? visibleBoards : activeBoard ? [activeBoard] : []).map((board) => {
                 const boardCols = displayCols.filter((c) => board.cols.some((b) => b.id === c.id));
                 const count = boardCols.reduce((n, c) => n + c.cards.length, 0);
                 const end = boardEndDate(board);
                 const phase = phaseSnapshot?.phases.find(p=>p.board_id===board.id&&p.category_id===(filterKind||null));
                 return <section key={board.id} className={combined ? "kanban-group" : undefined} aria-label={board.name} style={combined ? { "--board-color": boardColor(board, boards) } as CSSProperties : undefined}>
                   {combined && <header className="board-group-head">
-                    <div><h2>{board.name}</h2><Link className="board-phase-summary" href={`/table?board=${board.id}`}>{phaseRangeLabel(phase)} · Gantt ↗</Link></div>
+                    <div><h2>{board.name}</h2><Link className="board-phase-summary" href={`/table?board=${board.id}`}>{phaseRangeLabel(phase)} · Gantt <Icon name="arrowUpRight" /></Link></div>
                     <div className="board-group-meta">
                       <span className="board-group-count">{count} {count === 1 ? "task" : "tasks"}{end ? ` · Ends ${formatDeadline(end)}` : ""}</span>
                       <details className="planning-menu planning-overflow">

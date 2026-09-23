@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import Icon from "@/app/components/Icon";
 import { DRIVE_MIME_TYPES, driveFileUrls, normalizeDriveFile, type DriveFile } from '@/lib/googleDriveFile';
 import { isDrivePickerConfigured, pickDriveFile, prepareDrivePicker } from '@/lib/googleDrivePicker';
 import './google-drive.css';
@@ -42,7 +43,7 @@ export default function GoogleDriveBlock({ file, onChange, readOnly }: {
     <div className="drive-block-header">
       <div><strong>{valid?.name || 'Embed from Google Drive'}</strong><span>{valid ? DRIVE_MIME_TYPES[valid.mimeType].label : 'Search your account and choose a document'}</span></div>
       <div className="drive-block-actions">
-        {urls && <a href={urls.original} target="_blank" rel="noopener noreferrer">Open original ↗</a>}
+        {urls && <a href={urls.original} target="_blank" rel="noopener noreferrer">Open original <Icon name="external" /></a>}
         {!readOnly && <button type="button" disabled={!ready || busy} onClick={choose}>{busy ? 'Choosing…' : valid ? 'Replace' : 'Choose from Google Drive'}</button>}
       </div>
     </div>

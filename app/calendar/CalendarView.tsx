@@ -34,9 +34,13 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   const [feedErrors, setFeedErrors] = useState<Record<string, string>>({});
   const [feedsOpen, setFeedsOpen] = useState(false);
   const [feedsReload, setFeedsReload] = useState(0);
+  // Event to open once events load (?event=<id>, from an attendee notification).
+  const [wantedEvent, setWantedEvent] = useState<string | null>(null);
   // Deep link from search: /calendar?date=YYYY-MM-DD selects that day.
   useEffect(() => {
-    const wanted = new URLSearchParams(window.location.search).get("date");
+    const params = new URLSearchParams(window.location.search);
+    setWantedEvent(params.get("event"));
+    const wanted = params.get("date");
     if (!wanted || !/^\d{4}-\d{2}-\d{2}$/.test(wanted)) return;
     const day = new Date(`${wanted}T12:00:00`);
     if (Number.isNaN(day.getTime())) return;
@@ -66,6 +70,14 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
     }).catch(error => { if (active) setFeedErrors({ list: error.message }); });
     return () => { active = false; };
   }, [project, feedsReload]);
+  // Kept until the event turns up: the first load can run before the workspace
+  // id is known and come back empty.
+  useEffect(() => {
+    const found = wantedEvent ? standaloneEvents.find(e => e.id === wantedEvent) : undefined;
+    if (!found) return;
+    setEditingEvent(found);
+    setWantedEvent(null);
+  }, [wantedEvent, standaloneEvents]);
   useSidebarLiveUpdates(project, ["calendar_events"], async () => {
     try { setStandaloneEvents(await listCalendarEvents(project)); setEventsError(""); }
     catch (error) { setEventsError((error as Error).message); }

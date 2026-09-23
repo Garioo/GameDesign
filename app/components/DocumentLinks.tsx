@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import Icon from "@/app/components/Icon";
 import { driveFileUrls, type DriveFile } from "@/lib/googleDriveFile";
 import { isDrivePickerConfigured, pickDriveFile, prepareDrivePicker } from "@/lib/googleDrivePicker";
 import { documentProvider, documentUrl, type DocumentLink } from "@/lib/documentLinks";
@@ -47,17 +48,17 @@ export default function DocumentLinks({ links, onChange, disabled = false }: {
     finally { setBusy(false); }
   }
   return <section className="document-links" aria-label="Attached documents">
-    <div className="document-links-head"><strong>Documents & links</strong>{onChange && isDrivePickerConfigured() && <button type="button" disabled={disabled} onClick={chooseFromDrive}>{busy ? "Opening…" : "+ Google Drive"}</button>}{onChange && <button type="button" disabled={disabled} onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "+ Add link"}</button>}</div>
+    <div className="document-links-head"><strong>Documents & links</strong>{onChange && isDrivePickerConfigured() && <button type="button" disabled={disabled} onClick={chooseFromDrive}>{busy ? "Opening…" : <><Icon name="plus" /> Google Drive</>}</button>}{onChange && <button type="button" disabled={disabled} onClick={() => setAdding(!adding)}>{adding ? "Cancel" : <><Icon name="plus" /> Add link</>}</button>}</div>
     {links.map(link => <div className="document-link" key={link.id}>
-      <a href={(() => { try { return documentUrl(link.url); } catch { return undefined; } })()} target="_blank" rel="noopener noreferrer"><span>{link.title}</span><small>{documentProvider(link.url)} ↗</small></a>
-      {onChange && <button type="button" disabled={disabled} aria-label={`Remove ${link.title}`} onClick={() => remove(link)}>×</button>}
+      <a href={(() => { try { return documentUrl(link.url); } catch { return undefined; } })()} target="_blank" rel="noopener noreferrer"><span>{link.title}</span><small>{documentProvider(link.url)} <Icon name="external" /></small></a>
+      {onChange && <button type="button" disabled={disabled} aria-label={`Remove ${link.title}`} onClick={() => remove(link)}><Icon name="close" /></button>}
     </div>)}
     {!links.length && !adding && <p>Add Google Docs, Sheets, Slides, or another shared link.</p>}
     {adding && <div className="document-link-fields">
       <label htmlFor={`${id}-url`}>Document link</label>
       <input id={`${id}-url`} type="url" placeholder="https://docs.google.com/…" value={url} disabled={disabled} onChange={e => setUrl(e.target.value)} />
       <label htmlFor={`${id}-title`}>Name (optional)</label>
-      <input id={`${id}-title`} maxLength={160} value={title} disabled={disabled} placeholder="Design brief" onChange={e => setTitle(e.target.value)} />
+      <input id={`${id}-title`} maxLength={160} value={title} disabled={disabled} placeholder="Project brief" onChange={e => setTitle(e.target.value)} />
       <p>Opens in a new tab. Access follows the document’s sharing settings.</p>
       <button type="button" disabled={disabled || !url.trim()} onClick={add}>Attach link</button>
     </div>}

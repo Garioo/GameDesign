@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Icon from "@/app/components/Icon";
 import { useRouter } from "next/navigation";
 import {
   deleteNotification,
@@ -97,7 +98,7 @@ export default function NotificationBell({ workspaceId }: { workspaceId: string 
             )}
           </div>
           <div className="notif-list">
-            {notifications.length === 0 && <p className="notif-empty">Nothing yet. You’ll hear about @mentions, replies to your threads, tasks assigned to you and pages you’re made owner of.</p>}
+            {notifications.length === 0 && <p className="notif-empty">No notifications. You’ll be notified about @mentions, replies to your comments, tasks assigned to you and pages you’re made owner of.</p>}
             {notifications.map((n) => (
               <div key={n.id} className="notif-row">
               <button type="button" className={"notif-item" + (n.read_at ? "" : " is-unread")} onClick={() => openNotification(n)}>
@@ -113,7 +114,7 @@ export default function NotificationBell({ workspaceId }: { workspaceId: string 
                   <span className="notif-time">{timeAgo(n.created_at)}</span>
                 </span>
               </button>
-              <button type="button" className="notif-dismiss" aria-label="Dismiss notification" title="Dismiss" onClick={() => dismiss(n)}>×</button>
+              <button type="button" className="notif-dismiss" aria-label="Dismiss notification" title="Dismiss" onClick={() => dismiss(n)}><Icon name="close" /></button>
               </div>
             ))}
           </div>

@@ -9,12 +9,16 @@ export interface CalendarEvent {
   end_time: string | null;
   location: string;
   notes: string;
+  /** Workspace members on the event (profile ids). */
+  attendees: string[];
+  /** People outside Foundry, by name. */
+  guests: string[];
 }
 export type CalendarEventDraft = Omit<CalendarEvent, "id">;
-const fields = "id,title,date,end_date,start_time,end_time,location,notes";
+const fields = "id,title,date,end_date,start_time,end_time,location,notes,attendees,guests";
 function eventError(error: { code?: string; message: string }) {
   return new Error(error.code === "PGRST205" || error.code === "42P01" || error.code === "PGRST204" || error.code === "42703"
-    ? "Calendar events need a database update. Apply the calendar-events and calendar-event-ranges migrations in Supabase."
+    ? "Calendar events need a database update. Apply the calendar-events, calendar-event-ranges and event-attendees migrations in Supabase."
     : error.message);
 }
 export async function listCalendarEvents(project: string): Promise<CalendarEvent[]> {
@@ -23,7 +27,10 @@ export async function listCalendarEvents(project: string): Promise<CalendarEvent
   return data ?? [];
 }
 export async function saveCalendarEvent(project: string, draft: CalendarEventDraft, id?: string): Promise<CalendarEvent> {
-  const clean = { ...draft, title: draft.title.trim(), location: draft.location.trim(), notes: draft.notes.trim() };
+  const guests = [...new Set(draft.guests.map(g => g.trim()).filter(Boolean))];
+  const clean = { ...draft, title: draft.title.trim(), location: draft.location.trim(), notes: draft.notes.trim(), attendees: [...new Set(draft.attendees)], guests };
+  if (guests.some(g => g.length > 120)) throw new Error("Guest names can be up to 120 characters.");
+  if (clean.attendees.length > 100 || guests.length > 100) throw new Error("An event can have up to 100 attendees and 100 guests.");
   if (!clean.title || clean.title.length > 160) throw new Error("Enter an event title of up to 160 characters.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(clean.date)) throw new Error("Choose an event date.");
   if (clean.end_date && (!/^\d{4}-\d{2}-\d{2}$/.test(clean.end_date) || clean.end_date < clean.date)) throw new Error("End date must be on or after the start date.");

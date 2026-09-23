@@ -211,7 +211,6 @@ export default function StageDialog({
       >
         <header>
           <div>
-            <span className="planning-eyebrow">YOUR WORKFLOW</span>
             <h2 id="stages-title">
               {board ? "Manage stages" : "Create a board"}
             </h2>
@@ -481,7 +480,7 @@ export default function StageDialog({
           )}
         </div>
         <footer>
-          <span>Tasks and links stay connected.</span>
+          <span>Tasks keep their links when stages change.</span>
           <button type="button" onClick={onClose} disabled={saving}>
             Cancel
           </button>

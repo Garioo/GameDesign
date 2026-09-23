@@ -1,12 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import Icon from "@/app/components/Icon";
 import { BLOCK_TONES, type Block, type BlockTone, type BlockType, type CurveData } from "./data";
 import GoogleDriveBlock from "./GoogleDriveBlock";
 import CurveBlock, { DEFAULT_CURVE } from "./CurveBlock";
 import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
 import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
+import InlineAnnotator, { type AnnotationRequest } from "./InlineAnnotator";
 import "./BlockEditor.css";
 
 // True when the editor renders for a viewer: blocks display normally but
@@ -204,6 +206,10 @@ async function readImageFile(file: File, maxDim = 1600): Promise<string> {
 // markup or URL from the outside is ever trusted. Everything else (attributes,
 // unknown tags) is stripped down to its text content at every read and write.
 const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "CODE", "BR"]);
+// Inline comments / suggested edits: <mark data-comment> and <del data-suggestion>
+// keep only their anchor id, which must be a uuid (it also ends up in CSS selectors).
+const ANCHOR_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ANCHOR_ATTR: Record<string, string> = { MARK: "data-comment", DEL: "data-suggestion" };
 
 function sanitizeHtml(html: string): string {
   if (!/[<&]/.test(html)) return html;
@@ -226,6 +232,17 @@ function sanitizeHtml(html: string): string {
             continue;
           }
           // invalid ref / empty label — falls through and gets unwrapped
+        }
+        const anchorAttr = ANCHOR_ATTR[el.tagName];
+        if (anchorAttr) {
+          const anchor = el.getAttribute(anchorAttr) ?? "";
+          if (ANCHOR_RE.test(anchor)) {
+            walk(el);
+            while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+            el.setAttribute(anchorAttr, anchor);
+            continue;
+          }
+          // no valid anchor — falls through and gets unwrapped
         }
         walk(el);
         if (ALLOWED_TAGS.has(el.tagName)) {
@@ -372,6 +389,39 @@ type Slash = { id: string; query: string; index: number };
 type Mention = { id: string; query: string; trigger: "@" | "[["; index: number };
 type FocusReq = { id: string; pos: "start" | "end" | number };
 
+/** New inline comment / suggestion, posted by the page before the text is marked. */
+export interface InlineAnnotation {
+  anchor: string;
+  quote: string;
+  body: string;
+  /** Proposed replacement ('' = delete); null for a plain comment. */
+  suggestion: string | null;
+}
+/** Imperative handle for the page's comment rail. Works on the live DOM, so it
+ *  never overwrites typing that hasn't reached the parent's state yet. */
+export interface BlockEditorApi {
+  /** Accept (swap in `replacement`) or reject (keep the original) a suggestion. False if its text is gone. */
+  settleSuggestion: (anchor: string, accept: boolean, replacement: string) => boolean;
+  /** Drop a comment highlight or suggestion mark, keeping the text. */
+  removeAnnotation: (anchor: string) => void;
+}
+
+const unwrap = (el: Element) => {
+  const parent = el.parentNode;
+  if (!parent) return;
+  while (el.firstChild) parent.insertBefore(el.firstChild, el);
+  parent.removeChild(el);
+};
+const wrapRange = (range: Range, wrapper: HTMLElement) => {
+  try {
+    range.surroundContents(wrapper);
+  } catch {
+    // selection crosses element boundaries — wrap its extracted contents instead
+    wrapper.appendChild(range.extractContents());
+    range.insertNode(wrapper);
+  }
+};
+
 export default function BlockEditor({
   blocks,
   onChange,
@@ -381,6 +431,10 @@ export default function BlockEditor({
   validRefs,
   onNavigate,
   readOnly = false,
+  onAnnotate,
+  openAnchors,
+  onAnnotationClick,
+  apiRef,
 }: {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
@@ -397,6 +451,14 @@ export default function BlockEditor({
   onNavigate?: (ref: string) => void;
   // Viewer mode: render everything, mutate nothing (RLS rejects writes anyway).
   readOnly?: boolean;
+  // Post an inline comment / suggestion for selected text. Enables the
+  // selection toolbar; the text is marked once this resolves.
+  onAnnotate?: (a: InlineAnnotation) => Promise<void>;
+  // Anchors of open threads: only these get highlighted / struck through.
+  openAnchors?: Set<string>;
+  // A comment highlight or suggestion was clicked in the text.
+  onAnnotationClick?: (anchor: string) => void;
+  apiRef?: MutableRefObject<BlockEditorApi | null>;
 }) {
   // Belt and braces: even if some affordance slips through, no change events
   // ever leave a read-only editor.
@@ -405,6 +467,7 @@ export default function BlockEditor({
     onLiveInput = undefined;
   }
   const refs = useRef(new Map<string, HTMLDivElement>());
+  const rootRef = useRef<HTMLDivElement>(null);
   const [slash, setSlash] = useState<Slash | null>(null);
   const [mention, setMention] = useState<Mention | null>(null);
   const [focusReq, setFocusReq] = useState<FocusReq | null>(null);
@@ -445,6 +508,70 @@ export default function BlockEditor({
       const el = refs.current.get(b.id);
       return el ? { ...b, text: sanitizeHtml(el.innerHTML) } : b;
     });
+
+  const findAnnotation = (anchor: string): Element | null => {
+    if (!ANCHOR_RE.test(anchor)) return null;
+    for (const el of refs.current.values()) {
+      const hit = el.querySelector(`[data-comment="${anchor}"], [data-suggestion="${anchor}"]`);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  // Mark the selection first, so it can't drift while the comment saves; undo
+  // the mark if saving fails.
+  const annotate = async (req: AnnotationRequest) => {
+    if (!onAnnotate) return;
+    if (!req.range.startContainer.isConnected || !req.block.contains(req.range.commonAncestorContainer)) {
+      throw new Error("The text changed while you were writing. Select it again.");
+    }
+    const anchor = crypto.randomUUID();
+    const suggest = req.kind === "suggest";
+    const wrapper = document.createElement(suggest ? "del" : "mark");
+    wrapper.setAttribute(suggest ? "data-suggestion" : "data-comment", anchor);
+    wrapRange(req.range, wrapper);
+    try {
+      await onAnnotate({ anchor, quote: req.quote, body: req.body, suggestion: suggest ? req.suggestion : null });
+    } catch (e) {
+      unwrap(wrapper);
+      throw e;
+    }
+    onChange(readBlocks());
+  };
+
+  if (apiRef) {
+    apiRef.current = {
+      settleSuggestion: (anchor, accept, replacement) => {
+        const el = findAnnotation(anchor);
+        if (!el || el.tagName !== "DEL") return false;
+        if (accept) {
+          if (replacement) el.replaceWith(document.createTextNode(replacement));
+          else el.remove();
+        } else {
+          unwrap(el);
+        }
+        onChange(readBlocks());
+        return true;
+      },
+      removeAnnotation: (anchor) => {
+        const el = findAnnotation(anchor);
+        if (!el) return;
+        unwrap(el);
+        onChange(readBlocks());
+      },
+    };
+  }
+
+  // Highlight open threads only; marks left behind by resolved or deleted
+  // comments render as plain text. Anchors are uuid-checked before use.
+  const annotationCss = useMemo(() => {
+    const ids = [...(openAnchors ?? [])].filter((a) => ANCHOR_RE.test(a));
+    if (!ids.length) return "";
+    return (
+      ids.map((a) => `.blocks mark[data-comment="${a}"]`).join(",") + "{background:var(--comment-mark);border-bottom:2px solid var(--comment-mark-line);cursor:pointer}" +
+      ids.map((a) => `.blocks del[data-suggestion="${a}"]`).join(",") + "{text-decoration:line-through;text-decoration-color:var(--danger);background:var(--suggestion-mark);cursor:pointer}"
+    );
+  }, [openAnchors]);
 
   const filtered = (q: string) =>
     MENU.filter((m) => m.label.toLowerCase().includes(q.toLowerCase()));
@@ -863,8 +990,11 @@ export default function BlockEditor({
   return (
     <ReadOnlyCtx.Provider value={readOnly}>
     <div
+      ref={rootRef}
       className={"blocks" + (readOnly ? " read-only" : "")}
       onClick={(e) => {
+        const note = (e.target as HTMLElement).closest?.("mark[data-comment], del[data-suggestion]");
+        if (note) onAnnotationClick?.(note.getAttribute("data-comment") ?? note.getAttribute("data-suggestion") ?? "");
         // Mention chips: plain click navigates in-app; cmd/ctrl/shift-click
         // falls through to the real href (open in new tab).
         const chip = (e.target as HTMLElement).closest?.("a[data-mention]");
@@ -925,6 +1055,8 @@ export default function BlockEditor({
           }}
         />
       ))}
+      {annotationCss && <style>{annotationCss}</style>}
+      {onAnnotate && !readOnly && <InlineAnnotator rootRef={rootRef} onSubmit={annotate} />}
     </div>
     </ReadOnlyCtx.Provider>
   );
@@ -1333,7 +1465,7 @@ function TableBlock({
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => delRow(ri)}
                       >
-                        ×
+                        <Icon name="close" />
                       </button>
                     )}
                     {!readOnly && ri === 0 && cols > 1 && (
@@ -1343,7 +1475,7 @@ function TableBlock({
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => delCol(ci)}
                       >
-                        ×
+                        <Icon name="close" />
                       </button>
                     )}
                     <TableCell
@@ -1764,7 +1896,7 @@ function ScriptBlock({
           <ScriptCode code={code} path={path} />
         ) : (
           <div className="script-hint" style={{ padding: "10px 14px" }}>
-            No cached copy yet — hit Refresh.
+            No saved copy yet. Click Refresh to load the file.
           </div>
         ))}
     </div>

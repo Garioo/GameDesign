@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Icon from "@/app/components/Icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -589,7 +590,6 @@ export default function HomeDashboard() {
               .
             </h1>
             <p className={styles.greetingSub}>
-              Pick up where the team left off.
               {continuePage && (
                 <Link
                   href={`/doc?page=${continuePage.id}`}
@@ -657,13 +657,12 @@ export default function HomeDashboard() {
                   <Doc />
                 </span>
                 <span className={styles.destNo}>
-                  01
                   <ArrowRight className={styles.destArrow} />
                 </span>
               </div>
               <h2 className={styles.destTitle}>Docs</h2>
               <p className={styles.destBody}>
-                The living design document — specs, systems and decisions.
+                Pages for notes, specs and plans.
               </p>
             </Link>
             <Link href="/doc/canvas" className={styles.dest}>
@@ -672,13 +671,12 @@ export default function HomeDashboard() {
                   <Shapes />
                 </span>
                 <span className={styles.destNo}>
-                  02
                   <ArrowRight className={styles.destArrow} />
                 </span>
               </div>
               <h2 className={styles.destTitle}>Canvas</h2>
               <p className={styles.destBody}>
-                Sketch flows, systems and level layouts on the shared canvas.
+                A shared whiteboard for diagrams and sketches.
               </p>
             </Link>
             <Link href="/board" className={styles.dest}>
@@ -687,13 +685,12 @@ export default function HomeDashboard() {
                   <Columns />
                 </span>
                 <span className={styles.destNo}>
-                  03
                   <ArrowRight className={styles.destArrow} />
                 </span>
               </div>
               <h2 className={styles.destTitle}>Board</h2>
               <p className={styles.destBody}>
-                Track features from idea to shipped on the production board.
+                Tasks organised into stages, with owners and due dates.
               </p>
             </Link>
           </nav>
@@ -741,7 +738,7 @@ export default function HomeDashboard() {
                       </button>
                     </div>
                     <Link href="/doc" className={styles.sectionLink}>
-                      All pages →
+                      All pages <Icon name="arrowRight" />
                     </Link>
                   </div>
                 </div>
@@ -751,11 +748,11 @@ export default function HomeDashboard() {
                       {recentFilter === "mine" ? (
                         <>No pages assigned to you yet.</>
                       ) : recentFilter === "foryou" ? (
-                        <>No new comments from the team — all caught up.</>
+                        <>No new comments.</>
                       ) : (
                         <>
-                          No pages yet — <Link href="/doc">open the docs</Link>{" "}
-                          to start your first one.
+                          No pages yet. <Link href="/doc">Create a page</Link>{" "}
+                          to get started.
                         </>
                       )}
                     </p>
@@ -815,7 +812,7 @@ export default function HomeDashboard() {
                 <div className={styles.todoList}>
                   {snap.todos.length === 0 ? (
                     <p className={styles.empty}>
-                      Nothing open — to-dos you add inside pages show up here.
+                      No open to-dos. To-dos you add on pages appear here.
                     </p>
                   ) : (
                     snap.todos.slice(0, TODOS_SHOWN).map((t) => (
@@ -888,7 +885,7 @@ export default function HomeDashboard() {
                     <ActivityFeed
                       workspaceId={session.workspaceId}
                       limit={15}
-                      emptyText="Nothing yet — pages, tasks, comments and canvases your team creates show up here."
+                      emptyText="No activity yet. Changes to pages, tasks, comments and canvases appear here."
                     />
                   </div>
                 </section>
@@ -984,10 +981,10 @@ export default function HomeDashboard() {
                   </div>
                   <p className={styles.teamNote}>
                     {onlineIds.size > 1
-                      ? `${onlineIds.size} people are here right now.`
+                      ? `${onlineIds.size} online now.`
                       : snap.members.length === 1
-                        ? "Just you in this workspace so far."
-                        : `${snap.members.length} people are designing here.`}
+                        ? "You’re the only member so far."
+                        : `${snap.members.length} members.`}
                   </p>
                 </section>
               )}
@@ -995,7 +992,7 @@ export default function HomeDashboard() {
               {!tipsHidden && (
               <section className={styles.tipsCard}>
                 <div className={styles.tipsHead}>
-                  <h2 className={styles.tipsTitle}>Good to know</h2>
+                  <h2 className={styles.tipsTitle}>Tips</h2>
                   <button
                     type="button"
                     className={styles.tipsClose}
@@ -1003,7 +1000,7 @@ export default function HomeDashboard() {
                     aria-label="Dismiss tips"
                     title="Dismiss"
                   >
-                    ×
+                    <Icon name="close" />
                   </button>
                 </div>
                 <div className={styles.tipItem}>
@@ -1011,10 +1008,10 @@ export default function HomeDashboard() {
                     <CheckSquare />
                   </span>
                   <div>
-                    <h3 className={styles.tipName}>To-dos follow you</h3>
+                    <h3 className={styles.tipName}>To-dos</h3>
                     <p className={styles.tipBody}>
-                      Drop a to-do block in any page — every open one gathers
-                      here, ready to check off.
+                      Open to-dos from your pages are listed here, so you can
+                      check them off without opening each page.
                     </p>
                   </div>
                 </div>
@@ -1023,10 +1020,10 @@ export default function HomeDashboard() {
                     <AtSign />
                   </span>
                   <div>
-                    <h3 className={styles.tipName}>@mention anything</h3>
+                    <h3 className={styles.tipName}>Mentions</h3>
                     <p className={styles.tipBody}>
-                      Type @ inside a doc to link pages and canvases. Labels
-                      stay fresh when things get renamed.
+                      Type @ on a page to link another page, a canvas or a
+                      teammate. Links update when things are renamed.
                     </p>
                   </div>
                 </div>
@@ -1035,9 +1032,9 @@ export default function HomeDashboard() {
                     <History />
                   </span>
                   <div>
-                    <h3 className={styles.tipName}>Pick up where you left off</h3>
+                    <h3 className={styles.tipName}>Continue</h3>
                     <p className={styles.tipBody}>
-                      The Continue shortcut up top jumps to your latest page.
+                      The Continue button at the top opens the page you edited last.
                     </p>
                   </div>
                 </div>
