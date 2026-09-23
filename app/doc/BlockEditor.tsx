@@ -8,6 +8,7 @@ import CurveBlock, { DEFAULT_CURVE } from "./CurveBlock";
 import { getFileContent, getRepoTree, getGithubToken, GithubError } from "@/lib/github";
 import { detectLang, highlightLines, langLabel, renderLine } from "./highlight";
 import { MENTION_REF_RE, mentionHref, type MentionTarget } from "./mentions";
+import { linkifyText, safeLinkHref } from "@/lib/webLinks";
 import InlineAnnotator, { type AnnotationRequest } from "./InlineAnnotator";
 import "./BlockEditor.css";
 
@@ -211,6 +212,7 @@ const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "CODE", "BR"]);
 const ANCHOR_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ANCHOR_ATTR: Record<string, string> = { MARK: "data-comment", DEL: "data-suggestion" };
 
+
 function sanitizeHtml(html: string): string {
   if (!/[<&]/.test(html)) return html;
   const root = document.createElement("div");
@@ -232,6 +234,19 @@ function sanitizeHtml(html: string): string {
             continue;
           }
           // invalid ref / empty label — falls through and gets unwrapped
+        }
+        if (el.tagName === "A" && !el.hasAttribute("data-mention")) {
+          // Web link: keep only a safe href, and always open in a new tab.
+          const href = safeLinkHref(el.getAttribute("href") ?? "");
+          if (href && (el.textContent ?? "").trim()) {
+            walk(el);
+            while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+            el.setAttribute("href", href);
+            el.setAttribute("target", "_blank");
+            el.setAttribute("rel", "noopener noreferrer");
+            continue;
+          }
+          // unsafe or empty link — falls through and gets unwrapped
         }
         const anchorAttr = ANCHOR_ATTR[el.tagName];
         if (anchorAttr) {
@@ -995,6 +1010,14 @@ export default function BlockEditor({
       onClick={(e) => {
         const note = (e.target as HTMLElement).closest?.("mark[data-comment], del[data-suggestion]");
         if (note) onAnnotationClick?.(note.getAttribute("data-comment") ?? note.getAttribute("data-suggestion") ?? "");
+        // Web links in page text: contentEditable never follows a link, so
+        // open it in a new tab ourselves (not while selecting text).
+        const link = (e.target as HTMLElement).closest?.<HTMLAnchorElement>("a[href]:not([data-mention])");
+        if (link && window.getSelection()?.isCollapsed !== false) {
+          e.preventDefault();
+          window.open(link.href, "_blank", "noopener,noreferrer");
+          return;
+        }
         // Mention chips: plain click navigates in-app; cmd/ctrl/shift-click
         // falls through to the real href (open in new tab).
         const chip = (e.target as HTMLElement).closest?.("a[data-mention]");
@@ -1178,12 +1201,21 @@ function BlockRow({
       onPaste={(e) => {
         // Paste as plain text — except for internal rich content carrying
         // mention chips, which round-trips through the sanitizer instead.
+        // URLs in the pasted text become links; pasting a single URL over
+        // selected text links that text.
         e.preventDefault();
         const html = e.clipboardData.getData("text/html");
+        const plain = e.clipboardData.getData("text/plain");
+        const singleUrl = safeLinkHref(plain);
+        const sel = window.getSelection();
         if (html && html.includes("data-mention")) {
           document.execCommand("insertHTML", false, sanitizeHtml(html));
+        } else if (singleUrl && sel && !sel.isCollapsed) {
+          document.execCommand("createLink", false, singleUrl);
+        } else if (/(?:https?:\/\/|www\.)\S/i.test(plain)) {
+          document.execCommand("insertHTML", false, linkifyText(plain));
         } else {
-          document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+          document.execCommand("insertText", false, plain);
         }
         onInput(block.id, e.currentTarget);
       }}

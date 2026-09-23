@@ -35,6 +35,10 @@ interface TopBarProps {
   children?: ReactNode;
   /** Shows a hamburger button before the brand (mobile only, via CSS) that opens the page's own nav drawer. Omit when the page has no collapsible nav. */
   onMenuToggle?: () => void;
+  /** Also show the menu button on wide screens (e.g. to hide/show a docked sidebar). */
+  menuAlwaysVisible?: boolean;
+  /** Accessible label / tooltip for the menu button. */
+  menuLabel?: string;
   /** Current workspace id — shows the notification bell when given. */
   workspaceId?: string;
 }
@@ -45,13 +49,21 @@ export default function TopBar({
   online,
   children,
   onMenuToggle,
+  menuAlwaysVisible = false,
+  menuLabel = "Toggle navigation",
   workspaceId,
 }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
         {onMenuToggle && (
-          <button type="button" className="topbar-menu-btn" onClick={onMenuToggle} aria-label="Toggle navigation">
+          <button
+            type="button"
+            className={"topbar-menu-btn" + (menuAlwaysVisible ? " is-always" : "")}
+            onClick={onMenuToggle}
+            aria-label={menuLabel}
+            title={menuLabel}
+          >
             <Menu className="topbar-menu-icon" />
           </button>
         )}

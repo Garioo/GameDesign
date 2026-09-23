@@ -281,17 +281,29 @@ export interface SectionInfo {
   id: string;
   name: string;
   position: number;
+  /** Hex colour from SECTION_PALETTE, or null for none. */
+  color: string | null;
 }
+
+/** Colours a section can be given (the board palette, so the app stays consistent). */
+export { BOARD_PALETTE as SECTION_PALETTE } from "./boardColors";
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+/** A stored section colour if it's a plain hex colour, else null. */
+export const cleanSectionColor = (value: unknown): string | null =>
+  typeof value === "string" && HEX_COLOR_RE.test(value) ? value : null;
 
 /** List the workspace sections, ordered. */
 export async function listSections(workspaceId: string): Promise<SectionInfo[]> {
   const { data, error } = await supabase
     .from("sections")
-    .select("id, name, position")
+    .select("id, name, position, color")
     .eq("project_id", workspaceId)
     .order("position", { ascending: true });
   if (error) throw new Error(`listSections failed: ${error.message}`);
-  return (data ?? []) as SectionInfo[];
+  return ((data ?? []) as SectionInfo[]).map((s) => ({
+    ...s,
+    color: cleanSectionColor(s.color),
+  }));
 }
 
 /** Create a new section (top-level group). Returns it with its assigned position. */
@@ -313,7 +325,7 @@ export async function createSection(workspaceId: string, name: string): Promise<
     .select("id, name, position")
     .single();
   if (error || !data) throw new Error(`createSection failed: ${error?.message}`);
-  return data as SectionInfo;
+  return { ...(data as Omit<SectionInfo, "color">), color: null };
 }
 
 /** Create a blank page in a section (with one empty text block) and return it. */
@@ -449,6 +461,13 @@ export async function renameSection(sectionId: string, name: string): Promise<vo
   if (!name) return;
   const { error } = await supabase.from("sections").update({ name }).eq("id", sectionId);
   if (error) throw new Error(`renameSection failed: ${error.message}`);
+}
+
+/** Set a section's colour (a hex colour, or null to clear it). */
+export async function setSectionColor(sectionId: string, color: string | null): Promise<void> {
+  if (color !== null && !HEX_COLOR_RE.test(color)) throw new Error("Choose one of the section colours.");
+  const { error } = await supabase.from("sections").update({ color }).eq("id", sectionId);
+  if (error) throw new Error(`setSectionColor failed: ${error.message}`);
 }
 
 /** Delete a section (only call when it has no pages). */

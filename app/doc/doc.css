@@ -21,17 +21,16 @@
    app/components/chrome.css (TopBar.tsx / Dock.tsx). */
 
 /* ---------------- 3-column body ---------------- */
+/* Full window width: sidebar and rail hug the edges, the page takes the rest. */
 .body {
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr) 318px;
   align-items: start;
-  max-width: 1500px;
-  margin: 0 auto;
 }
 
 /* ---------------- main document ---------------- */
 .main { padding: 40px 56px 120px; }
-.doc { max-width: 720px; margin: 0 auto; }
+.doc { width: 100%; }
 
 /* The floating dock sits right where the slash-command menu and any
    block near the end of the page want to open. Fade it back while a
@@ -76,7 +75,6 @@
   font-size: 20px;
   line-height: 1.5;
   color: var(--ink-soft);
-  max-width: 600px;
   margin-bottom: 34px;
 }
 
@@ -332,6 +330,20 @@
   .ref-card:nth-child(7) { animation-delay: .70s; }
 }
 
+/* Hidden sidebar (top-bar button / ⌘\): the page takes its column. Only on
+   screens wide enough to dock it; narrow screens use the drawer instead. */
+@media (min-width: 861px) {
+  .app.sidebar-hidden .sidebar { display: none; }
+  .app.sidebar-hidden .body { grid-template-columns: minmax(0, 1fr) 318px; }
+}
+@media (min-width: 861px) and (max-width: 1180px) {
+  .app.sidebar-hidden .body { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The drawer backdrop only exists in the drawer layouts below; on wide screens
+   it must never take a slot in the .body grid. */
+.nav-backdrop { display: none; }
+
 /* ---------------- responsive ---------------- */
 /* Below 1180px the rail (linked references + comments) becomes a
    slide-in drawer from the right, opened via the topbar's rail-toggle
@@ -352,6 +364,7 @@
   .app.rail-open .rail { display: flex; }
   .rail-toggle-btn { display: inline-flex; position: relative; }
   .nav-backdrop {
+    display: block;
     position: fixed; inset: 58px 0 0 0; z-index: 44;
     border: none; padding: 0; cursor: default;
     background: rgba(42, 36, 30, 0.28);

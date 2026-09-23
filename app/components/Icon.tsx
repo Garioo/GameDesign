@@ -14,6 +14,8 @@ const paths = {
   ],
   external: ["M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"],
   arrowRight: ["M5 12h14", "m12 5 7 7-7 7"],
+  arrowUp: ["m5 12 7-7 7 7", "M12 19V5"],
+  arrowDown: ["M12 5v14", "m19 12-7 7-7-7"],
   arrowUpRight: ["M7 17 17 7", "M7 7h10v10"],
   cornerLeftUp: ["M14 9 9 4 4 9", "M20 20h-7a4 4 0 0 1-4-4V4"],
   chevronDown: ["m6 9 6 6 6-6"],

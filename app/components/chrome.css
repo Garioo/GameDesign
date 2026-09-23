@@ -43,6 +43,7 @@
   cursor: pointer;
 }
 .topbar-menu-btn:hover { background: var(--line-soft); color: var(--ink); }
+.topbar-menu-btn.is-always { display: inline-flex; }
 .topbar-menu-icon { width: 16px; height: 16px; }
 .brand-name { font-weight: 700; letter-spacing: 0.06em; font-size: 13.5px; }
 .crumb-sep { color: var(--ink-faint); }

@@ -377,6 +377,16 @@
 }
 
 /* mention chips */
+/* web links (pasted URLs) — click opens them in a new tab */
+.blk-text a[href]:not([data-mention]) {
+  color: var(--ember-deep);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ember-deep) 40%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.blk-text a[href]:not([data-mention]):hover { text-decoration-color: currentColor; }
 .blk-text a[data-mention] {
   padding: 1px 6px 2px;
   border-radius: 6px;

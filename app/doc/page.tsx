@@ -23,6 +23,8 @@ import {
   listSections,
   loadWorkspace,
   renameSection,
+  setSectionColor,
+  cleanSectionColor,
   reorderSections,
   saveBlocks,
   savePage,
@@ -225,6 +227,33 @@ function DocPageInner() {
     [comments],
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Wide screens: the docked sidebar can be hidden to give the page the room
+  // (remembered in this browser). Narrow screens use the drawer (sidebarOpen).
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  useEffect(() => {
+    try { setSidebarHidden(localStorage.getItem("gd-doc-sidebar-hidden") === "1"); } catch { /* optional preference */ }
+  }, []);
+  const toggleSidebar = useCallback(() => {
+    if (window.matchMedia("(max-width: 860px)").matches) {
+      setSidebarOpen((v) => !v);
+      return;
+    }
+    setSidebarHidden((hidden) => {
+      try { localStorage.setItem("gd-doc-sidebar-hidden", hidden ? "0" : "1"); } catch { /* optional preference */ }
+      return !hidden;
+    });
+  }, []);
+  // ⌘\ / Ctrl+\ toggles the sidebar, as in most editors.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleSidebar]);
   const [railOpen, setRailOpen] = useState(false);
   const [draftRecovery, setDraftRecovery] = useState<BlockDraft & { pageId: string } | null>(null);
   const draftChecked = useRef<Set<string>>(new Set());
@@ -537,15 +566,16 @@ function DocPageInner() {
             if (oldId) setSections((prev) => prev.filter((s) => s.id !== oldId));
             return;
           }
-          const row = payload.new as { id?: string; name?: string; position?: number };
+          const row = payload.new as { id?: string; name?: string; position?: number; color?: string | null };
           const id = row?.id;
           if (!id) return;
           setSections((prev) => {
             const name = row.name ?? "Section";
             const position = row.position ?? prev.length;
+            const color = cleanSectionColor(row.color);
             return prev.some((s) => s.id === id)
-              ? prev.map((s) => (s.id === id ? { ...s, name, position } : s))
-              : [...prev, { id, name, position }];
+              ? prev.map((s) => (s.id === id ? { ...s, name, position, color } : s))
+              : [...prev, { id, name, position, color }];
           });
           if (row.name) {
             setDocs((prev) => prev.map((d) => (d.sectionId === id ? { ...d, group: row.name! } : d)));
@@ -979,6 +1009,11 @@ function DocPageInner() {
     renameSection(id, name).catch(console.error);
   };
 
+  const handleSetSectionColor = (id: string, color: string | null) => {
+    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, color } : s)));
+    setSectionColor(id, color).catch(console.error);
+  };
+
   const handleDeleteSection = (id: string) => {
     setSections((prev) => prev.filter((s) => s.id !== id));
     deleteSection(id).catch(console.error);
@@ -1081,13 +1116,15 @@ function DocPageInner() {
         : [];
 
   return (
-    <div className={"app" + (sidebarOpen ? " nav-open" : "") + (railOpen ? " rail-open" : "")}>
+    <div className={"app" + (sidebarOpen ? " nav-open" : "") + (railOpen ? " rail-open" : "") + (sidebarHidden ? " sidebar-hidden" : "")}>
       {/* ---------------- top bar (global chrome) ---------------- */}
       <TopBar
         brandName={workspace?.name}
         crumbs={[active.group, active.title]}
         online={onlineList}
-        onMenuToggle={() => setSidebarOpen((v) => !v)}
+        onMenuToggle={toggleSidebar}
+        menuAlwaysVisible
+        menuLabel={sidebarHidden ? "Show sidebar (⌘\\)" : "Hide sidebar (⌘\\)"}
         workspaceId={session?.workspaceId}
       >
         <span className={"save-state save-" + saveState}>
@@ -1149,6 +1186,7 @@ function DocPageInner() {
           onRenamePage={(id, title) => update(id, { title })}
           onDeletePage={handleDeletePage}
           onRenameSection={handleRenameSection}
+          onSetSectionColor={handleSetSectionColor}
           onDeleteSection={handleDeleteSection}
           onMovePage={handleMovePage}
           onMoveSection={handleMoveSection}
@@ -1384,7 +1422,9 @@ function DocPageInner() {
               }
               onAnnotationClick={(anchor) => {
                 setFocusAnchor({ anchor, at: Date.now() });
-                setRailOpen(true);
+                // The rail is only a drawer below 1180px (doc.css); on wider
+                // screens it's always visible and must not be "opened".
+                if (window.matchMedia("(max-width: 1180px)").matches) setRailOpen(true);
               }}
               onLiveInput={(blockId, text, blocks) => {
                 // instant: per-block delta to other clients (no local re-render)

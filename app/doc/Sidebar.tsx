@@ -4,7 +4,7 @@ import LinkedDocuments from "./LinkedDocuments";
 
 import { useEffect, useState } from "react";
 import type { DesignDoc } from "./data";
-import type { SectionInfo } from "@/lib/docsRepo";
+import { SECTION_PALETTE, type SectionInfo } from "@/lib/docsRepo";
 import Icon from "@/app/components/Icon";
 import "./Sidebar.css";
 
@@ -62,6 +62,8 @@ interface SidebarProps {
   onRenamePage: (id: string, title: string) => void;
   onDeletePage: (id: string) => void;
   onRenameSection: (id: string, name: string) => void;
+  /** Set or clear (null) a section's colour; editors only. */
+  onSetSectionColor?: (id: string, color: string | null) => void;
   onDeleteSection: (id: string) => void;
   /** Opens the trash dialog; editors only. */
   onOpenTrash?: () => void;
@@ -84,6 +86,7 @@ export default function Sidebar({
   onRenamePage,
   onDeletePage,
   onRenameSection,
+  onSetSectionColor,
   onDeleteSection,
   onOpenTrash,
   onMovePage,
@@ -178,14 +181,20 @@ export default function Sidebar({
     onMovePage(moved.id, tgt.sectionId ?? null, parentId, ordered);
   };
 
-  const performSectionDrop = (targetId: string) => {
-    if (!dragSection || dragSection === targetId) return;
+  // Moves the section into the target's slot: dragged down it lands after the
+  // target, dragged up before it — so any position, including last, is reachable.
+  const moveSectionTo = (movedId: string, targetId: string) => {
+    if (movedId === targetId) return;
     const ids = [...sections].sort((a, b) => a.position - b.position).map((s) => s.id);
-    const from = ids.indexOf(dragSection);
-    ids.splice(from, 1);
+    const from = ids.indexOf(movedId);
     const to = ids.indexOf(targetId);
-    ids.splice(to, 0, dragSection);
+    if (from === -1 || to === -1) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, movedId);
     onMoveSection(ids);
+  };
+  const performSectionDrop = (targetId: string) => {
+    if (dragSection) moveSectionTo(dragSection, targetId);
   };
 
   const clearDrag = () => {
@@ -326,7 +335,7 @@ export default function Sidebar({
       </div>
 
       <nav className="nav">
-        {orderedSections.map((sec) => {
+        {orderedSections.map((sec, secIndex) => {
           const tops = topLevel(sec.id);
           const isRenaming = renaming?.kind === "section" && renaming.id === sec.id;
           const hasPages = docs.some((d) => d.sectionId === sec.id);
@@ -335,17 +344,28 @@ export default function Sidebar({
           return (
             <div
               key={sec.id}
-              className={"nav-group" + (dropSection === sec.id ? " drop-section" : "")}
+              className={
+                "nav-group" +
+                (dropSection === sec.id ? " drop-section" : "") +
+                (dragSection === sec.id ? " dragging-section" : "")
+              }
               onDragOver={(e) => {
-                if (dragPage) {
+                if (dragPage || (dragSection && dragSection !== sec.id)) {
                   e.preventDefault();
                   setDropSection(sec.id);
                 }
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropSection((d) => (d === sec.id ? null : d));
               }}
               onDrop={(e) => {
                 if (dragPage) {
                   e.preventDefault();
                   performPageDrop({ kind: "section", id: sec.id });
+                  clearDrag();
+                } else if (dragSection) {
+                  e.preventDefault();
+                  performSectionDrop(sec.id);
                   clearDrag();
                 }
               }}
@@ -359,16 +379,6 @@ export default function Sidebar({
                   e.dataTransfer.effectAllowed = "move";
                 }}
                 onDragEnd={clearDrag}
-                onDragOver={(e) => {
-                  if (dragSection && dragSection !== sec.id) e.preventDefault();
-                }}
-                onDrop={(e) => {
-                  if (dragSection) {
-                    e.preventDefault();
-                    performSectionDrop(sec.id);
-                    clearDrag();
-                  }
-                }}
               >
                 {isRenaming ? (
                   <input
@@ -383,21 +393,31 @@ export default function Sidebar({
                     onBlur={commitRename}
                   />
                 ) : (
-                  <button
-                    type="button"
+                  // A span, not a <button>: browsers won't start dragging the
+                  // section header from a button, and it fills the header.
+                  <span
+                    role="button"
+                    tabIndex={0}
                     className="nav-group-toggle"
                     aria-expanded={!isCollapsed}
                     title={isCollapsed ? `Show pages in ${sec.name}` : `Hide pages in ${sec.name}`}
                     onClick={() => setSectionCollapsed(sec.id, !isCollapsed)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSectionCollapsed(sec.id, !isCollapsed);
+                      }
+                    }}
                   >
                     <Icon name={isCollapsed ? "chevronRight" : "chevronDown"} className="nav-group-chevron" />
+                    {sec.color && <span className="nav-group-dot" style={{ background: sec.color }} aria-hidden="true" />}
                     <span className="nav-group-name">{sec.name}</span>
                     {isCollapsed && (
                       <span className="nav-group-count" aria-label={`${pageCount} ${pageCount === 1 ? "page" : "pages"}`}>
                         {pageCount}
                       </span>
                     )}
-                  </button>
+                  </span>
                 )}
                 {canEdit && (
                 <span className="nav-group-actions">
@@ -430,6 +450,58 @@ export default function Sidebar({
                     <button onMouseDown={(e) => { e.preventDefault(); startRename("section", sec.id, sec.name); }}>
                       <Pencil /> Rename
                     </button>
+                    <button
+                      disabled={secIndex === 0}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        if (secIndex === 0) return;
+                        setMenu(null);
+                        moveSectionTo(sec.id, orderedSections[secIndex - 1].id);
+                      }}
+                    >
+                      <Icon name="arrowUp" /> Move up
+                    </button>
+                    <button
+                      disabled={secIndex === orderedSections.length - 1}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        if (secIndex === orderedSections.length - 1) return;
+                        setMenu(null);
+                        moveSectionTo(sec.id, orderedSections[secIndex + 1].id);
+                      }}
+                    >
+                      <Icon name="arrowDown" /> Move down
+                    </button>
+                    {onSetSectionColor && (
+                      <div className="row-menu-colors" role="radiogroup" aria-label={`Colour for ${sec.name}`}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={!sec.color}
+                          title="No colour"
+                          className={"color-swatch color-none" + (!sec.color ? " is-selected" : "")}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            onSetSectionColor(sec.id, null);
+                          }}
+                        />
+                        {SECTION_PALETTE.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            role="radio"
+                            aria-checked={sec.color === c}
+                            title={c}
+                            className={"color-swatch" + (sec.color === c ? " is-selected" : "")}
+                            style={{ background: c }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              onSetSectionColor(sec.id, c);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <button
                       className="danger"
                       disabled={hasPages}
