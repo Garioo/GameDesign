@@ -682,7 +682,7 @@ export default function HomeDashboard() {
                     <h2 className={styles.sectionTitle}>Upcoming milestones</h2>
                     <Link href="/milestones" className={styles.sectionLink}>All milestones</Link>
                   </div>
-                  <UpcomingMilestones workspaceId={session.workspaceId} />
+                  <UpcomingMilestones workspaceId={session.workspaceId} boards={boards} />
                 </section>
               )}
 

@@ -3,11 +3,10 @@
  *
  * Next's client navigation is a same-document update, so the transition is
  * started by hand: the browser snapshots the old page, we push the route, and
- * the new page is revealed once it has rendered — signalled by the dock (on
- * every signed-in page) calling finishViewTransition() when the path changes.
- * A timeout reveals it anyway if that signal never comes (a page without the
- * dock, a slow chunk). The animations themselves live in
- * app/components/chrome.css. Browsers without the API, and people who prefer
+ * the new page is revealed once it has rendered — signalled by
+ * app/RouteTransitionSignal.tsx (in the root layout) when the path changes.
+ * A short timeout reveals it anyway if that signal never comes (a slow
+ * chunk). The animations themselves live in app/components/chrome.css. Browsers without the API, and people who prefer
  * reduced motion, just navigate.
  * ------------------------------------------------------------------------- */
 
@@ -15,7 +14,7 @@ type Router = { push: (href: string) => void };
 type ViewTransitionDoc = Document & { startViewTransition?: (cb: () => Promise<void>) => unknown };
 
 /** Longest the old page stays frozen while the new one loads. */
-const MAX_WAIT_MS = 700;
+const MAX_WAIT_MS = 400;
 
 let reveal: (() => void) | null = null;
 

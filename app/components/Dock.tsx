@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { finishViewTransition, navigateWithTransition } from "@/lib/viewTransition";
+import { navigateWithTransition } from "@/lib/viewTransition";
 import { useShortcuts, type Shortcut } from "@/lib/shortcuts";
 import GlobalSearch, { type PaletteOpen, type SearchConfig } from "./GlobalSearch";
 import { SequenceHint, ShortcutHelp } from "./KeyboardLayer";
@@ -73,10 +73,6 @@ const ITEMS: { id: string; label: string; href?: string; go: string; Icon: Compo
   { id: "milestones", label: "Milestones", href: "/milestones", go: "m", Icon: FlagIcon },
 ];
 
-/** Fraction of the remaining distance the nav pill covers each frame (higher = snappier). */
-const PILL_EASE = 0.22;
-/** How long the pill keeps following its target after a change; covers the slowest label transition in chrome.css (0.55s). */
-const PILL_TRACK_MS = 650;
 
 function activeFromPath(path: string): string {
   if (path.startsWith("/doc/canvas")) return "canvas";
@@ -106,11 +102,6 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
   const router = useRouter();
   const pathname = usePathname();
   const active = activeFromPath(pathname);
-  // Every signed-in page renders the dock, so its arrival on a new path is the
-  // "new page is ready" signal for a pending view transition.
-  useEffect(() => {
-    finishViewTransition();
-  }, [pathname]);
 
   // ⌘K / Ctrl-K toggles the search on every route that shows the dock.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -170,53 +161,6 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
 
   const showNav = !tools || navHover;
 
-  // Gliding pill: a highlight behind the nav that springs toward whichever
-  // button is hovered/focused. It's driven per frame (rather than a CSS
-  // transition) because the target moves too — the hovered label unrolls
-  // and the previous one rolls up, reflowing the row as the pill travels.
-  const navRef = useRef<HTMLDivElement>(null);
-  const pillRef = useRef<HTMLSpanElement>(null);
-  const pillTarget = useRef<HTMLElement | null>(null);
-  const pillPos = useRef<{ x: number; w: number } | null>(null);
-  const pillFrame = useRef(0);
-  const pillTrackUntil = useRef(0);
-  const stepPill = () => {
-    const pill = pillRef.current;
-    const el = pillTarget.current;
-    if (!pill || !el) return;
-    const tx = el.offsetLeft;
-    const tw = el.offsetWidth;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const cur = pillPos.current;
-    const next = !cur || reduce ? { x: tx, w: tw } : { x: cur.x + (tx - cur.x) * PILL_EASE, w: cur.w + (tw - cur.w) * PILL_EASE };
-    pillPos.current = next;
-    pill.style.transform = `translateX(${next.x}px)`;
-    pill.style.width = `${next.w}px`;
-    // Keep ticking while the pill travels, and for as long as the labels'
-    // roll-up/unroll transitions (chrome.css) can still be moving the target.
-    const settled =
-      Math.abs(tx - next.x) < 0.3 && Math.abs(tw - next.w) < 0.3 && performance.now() > pillTrackUntil.current;
-    pillFrame.current = settled ? 0 : requestAnimationFrame(stepPill);
-  };
-  const setPill = (el: HTMLElement | null) => {
-    if (el === pillTarget.current) return;
-    pillTarget.current = el;
-    navRef.current?.classList.toggle("has-pill", !!el);
-    if (!el) {
-      pillPos.current = null; // next entry appears in place instead of gliding in from afar
-      return;
-    }
-    pillTrackUntil.current = performance.now() + PILL_TRACK_MS;
-    cancelAnimationFrame(pillFrame.current);
-    stepPill();
-  };
-  // Gaps and the divider keep the current target, so the pill doesn't
-  // blink out while the pointer crosses between buttons.
-  const onNavOver = (e: { target: EventTarget }) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-pill]");
-    if (el) setPill(el);
-  };
-  useEffect(() => () => cancelAnimationFrame(pillFrame.current), []);
 
   return (
     <div
@@ -226,17 +170,8 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
     >
       <nav className="dock">
         {showNav ? (
-          <div
-            key="nav"
-            ref={navRef}
-            className="dock-row dock-nav"
-            onPointerOver={onNavOver}
-            onPointerLeave={() => setPill(null)}
-            onFocus={(e) => e.target.matches(":focus-visible") && onNavOver(e)}
-            onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setPill(null)}
-          >
-            <span ref={pillRef} className="dock-pill" aria-hidden="true" />
-            <button data-pill className="dock-search" onClick={() => openSearch()} aria-label={`Search (${shortcut})`}>
+          <div key="nav" className="dock-row dock-nav">
+            <button data-tip className="dock-search" onClick={() => openSearch()} aria-label={`Search (${shortcut})`}>
               <SearchIcon className="dock-search-icon" />
               <kbd className="kbd dock-label">{shortcut}</kbd>
             </button>
@@ -244,7 +179,7 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
             {ITEMS.map(({ id, label, href, go, Icon }) => (
               <button
                 key={id}
-                data-pill
+                data-tip
                 className={"dock-item" + (id === active ? " is-active" : "")}
                 onClick={href && id !== active ? () => navigateWithTransition(router, hrefFor(id, href)) : undefined}
               >
@@ -256,7 +191,7 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
               </button>
             ))}
             {onNew && (
-              <button data-pill className="dock-new" onClick={onNew}>
+              <button data-tip className="dock-new" onClick={onNew}>
                 <Plus className="dock-new-icon" /> <span className="dock-label">{newLabel}</span>
               </button>
             )}

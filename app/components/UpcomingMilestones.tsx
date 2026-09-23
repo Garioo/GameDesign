@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { loadBoards } from "@/lib/boardRepo";
+import type { Board } from "@/lib/boardRepo";
 import { blockedIds, countdown, milestoneProgress, sortMilestones, todayKey, urgency, type Milestone, type PlanTask } from "@/lib/planning";
 import { loadPlanning } from "@/lib/planningRepo";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
@@ -15,30 +15,33 @@ interface Row {
   blocked: number;
 }
 
-/** The next few open milestones with countdowns and progress (Home). */
-export default function UpcomingMilestones({ workspaceId, limit = 3 }: { workspaceId: string; limit?: number }) {
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [missing, setMissing] = useState(false);
+/**
+ * The next few open milestones with countdowns and progress (Home). Uses the
+ * boards Home already has, so it only fetches the planning data itself.
+ */
+export default function UpcomingMilestones({ workspaceId, boards, limit = 3 }: { workspaceId: string; boards: Board[] | null; limit?: number }) {
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof loadPlanning>> | null>(null);
 
   const load = useCallback(async () => {
-    const [plan, boards] = await Promise.all([loadPlanning(workspaceId), loadBoards(workspaceId)]);
-    setMissing(plan.missing);
+    setPlan(await loadPlanning(workspaceId));
+  }, [workspaceId]);
+  useEffect(() => {
+    load().catch(() => setPlan({ milestones: [], dependencies: [], recurring: [], missing: false }));
+  }, [load]);
+  useSidebarLiveUpdates(workspaceId, ["milestones", "card_dependencies"], load);
+
+  const missing = !!plan?.missing;
+  const rows = useMemo<Row[] | null>(() => {
+    if (!plan || !boards) return null;
     const tasks: PlanTask[] = boards.flatMap((b) =>
       b.cols.flatMap((c) => c.cards.map((k) => ({ id: k.id, title: k.title, done: !!c.isCompleted, milestoneId: k.milestoneId ?? null }))),
     );
     const blocked = blockedIds(plan.dependencies, new Map(tasks.map((t) => [t.id, t])));
-    setRows(
-      sortMilestones(plan.milestones)
-        .filter((m) => !m.completedAt)
-        .slice(0, limit)
-        .map((m) => ({ m, ...milestoneProgress(m.id, tasks, blocked) })),
-    );
-  }, [workspaceId, limit]);
-
-  useEffect(() => {
-    load().catch(() => setRows([]));
-  }, [load]);
-  useSidebarLiveUpdates(workspaceId, ["milestones", "board_cards", "card_dependencies"], load);
+    return sortMilestones(plan.milestones)
+      .filter((m) => !m.completedAt)
+      .slice(0, limit)
+      .map((m) => ({ m, ...milestoneProgress(m.id, tasks, blocked) }));
+  }, [plan, boards, limit]);
 
   if (missing) return null;
   if (rows === null) return <div className={styles.skeleton} />;

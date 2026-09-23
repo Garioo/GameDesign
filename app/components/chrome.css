@@ -400,91 +400,60 @@ button.who-row:disabled { cursor: default; }
 .dock-new:active { transform: none; }
 .dock-new-icon { width: 16px; height: 16px; }
 
-/* Icon-only nav with a gliding pill. On pointer devices the bar is a strip
-   of icons; Dock.tsx springs .dock-pill behind whichever [data-pill] button
-   is hovered/focused, and that button unrolls its label out of the pill.
-   Labels collapse via max-width (not display:none) so they stay the
-   buttons' accessible names. */
+/* Icon-only nav with calm tooltips. On pointer devices the bar is a fixed
+   strip of icons: hovering one gives it a soft background and fades its
+   name (plus its "G …" shortcut) in above it. Nothing moves or resizes.
+   The label stays in the DOM as the button's accessible name. */
 @media (hover: hover) {
   .dock:has(.dock-nav) { padding: 4px; }
-  .dock-nav { position: relative; gap: 2px; }
-  .dock-nav [data-pill] {
+  .dock-nav { gap: 2px; }
+  .dock-nav [data-tip] {
     position: relative;
-    z-index: 1;
     gap: 0;
     padding: 8px;
-    /* closing (rolling the label back up) is deliberately slower than opening */
-    transition: gap 0.55s cubic-bezier(0.4, 0, 0.2, 1), padding 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-      color var(--t-fast), filter var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
   }
-  /* the pill is the hover background now */
-  .dock-nav .dock-item:hover:not(.is-active),
-  .dock-nav .dock-search:hover { background: none; }
   .dock-nav .dock-item:hover,
   .dock-nav .dock-new:hover { transform: none; }
-  .dock-nav [data-pill]:active { transform: scale(0.95); }
   .dock-nav .dock-new { margin-left: 0; }
   .dock-nav .dock-divider { margin: 0 2px; height: 18px; }
 
   .dock-nav .dock-label {
-    display: inline-block;
-    overflow: hidden;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    display: flex;
+    align-items: center;
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
     white-space: nowrap;
-    max-width: 0;
+    box-shadow: var(--shadow-pop);
+    pointer-events: none;
     opacity: 0;
-    transform: translateX(-6px);
-    transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease,
-      transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(-50%);
+    transition: opacity 0.12s ease;
   }
-  .dock-nav [data-pill]:is(:hover, :focus-visible) {
-    gap: 7px;
-    padding: 8px 13px 8px 10px;
-    transition: gap 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
-      color var(--t-fast), filter var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
-  }
-  .dock-nav [data-pill]:is(:hover, :focus-visible) .dock-label {
-    max-width: 170px;
-    opacity: 1;
-    transform: none;
-    transition: max-width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease 0.06s,
-      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
+  .dock-nav [data-tip]:is(:hover, :focus-visible) .dock-label { opacity: 1; }
 
-  /* the "G P" shortcut hint inside an unrolled label */
+  /* the "G P" shortcut hint inside the tooltip */
   .dock-kbd {
-    margin-left: 7px;
+    margin-left: 8px;
     padding: 1px 5px;
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: var(--surface);
-    color: var(--ink-faint);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.16);
+    color: rgba(255, 255, 255, 0.75);
     font-family: inherit;
     font-size: 10.5px;
     font-weight: 600;
     letter-spacing: 0.04em;
-    vertical-align: 1px;
   }
-
-  .dock-pill {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    border-radius: 11px;
-    background: var(--line-soft);
-    box-shadow: inset 0 0 0 1px var(--line);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-  }
-  .dock-nav.has-pill .dock-pill { opacity: 1; transition-duration: 0.18s; }
 }
 @media (hover: none) {
-  .dock-pill, .dock-kbd { display: none; }
-}
-@media (hover: hover) and (prefers-reduced-motion: reduce) {
-  .dock-nav [data-pill], .dock-nav .dock-label { transition: none; }
+  .dock-kbd { display: none; }
 }
 
 /* Cross-fade when the bar content swaps between tools and nav. */

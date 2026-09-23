@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+import RouteTransitionSignal from "./RouteTransitionSignal";
 
 // Single-family typography: Hanken Grotesk everywhere. Headings differ by
 // size/weight only. --font-display still exists as an alias of --font-ui
@@ -29,7 +30,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={hanken.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <RouteTransitionSignal />
+      </body>
     </html>
   );
 }
