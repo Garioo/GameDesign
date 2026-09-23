@@ -155,13 +155,29 @@ restore logs one entry.
   same kind of thing to the same item updates one row instead of adding more
   (e.g. "added 5 tasks to Gameplay", "left 3 comments on Combat"). A status or
   stage change that is reversed inside that window disappears.
-- **Not recorded:** block text edits. "Recently edited" already covers those.
+- **Not recorded:** block text edits. Those go to the page's edit history (below).
 - **Where it shows:** a **Team activity** feed on Home, and a collapsed
   **History** section in each page's side panel and each task dialog.
 - **New notifications:** **replies** (everyone else in a comment thread hears
   about a new reply, unless it @-mentions them, in which case they get the
   mention instead) and **page ownership** (you're made owner of a page by
   someone else).
+
+## Page edit history
+
+Apply `supabase/migrate-page-edits.sql`. The clock button in a page's top bar
+opens **Edit history**: who wrote, edited or deleted each block, when, and a
+word-level view of what changed (removed words struck through, added words
+highlighted). Filter by person, and click an entry to jump to that block.
+
+- **How it's recorded:** a trigger on `blocks` writes `page_edits` rows with
+  the signed-in author and the block's text before and after. Clients can't
+  write the table, so authorship can't be forged. Members can read it.
+- **Typing is folded:** one person's edits to the same block within 10 minutes
+  make one entry. An edit that ends where it started, or a block added and
+  deleted in that window, leaves nothing.
+- **Not recorded:** moving blocks, changing a block's type, ticking to-dos,
+  and seeding. History starts when the migration is applied.
 
 ## Phase planning
 

@@ -90,6 +90,7 @@ on all tables.** Tables:
 | `comments`        | Threaded discussion (page_id, parent_id)                 |
 | `milestones`      | Project timeline                                         |
 | `activity`        | Team activity feed, written only by triggers (`migrate-activity.sql`) |
+| `page_edits`      | Per-block text edit history with author, written only by a trigger (`migrate-page-edits.sql`) |
 
 ## Real-time patterns
 
@@ -135,6 +136,7 @@ trade-off between "feels instant" and "doesn't hammer the database."
    22. `migrate-card-completed-at.sql` — `card_completions` (when each task was finished), kept by triggers as tasks enter/leave done stages; feeds the Team scoreboard on Home. A separate table so the migration never writes `board_cards`, whose guards require a signed-in member. Apply after `migrate-activity.sql` (the backfill reads the activity feed).
    23. `migrate-event-attendees.sql` — attendees on calendar events: workspace members (who get an `event` notification when added) and outside guests by name. Apply after `migrate-calendar-event-ranges.sql` and `migrate-activity.sql` (it extends the notification kinds).
    24. `migrate-inline-suggestions.sql` — inline comments and suggested edits on page text: anchor/quote/suggestion columns on `comments` and `settle_suggestion()` (editors accept or reject). Apply after `migrate-card-comments.sql`.
+   25. `migrate-page-edits.sql` — page edit history: a trigger on `blocks` records who changed each block's text, and from what to what, in `page_edits`. Independent of the other migrations.
 
    All of them are written to be safe to rerun, so applying the whole list again after a new one
    is added won't touch existing data.

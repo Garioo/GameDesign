@@ -37,6 +37,7 @@ import {
 import type { SearchConfig } from "@/app/components/GlobalSearch";
 import { pageItems } from "@/lib/searchIndex";
 import TrashDialog from "./TrashDialog";
+import EditHistory from "./EditHistory";
 import UndoToast from "@/app/components/UndoToast";
 import { HistoryToggle } from "@/app/components/ActivityFeed";
 import Comments from "./Comments";
@@ -115,6 +116,11 @@ const Grid = ({ className }: IconProps) => (
 const PanelInfo = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+const Clock = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
   </svg>
 );
 const Gear = ({ className }: IconProps) => (
@@ -201,6 +207,7 @@ function DocPageInner() {
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [editHistoryOpen, setEditHistoryOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; onUndo?: () => void } | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
   // Inline comments / suggested edits: the editor's live-DOM handle, which
@@ -1137,6 +1144,14 @@ function DocPageInner() {
           {comments.length > 0 && <span className="rail-toggle-badge">{comments.length}</span>}
         </button>
         <button
+          className="share-btn settings-btn"
+          title="Edit history — who wrote what"
+          aria-label="Edit history"
+          onClick={() => setEditHistoryOpen(true)}
+        >
+          <Clock className="settings-gear" />
+        </button>
+        <button
           className="share-btn"
           onClick={async () => {
             try {
@@ -1461,6 +1476,15 @@ function DocPageInner() {
         onNew={canEdit ? () => handleNewPage(activeSectionId, active.group) : undefined}
       />
 
+      {editHistoryOpen && session && (
+        <EditHistory
+          key={active.id}
+          workspaceId={session.workspaceId}
+          pageId={active.id}
+          pageTitle={active.title}
+          onClose={() => setEditHistoryOpen(false)}
+        />
+      )}
       {trashOpen && (
         <TrashDialog
           workspaceId={session!.workspaceId}
