@@ -9,7 +9,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import BlockEditor, { type BlockEditorApi } from "./BlockEditor";
 import Sidebar from "./Sidebar";
 import TopBar from "@/app/components/TopBar";
+import SaveStatus, { type SaveState } from "@/app/components/SaveStatus";
 import { useSitePresence } from "@/lib/useSitePresence";
+import { useFollowedView, useShareView } from "@/lib/followView";
 import { useShortcuts } from "@/lib/shortcuts";
 import Dock from "@/app/components/Dock";
 import { supabase } from "@/lib/supabase";
@@ -132,8 +134,6 @@ const Gear = ({ className }: IconProps) => (
     <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08A1.7 1.7 0 0 0 10 4.09V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08A1.7 1.7 0 0 0 21 11.9h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
   </svg>
 );
-
-type SaveState = "saved" | "saving" | "error";
 
 // Local backup of a page's blocks, written on every edit so content survives
 // a reload while the debounced server save hasn't gone through yet (e.g. no
@@ -260,33 +260,55 @@ function DocPageInner() {
     Record<string, { last: number; timer: ReturnType<typeof setTimeout> | null; pending: unknown }>
   >({});
   const pendingSaves = useRef(0);
-  const lastFailedSave = useRef<(() => Promise<void>) | null>(null);
+  // Failed writes, one per target (`b:<page>`, `p:<page>`, "profile", …).
+  // Every write sends the full latest value for its target, so only the
+  // newest attempt per key matters — it's what Retry / reconnect re-sends.
+  const failedSaves = useRef(new Map<string, () => Promise<void>>());
+  const latestSave = useRef<Record<string, number>>({});
+  const saveSeq = useRef(0);
+
+  // Saving while a debounce is waiting or a request is in flight; otherwise
+  // failed if any target's newest write failed; otherwise saved.
+  const settleSaveState = () => {
+    if (pendingSaves.current > 0 || Object.keys(saveTimers.current).length > 0) setSaveState("saving");
+    else setSaveState(failedSaves.current.size > 0 ? "error" : "saved");
+  };
 
   // Run a persistence call and surface its outcome in the topbar indicator.
-  const trackSave = (run: () => Promise<void>) => {
+  const trackSave = (key: string, run: () => Promise<void>) => {
+    const seq = ++saveSeq.current;
+    latestSave.current[key] = seq;
     pendingSaves.current += 1;
     setSaveState("saving");
     run()
-      .then(() => {
+      .then(
+        () => { if (latestSave.current[key] === seq) failedSaves.current.delete(key); },
+        (e) => {
+          console.error(e);
+          // A slow, stale request failing after a newer one mustn't queue old data.
+          if (latestSave.current[key] === seq) failedSaves.current.set(key, run);
+        },
+      )
+      .finally(() => {
         pendingSaves.current -= 1;
-        if (pendingSaves.current === 0) {
-          lastFailedSave.current = null; // a newer write superseded the failure
-          setSaveState("saved");
-        }
-      })
-      .catch((e) => {
-        pendingSaves.current -= 1;
-        console.error(e);
-        lastFailedSave.current = run;
-        setSaveState("error");
+        settleSaveState();
       });
   };
 
-  const retryFailedSave = () => {
-    const run = lastFailedSave.current;
-    lastFailedSave.current = null;
-    if (run) trackSave(run);
+  const retryFailedSaves = () => {
+    const failed = [...failedSaves.current];
+    failedSaves.current.clear();
+    for (const [key, run] of failed) trackSave(key, run);
   };
+  const retryRef = useRef(retryFailedSaves);
+  retryRef.current = retryFailedSaves;
+
+  // Back online: send whatever queued up while the connection was down.
+  useEffect(() => {
+    const onOnline = () => retryRef.current();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
 
   // Navigate to a page, recording it in the URL so reload/back/share work.
   const openPage = (id: string) => {
@@ -605,6 +627,13 @@ function DocPageInner() {
     session,
     active ? { path: `/doc?page=${active.id}`, label: `${active.title || "Untitled"} · Pages` } : { path: "/doc", label: "Pages" },
   );
+  // Followers open version history / trash along with you (settings stay private).
+  useShareView("doc", versionHistoryOpen || trashOpen ? { ...(versionHistoryOpen ? { history: "1" } : {}), ...(trashOpen ? { trash: "1" } : {}) } : null);
+  const followedView = useFollowedView();
+  const followHistory = followedView === undefined ? undefined : followedView.history === "1";
+  const followTrash = followedView === undefined ? undefined : followedView.trash === "1";
+  useEffect(() => { if (followHistory !== undefined) setVersionHistoryOpen(followHistory); }, [followHistory]);
+  useEffect(() => { if (followTrash !== undefined) setTrashOpen(followTrash); }, [followTrash]);
 
   // If a local draft survived from a session that never made it to the
   // server (dropped connection, closed tab before the debounce fired),
@@ -619,10 +648,12 @@ function DocPageInner() {
     setDraftRecovery({ ...draft, pageId: active.id });
   }, [active]);
 
-  // Warn before an unsynced change is silently discarded by a reload/close.
+  // Warn before an unsynced change is silently discarded by a reload/close —
+  // including one still waiting on the debounce or in flight. (Block edits
+  // also survive in the local draft, but title/tag/link edits don't.)
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (saveState !== "error") return;
+      if (saveState === "saved") return;
       e.preventDefault();
       e.returnValue = "";
     };
@@ -807,20 +838,24 @@ function DocPageInner() {
   const scheduleSaveBlocks = (pageId: string, blocks: Block[]) => {
     if (!canEdit) return;
     writeDraft(pageId, blocks); // instant local backup — see readDraft's recovery check below
-    clearTimeout(saveTimers.current[`b:${pageId}`]);
+    const key = `b:${pageId}`;
+    clearTimeout(saveTimers.current[key]);
     setSaveState("saving");
-    saveTimers.current[`b:${pageId}`] = setTimeout(() => {
+    saveTimers.current[key] = setTimeout(() => {
+      delete saveTimers.current[key];
       suppress.current[pageId] = Date.now() + 1500;
-      trackSave(() => saveBlocks(pageId, blocks).then(() => clearDraft(pageId)));
+      trackSave(key, () => saveBlocks(pageId, blocks).then(() => clearDraft(pageId)));
     }, 600);
   };
   const scheduleSavePage = (doc: DesignDoc) => {
     if (!canEdit) return;
-    clearTimeout(saveTimers.current[`p:${doc.id}`]);
+    const key = `p:${doc.id}`;
+    clearTimeout(saveTimers.current[key]);
     setSaveState("saving");
-    saveTimers.current[`p:${doc.id}`] = setTimeout(() => {
+    saveTimers.current[key] = setTimeout(() => {
+      delete saveTimers.current[key];
       suppress.current[doc.id] = Date.now() + 1500;
-      trackSave(() => savePage(doc));
+      trackSave(key, () => savePage(doc));
     }, 600);
   };
 
@@ -933,7 +968,7 @@ function DocPageInner() {
   // ---- settings ----
   const handleSaveProfile = (patch: { name: string; initials: string; color: string }) => {
     if (!session) return;
-    trackSave(() => updateProfile(session.userId, patch));
+    trackSave("profile", () => updateProfile(session.userId, patch));
     const next = { ...session, ...patch };
     setSession(next);
     // useSitePresence re-joins with the new identity, updating everyone's avatars.
@@ -951,7 +986,7 @@ function DocPageInner() {
   const handleSaveWorkspace = (info: WorkspaceInfo) => {
     const wsId = wsRef.current;
     if (!wsId) return;
-    trackSave(() => updateWorkspaceInfo(wsId, info));
+    trackSave("workspace", () => updateWorkspaceInfo(wsId, info));
     setWorkspace(info);
     broadcast("ws", { t: "ws", info });
   };
@@ -1212,18 +1247,7 @@ function DocPageInner() {
             View &amp; comment
           </span>
         )}
-        <span className={"save-state save-" + saveState}>
-          {saveState === "saving" && "Saving…"}
-          {saveState === "saved" && "Saved"}
-          {saveState === "error" && (
-            <>
-              Save failed
-              <button className="save-retry" onClick={retryFailedSave}>
-                Retry
-              </button>
-            </>
-          )}
-        </span>
+        <SaveStatus state={saveState} onRetry={retryFailedSaves} />
         <button
           className="share-btn rail-toggle-btn"
           title="Linked references & comments"

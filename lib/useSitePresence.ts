@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
+import { useOwnView, type View } from "./followView";
 
 /* ---------------------------------------------------------------------------
  * Who's online in the workspace, and where. Every page joins the same
@@ -18,6 +19,8 @@ export interface OnlineUser {
   /** Where they are: an in-app path, and a label such as "Week 3 · Pages". */
   path?: string;
   label?: string;
+  /** What they have open there — a task, an event… (lib/followView). */
+  view?: View;
 }
 
 interface Me {
@@ -34,6 +37,9 @@ export function useSitePresence(me: Me | null, where: { path: string; label: str
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const whereRef = useRef(where);
   whereRef.current = where;
+  const view = useOwnView();
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   const payload = (): Tracked | null =>
     me && {
@@ -43,6 +49,7 @@ export function useSitePresence(me: Me | null, where: { path: string; label: str
       color: me.color,
       path: whereRef.current.path,
       label: whereRef.current.label,
+      view: viewRef.current,
       at: Date.now(),
     };
 
@@ -82,7 +89,7 @@ export function useSitePresence(me: Me | null, where: { path: string; label: str
     const p = payload();
     if (p) channelRef.current?.track(p).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [where.path, where.label]);
+  }, [where.path, where.label, view]);
 
   // Until the first sync (or when realtime is down), at least show yourself.
   if (users.length === 0 && me) {

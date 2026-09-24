@@ -10,7 +10,8 @@ type Name =
   | "calendar"
   | "timeline"
   | "arrowLeft"
-  | "arrowRight";
+  | "arrowRight"
+  | "repeat";
 const paths: Record<Name, string> = {
   plus: "M12 5v14M5 12h14",
   menu: "M4 5h16v14H4zM9 5v14",
@@ -23,6 +24,7 @@ const paths: Record<Name, string> = {
   timeline: "M3 6h12v4H3zM9 14h12v4H9z",
   arrowLeft: "m14 6-6 6 6 6",
   arrowRight: "m10 6 6 6-6 6",
+  repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
 };
 export function PlanningIcon({
   name,

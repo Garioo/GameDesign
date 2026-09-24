@@ -6,7 +6,8 @@ import { useEffect, useRef, useState, type CSSProperties, type ComponentType } f
 import { useRouter } from "next/navigation";
 import { GeoShapeGeoStyle, toRichText, type Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
-import CanvasBoard, { type SaveState } from "./CanvasBoard";
+import CanvasBoard from "./CanvasBoard";
+import SaveStatus, { type SaveState } from "@/app/components/SaveStatus";
 import TopBar from "@/app/components/TopBar";
 import { useSitePresence } from "@/lib/useSitePresence";
 import Dock from "@/app/components/Dock";
@@ -192,6 +193,7 @@ export default function CanvasPage() {
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
 
   const wsRef = useRef<string | null>(null);
+  const retrySave = useRef<(() => void) | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -312,6 +314,17 @@ export default function CanvasPage() {
     setHistory({ canUndo: false, canRedo: false });
   }, [activeId]);
 
+  // Warn before a reload/close drops a save that's still queued or failed.
+  useEffect(() => {
+    if (saveState === "saved") return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveState]);
+
   // Keep ?c=<id> in the URL so refresh / sharing reopens the same canvas.
   // history.replaceState avoids a Next.js re-render round-trip.
   useEffect(() => {
@@ -405,9 +418,7 @@ export default function CanvasPage() {
         workspaceId={session?.workspaceId}
       >
         {active && (
-          <span className={"save-state save-" + saveState}>
-            {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ Save failed" : "Saved"}
-          </span>
+          <SaveStatus state={saveState} onRetry={() => retrySave.current?.()} />
         )}
         <button className="share-btn">Share</button>
         <button
@@ -452,6 +463,7 @@ export default function CanvasPage() {
               onReady={setEditor}
               onToolChange={setTool}
               onSaveState={setSaveState}
+              retryRef={retrySave}
               onHistoryChange={(canUndo, canRedo) => setHistory({ canUndo, canRedo })}
             />
           ) : (

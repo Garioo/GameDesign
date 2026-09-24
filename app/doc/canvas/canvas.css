@@ -158,8 +158,7 @@
   letter-spacing: 0.02em;
 }
 
-/* save / sync status styling comes from the global chrome
-   (.save-state in app/components/chrome.css) */
+/* save / sync status: app/components/SaveStatus */
 
 /* ---- delete confirmation (canvas sidebar row menu) ---- */
 .row-menu-confirm {

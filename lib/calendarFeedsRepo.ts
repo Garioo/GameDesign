@@ -55,6 +55,12 @@ export async function loadFeedEvents(feed: CalendarFeed): Promise<FeedEvent[]> {
     ...event,
     id: `feed:${feed.id}:${uid}:${event.date}`,
     feed: { id: feed.id, label: feed.label },
+    // Feeds expand their own repeats (one ICS entry per date), so never as a rule here.
+    repeat: null,
+    repeat_until: null,
+    skipped_dates: [],
+    repeat_weekends: true,
+    agenda: [],
     attendees: [],
     guests: [],
   }));

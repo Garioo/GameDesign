@@ -177,5 +177,6 @@ export async function loadCanvasScene(id: string): Promise<CanvasScene> {
 /** Persist a canvas's scene. */
 export async function saveCanvasScene(id: string, scene: CanvasScene): Promise<void> {
   assertMaxBytes(scene, LIMITS.sceneBytes, "Canvas scene");
-  await supabase.from("canvases").update({ data: scene }).eq("id", id);
+  const { error } = await supabase.from("canvases").update({ data: scene }).eq("id", id);
+  if (error) throw new Error(`saveCanvasScene failed: ${error.message}`);
 }

@@ -23,6 +23,7 @@ import cardStyles from "./CardDetails.module.css";
 import { HistoryToggle } from "@/app/components/ActivityFeed";
 import TopBar from "@/app/components/TopBar";
 import { useSitePresence } from "@/lib/useSitePresence";
+import { useFollowedView, useShareView } from "@/lib/followView";
 import Dock from "@/app/components/Dock";
 import SettingsButton from "@/app/components/SettingsButton";
 import { supabase } from "@/lib/supabase";
@@ -34,6 +35,7 @@ import { plainLinkedText } from "@/lib/pageLinks";
 import { loadLinkTargets } from "@/lib/linkTargets";
 import LinkedText from "@/app/components/LinkedText";
 import { useShortcuts } from "@/lib/shortcuts";
+import { confirmDiscard, sameItems } from "@/lib/confirmDiscard";
 import { blockedIds, type CardDependency, type Milestone, type RecurringRule } from "@/lib/planning";
 import { loadPlanning, spawnRecurring } from "@/lib/planningRepo";
 import { PlanningCtx, TaskBadges, TaskPlanningSection, type BoardTask, type PlanningState } from "./TaskPlanning";
@@ -647,6 +649,8 @@ type CardModalProps = {
   onMakeCanvas: (card: CardData, existingCanvasId?: string) => Promise<void>;
   /** Pages and canvases a description can link to (also used for current titles). */
   linkTargets: MentionTarget[];
+  /** Set while the edit form is open, so following someone never closes it under you. */
+  editingRef?: { current: boolean };
 };
 
 /** Task dialog: a read-only view by default; editors switch to the form with Edit. */
@@ -671,16 +675,26 @@ function CardModal(props: CardModalProps) {
   const canToggle = canEdit && !!cardBoard?.cols.some(c => c.isCompleted) && !!cardBoard?.cols.some(c => !c.isCompleted);
 
   const dialogRef=useRef<HTMLDivElement>(null);
-  const closeRef=useRef(onClose);
-  closeRef.current=onClose;
   const editingRef=useRef(editing);
   editingRef.current=editing;
+  const outerEditing=props.editingRef;
+  useEffect(()=>{if(outerEditing)outerEditing.current=editing;},[editing,outerEditing]);
+  useEffect(()=>()=>{if(outerEditing)outerEditing.current=false;},[outerEditing]);
+  // Set by the edit form while it holds changes that Save hasn't sent yet.
+  const editDirty=useRef(false);
+  const okToDropEdits=()=>!editingRef.current||confirmDiscard(editDirty.current,"your edits to this task");
+  function leaveEdit(){if(okToDropEdits())setEditing(false);}
+  function close(){if(okToDropEdits())onClose();}
+  const closeRef=useRef(close);
+  closeRef.current=close;
+  const leaveEditRef=useRef(leaveEdit);
+  leaveEditRef.current=leaveEdit;
   useEffect(()=>{
     const previous=document.activeElement as HTMLElement|null;
     dialogRef.current?.focus();
     function key(e:KeyboardEvent){
       // Escape leaves the form first, then closes the dialog.
-      if(e.key==='Escape'){e.preventDefault();if(editingRef.current)setEditing(false);else closeRef.current();}
+      if(e.key==='Escape'){e.preventDefault();if(editingRef.current)leaveEditRef.current();else closeRef.current();}
       if(e.key==='Tab'){
         const items=Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')??[]).filter(el=>el.offsetParent!==null&&!el.closest('fieldset:disabled'));
         const first=items[0],last=items[items.length-1];
@@ -700,7 +714,7 @@ function CardModal(props: CardModalProps) {
   }
 
   return (
-    <div className={`modal-backdrop${panel ? " gantt-inspector-backdrop" : ""}`} onClick={onClose}>
+    <div className={`modal-backdrop${panel ? " gantt-inspector-backdrop" : ""}`} onClick={close}>
       <div ref={dialogRef} tabIndex={-1} className={`modal ${cardStyles.dialog}${panel ? " gantt-inspector" : ` ${cardStyles.wide}`}${expanded ? " expanded" : ""}`} role="dialog" aria-modal="true" aria-label="Task details" onClick={(e) => e.stopPropagation()}>
         <div className={`gantt-inspector-heading ${cardStyles.heading}`}>
           {editing
@@ -713,12 +727,12 @@ function CardModal(props: CardModalProps) {
               setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500);
             } catch (e) { console.error(e); }
           }}>{linkCopied ? "Copied!" : "Copy link"}</button>
-          <button className={cardStyles.close} onClick={onClose} aria-label="Close task details"><Icon name="close" /></button>
+          <button className={cardStyles.close} onClick={close} aria-label="Close task details"><Icon name="close" /></button>
         </div>
         {panel && <button className="gantt-sheet-toggle" onClick={()=>setExpanded(!expanded)}>{expanded ? "Reduce panel" : "Expand panel"}</button>}
         <div className={cardStyles.layout}>
           {editing ? (
-            <CardEditForm {...props} onDone={() => setEditing(false)} />
+            <CardEditForm {...props} dirtyRef={editDirty} onDone={() => setEditing(false)} onCancel={leaveEdit} />
           ) : (
             <div className={cardStyles.view}>
               {parent && (
@@ -798,7 +812,13 @@ function CardModal(props: CardModalProps) {
 
 /** Turns bare http(s) URLs in plain text into links. */
 /** The editable form, mounted fresh on each Edit so it starts from the latest task data. */
-function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, canEdit, boards, linkTargets, onDone }: CardModalProps & { onDone: () => void }) {
+function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, onDelete, onMakeCanvas, canEdit, boards, linkTargets, onDone, onCancel, dirtyRef }: CardModalProps & {
+  /** After a successful save. */
+  onDone: () => void;
+  /** Cancel button — the modal asks first if there are unsaved edits. */
+  onCancel: () => void;
+  dirtyRef: { current: boolean };
+}) {
   const [title, setTitle] = useState(card.title);
   const [sub, setSub] = useState(card.sub ?? "");
   const [kind, setKind] = useState(card.kind ?? "");
@@ -808,6 +828,11 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
   const [parentId, setParentId] = useState(card.parentId ?? "");
   const [tags, setTags] = useState<string[]>(card.tags ?? []);
   const [columnId, setColumnId] = useState(card.columnId ?? "");
+  const dirty = title !== card.title || sub !== (card.sub ?? "") || kind !== (card.kind ?? "")
+    || categoryId !== (card.categoryId ?? "") || priority !== (card.priority ?? "") || parentId !== (card.parentId ?? "")
+    || columnId !== (card.columnId ?? "") || !sameItems(ownerIds, card.ownerIds ?? []) || !sameItems(tags, card.tags ?? []);
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty, dirtyRef]);
+  useEffect(() => () => { dirtyRef.current = false; }, [dirtyRef]);
   const parentChoices = hierarchyParentChoices(boards.find(b => b.cols.some(c => c.id === columnId)), card.id);
   const [baseline, setBaseline] = useState<ScheduleSnapshot | null>(null);
   useEffect(() => { let active=true; loadSchedule(workspaceId).then(s=>{if(active)setBaseline(s);}).catch(e=>{if(active)setSaveError(e.message);}); return()=>{active=false;}; }, [workspaceId]);
@@ -930,7 +955,7 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
           >
             <Trash style={{ width: 13, height: 13 }} /> Delete
           </button>
-          <button className="modal-cancel" onClick={onDone}>Cancel</button>
+          <button className="modal-cancel" onClick={onCancel}>Cancel</button>
           <button className="modal-save" disabled={saving || !baseline} onClick={async () => {
             setSaving(true); setSaveError("");
             try {
@@ -1109,18 +1134,44 @@ export default function BoardWorkspace() {
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const topbarBoard = combined ? undefined : activeBoard;
-  // Online teammates, site-wide, each with where they are — for us the open
-  // task, else this board (or all boards / the calendar).
+  // Online teammates, site-wide, each with where they are: this board (or all
+  // boards / the calendar). An open task is their *view* there, so followers
+  // open it in place instead of reloading the board.
+  const place = isCalendar
+    ? { path: "/calendar", label: "Calendar" }
+    : topbarBoard
+      ? { path: `/board?board=${topbarBoard.id}`, label: `${topbarBoard.name} · Board` }
+      : { path: "/board", label: "All boards" };
   const onlineList = useSitePresence(
     session,
-    editingCard
-      ? { path: `/board?card=${editingCard.id}`, label: `${editingCard.title || "Untitled task"} · Task` }
-      : isCalendar
-        ? { path: "/calendar", label: "Calendar" }
-        : topbarBoard
-          ? { path: `/board?board=${topbarBoard.id}`, label: `${topbarBoard.name} · Board` }
-          : { path: "/board", label: "All boards" },
+    editingCard ? { path: place.path, label: `${editingCard.title || "Untitled task"} · Task` } : place,
   );
+  useShareView("board-card", editingCard ? { card: editingCard.id } : null);
+
+  // Following someone: open and close the task they have open.
+  const followedView = useFollowedView();
+  const followCard = followedView === undefined ? undefined : followedView.card ?? null;
+  const appliedFollowCard = useRef<string | null | undefined>(undefined);
+  const cardEditingRef = useRef(false);
+  useEffect(() => {
+    if (followCard === undefined) { appliedFollowCard.current = undefined; return; }
+    if (loading || followCard === appliedFollowCard.current) return;
+    if (followCard) {
+      const card = boards.flatMap(b => b.cols.flatMap(c => c.cards)).find(k => k.id === followCard);
+      if (!card) return; // not loaded yet — tried again when boards change
+      appliedFollowCard.current = followCard;
+      if (editingCard?.id === followCard || cardEditingRef.current) return;
+      const board = boards.find(b => b.cols.some(c => c.cards.some(k => k.id === followCard)));
+      if (board && !combined && board.id !== activeBoardId) setActiveBoardId(board.id);
+      openCard(card);
+    } else {
+      appliedFollowCard.current = null;
+      // Never close a form you're typing in.
+      if (editingCard && !cardEditingRef.current) openCard(null);
+    }
+    // openCard only reads state that's in the deps or refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followCard, loading, boards]);
   // In All boards mode the kanban works on every column at once; edits are mapped back to each board by column id.
   const cols = combined ? boards.flatMap((b) => b.cols) : activeBoard?.cols ?? [];
   const visibleCols = cols;
@@ -1532,6 +1583,7 @@ export default function BoardWorkspace() {
             people={people}
             categories={categories}
             onClose={() => openCard(null)}
+            editingRef={cardEditingRef}
             onOpenCard={openCardById}
             onAddSubtask={handleAddSubtask}
             onToggleSubtask={handleToggleSubtask}

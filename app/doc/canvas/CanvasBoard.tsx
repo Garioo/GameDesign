@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type RefObject } from "react";
 import {
   Tldraw,
   type Editor,
@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { loadCanvasScene, saveCanvasScene, type CanvasScene } from "@/lib/canvasRepo";
 import { makeCanvasAssetStore, removeAssetUrls, isCanvasAssetUrl } from "@/lib/canvasAssets";
 import type { SessionInfo } from "@/lib/session";
+import type { SaveState } from "@/app/components/SaveStatus";
 
 type RecordsDiff = {
   added: Record<string, TLRecord>;
@@ -28,8 +29,6 @@ type RecordsDiff = {
 
 /** Snapshots of the document scope, as produced by getSnapshot(store).document. */
 type DocumentSnapshot = { store: Record<string, TLRecord>; schema: unknown };
-
-export type SaveState = "saved" | "saving" | "error";
 
 // Supabase Realtime rejects broadcasts beyond ~256KB; stay safely under it.
 const MAX_BROADCAST_CHARS = 200_000;
@@ -50,6 +49,7 @@ export default function CanvasBoard({
   onReady,
   onToolChange,
   onSaveState,
+  retryRef,
   onHistoryChange,
 }: {
   canvasId: string;
@@ -60,6 +60,8 @@ export default function CanvasBoard({
   onToolChange?: (toolId: string) => void;
   /** Reports persistence status so the topbar can show Saved / Saving / error. */
   onSaveState?: (state: SaveState) => void;
+  /** Filled with a function that re-sends the scene after a failed save. */
+  retryRef?: RefObject<(() => void) | null>;
   /** Reports undo/redo availability so the nav bar can enable its buttons. */
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
 }) {
@@ -104,15 +106,38 @@ export default function CanvasBoard({
       };
 
       // ---- persistence (debounced) ----
+      // Each save writes the whole scene, so only the newest request's outcome
+      // counts, and "saved" waits until no newer edit is queued behind it.
+      let saveSeq = 0;
+      let unsaved = false; // edits since the last snapshot was sent
+      let failed = false;
+      const report = (state: SaveState) => { if (!disposed) onSaveState?.(state); };
       const persist = throttle(() => {
+        const seq = ++saveSeq;
+        unsaved = false;
         const { document } = getSnapshot(editor.store);
         saveCanvasScene(canvasId, { document } as unknown as CanvasScene)
-          .then(() => onSaveState?.("saved"))
+          .then(() => {
+            if (seq !== saveSeq) return;
+            failed = false;
+            if (!unsaved) report("saved");
+          })
           .catch((e) => {
             console.error(e);
-            onSaveState?.("error");
+            if (seq !== saveSeq) return;
+            failed = true;
+            report("error");
           });
       }, 1500);
+      const retrySave = () => {
+        report("saving");
+        persist();
+        persist.flush();
+      };
+      if (retryRef) retryRef.current = retrySave;
+      // Back online: re-send the scene if the last save didn't make it.
+      const onOnline = () => { if (failed) retrySave(); };
+      window.addEventListener("online", onOnline);
 
       /**
        * Replace the document scope with a snapshot, applied as *remote* changes:
@@ -180,7 +205,8 @@ export default function CanvasBoard({
           } else {
             sendBroadcast("doc", update.changes);
           }
-          onSaveState?.("saving");
+          unsaved = true;
+          report("saving");
           persist();
         },
         { source: "user", scope: "document" },
@@ -266,7 +292,12 @@ export default function CanvasBoard({
       }, 4000);
 
       return () => {
+        // Switching canvases: send a save still waiting on the throttle now
+        // rather than 1.5s after this board is gone.
+        persist.flush();
         disposed = true;
+        window.removeEventListener("online", onOnline);
+        if (retryRef?.current === retrySave) retryRef.current = null;
         clearInterval(prune);
         if (refetchTimer) clearTimeout(refetchTimer);
         stopTool();
@@ -276,7 +307,7 @@ export default function CanvasBoard({
         supabase.removeChannel(channel);
       };
     },
-    [canvasId, session, onReady, onToolChange, onSaveState, onHistoryChange],
+    [canvasId, session, onReady, onToolChange, onSaveState, retryRef, onHistoryChange],
   );
 
   if (needsTldrawLicenseKey) {

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listCalendarEvents, type CalendarEvent } from "@/lib/calendarEventsRepo";
 import { listCalendarFeeds, loadFeedEvents, type CalendarFeed, type FeedEvent } from "@/lib/calendarFeedsRepo";
 import { calendarWeekLayout, eventCoversDate, eventEndDate, eventSpan } from "@/lib/calendarLayout";
+import { expandOccurrences, isOccurrence, type Occurrence } from "@/lib/calendarRecurrence";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { dayNumber, isoWeek } from "@/lib/gantt";
 import EventDialog from "./EventDialog";
@@ -15,10 +16,13 @@ import styles from "./calendar.module.css";
 import { useShortcuts } from "@/lib/shortcuts";
 import Link from "next/link";
 import { usePlanning } from "../board/TaskPlanning";
+import { useFollowedView, useShareView } from "@/lib/followView";
 
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const weekOf = (date: Date) => isoWeek(dayNumber(dayKey(date)));
+const isDay = (value: string | null | undefined): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime());
+const isMode = (value: string | null | undefined): value is "month" | "week" | "day" => value === "month" || value === "week" || value === "day";
 
 export default function CalendarView({ canEdit, project, onNavigation }: {
   canEdit: boolean;
@@ -32,7 +36,27 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   const [standaloneEvents, setStandaloneEvents] = useState<CalendarEvent[]>([]);
   const [eventsError, setEventsError] = useState("");
   const [eventsLoading, setEventsLoading] = useState(true);
+  // The stored event (a repeating one's whole series) and which occurrence was opened.
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | FeedEvent | null | undefined>();
+  const [editingOccurrence, setEditingOccurrence] = useState<string | undefined>();
+  const openEvent = (shown: Occurrence<CalendarEvent | FeedEvent>) => { setEditingEvent(shown.series); setEditingOccurrence(shown.occurrence); };
+  const eventEditingRef = useRef(false);
+
+  // Followers see the same view, day and open event (lib/followView).
+  useShareView("calendar", {
+    mode: view,
+    date: selected,
+    ...(editingEvent ? { event: editingEvent.id, ...(editingOccurrence ? { occ: editingOccurrence } : {}) } : {}),
+  });
+  const followedView = useFollowedView();
+  const following = followedView !== undefined;
+  const followMode = followedView?.mode, followDate = followedView?.date;
+  useEffect(() => {
+    if (isMode(followMode)) setView(followMode);
+    if (isDay(followDate)) goToDay(followDate);
+  }, [followMode, followDate]);
+  const followEvent = following ? `${followedView?.event ?? ""}@${followedView?.occ ?? ""}` : undefined;
+  const appliedFollowEvent = useRef<string | undefined>(undefined);
   const [feeds, setFeeds] = useState<CalendarFeed[]>([]);
   const [feedEvents, setFeedEvents] = useState<Record<string, FeedEvent[]>>({});
   const [feedErrors, setFeedErrors] = useState<Record<string, string>>({});
@@ -40,16 +64,23 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   const [feedsReload, setFeedsReload] = useState(0);
   // Event to open once events load (?event=<id>, from an attendee notification).
   const [wantedEvent, setWantedEvent] = useState<string | null>(null);
-  // Deep link from search: /calendar?date=YYYY-MM-DD selects that day.
+  // Deep link (search, notifications, following someone):
+  // /calendar?date=YYYY-MM-DD&mode=week&event=<id>&occ=YYYY-MM-DD
+  const [wantedOccurrence, setWantedOccurrence] = useState<string | null>(null);
+  const goToDay = (wanted: string) => {
+    const day = new Date(`${wanted}T12:00:00`);
+    setSelected(wanted);
+    setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+  };
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setWantedEvent(params.get("event"));
+    const occ = params.get("occ");
+    if (isDay(occ)) setWantedOccurrence(occ);
+    const mode = params.get("mode");
+    if (isMode(mode)) setView(mode);
     const wanted = params.get("date");
-    if (!wanted || !/^\d{4}-\d{2}-\d{2}$/.test(wanted)) return;
-    const day = new Date(`${wanted}T12:00:00`);
-    if (Number.isNaN(day.getTime())) return;
-    setSelected(wanted);
-    setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+    if (isDay(wanted)) goToDay(wanted);
   }, []);
   useEffect(() => {
     let active = true;
@@ -80,17 +111,41 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
     const found = wantedEvent ? standaloneEvents.find(e => e.id === wantedEvent) : undefined;
     if (!found) return;
     setEditingEvent(found);
+    // ?occ= (or ?date=) picks the occurrence of a repeating event.
+    const day = wantedOccurrence ?? selected;
+    setEditingOccurrence(found.repeat && isOccurrence(found, day) ? day : found.date);
     setWantedEvent(null);
-  }, [wantedEvent, standaloneEvents]);
+  }, [wantedEvent, standaloneEvents]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (followEvent === undefined) { appliedFollowEvent.current = undefined; return; }
+    if (followEvent === appliedFollowEvent.current) return;
+    const [id, occ] = followEvent.split("@");
+    if (!id) {
+      appliedFollowEvent.current = followEvent;
+      // Never close a form you're typing in.
+      if (editingEvent && !eventEditingRef.current) { setEditingEvent(undefined); setEditingOccurrence(undefined); }
+      return;
+    }
+    const found = [...standaloneEvents, ...Object.values(feedEvents).flat()].find(e => e.id === id);
+    if (!found) return; // not loaded yet — tried again when events arrive
+    appliedFollowEvent.current = followEvent;
+    if (eventEditingRef.current) return;
+    setEditingEvent(found);
+    setEditingOccurrence(occ || found.date);
+  }, [followEvent, standaloneEvents, feedEvents]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keep an open event current when someone else saves it (notes, agenda, time…).
+  useEffect(() => {
+    setEditingEvent(current => {
+      if (!current || "feed" in current) return current;
+      return standaloneEvents.find(e => e.id === current.id) ?? current;
+    });
+  }, [standaloneEvents]);
   useSidebarLiveUpdates(project, ["calendar_events"], async () => {
     try { setStandaloneEvents(await listCalendarEvents(project)); setEventsError(""); }
     catch (error) { setEventsError((error as Error).message); }
   });
-  const allEvents: (CalendarEvent | FeedEvent)[] = [...standaloneEvents, ...Object.values(feedEvents).flat()];
   const feedClass = (event: CalendarEvent | FeedEvent) => "feed" in event ? styles.feedEvent : "";
   const failedFeeds = Object.keys(feedErrors).length;
-  const matchingEvents = allEvents.filter(event => `${event.title} ${event.location} ${plainLinkedText(event.notes)} ${"feed" in event ? `${event.feed.label} ${event.category}` : ""}`.toLowerCase().includes(search.toLowerCase()));
-  const eventsOn = (date: string) => matchingEvents.filter(event => eventCoversDate(event, date)).sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? "") || a.title.localeCompare(b.title));
   const eventRange = (event: CalendarEvent) => eventEndDate(event) !== event.date ? `${event.date} – ${eventEndDate(event)} · ` : "";
   const eventTime = (event: CalendarEvent) => event.start_time ? `${event.start_time.slice(0, 5)}${event.end_time ? `–${event.end_time.slice(0, 5)}` : ""}` : "All day";
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -105,6 +160,12 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   const selectedLabel = new Date(`${selected}T12:00:00`).toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" });
   const rangeStart = view === "day" ? selected : view === "week" ? dayKey(visibleCells[0]) : dayKey(month);
   const rangeEnd = view === "day" ? selected : view === "week" ? dayKey(visibleCells[6]) : dayKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+  // Repeating events become one entry per occurrence, over every day on screen.
+  const shownFrom = [dayKey(visibleCells[0]), selected].sort()[0];
+  const shownTo = [dayKey(visibleCells[visibleCells.length - 1]), selected].sort()[1];
+  const allEvents = expandOccurrences<CalendarEvent | FeedEvent>([...standaloneEvents, ...Object.values(feedEvents).flat()], shownFrom, shownTo);
+  const matchingEvents = allEvents.filter(event => `${event.title} ${event.location} ${plainLinkedText(event.notes)} ${event.agenda.map(i => i.text).join(" ")} ${"feed" in event ? `${event.feed.label} ${event.category}` : ""}`.toLowerCase().includes(search.toLowerCase()));
+  const eventsOn = (date: string) => matchingEvents.filter(event => eventCoversDate(event, date)).sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? "") || a.title.localeCompare(b.title));
   function shiftMonth(delta: number) {
     if (view !== "month") {
       const next = new Date(anchor); next.setDate(next.getDate() + delta * (view === "week" ? 7 : 1));
@@ -148,9 +209,9 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
       run: () => document.querySelector<HTMLInputElement>(".planning-search input")?.focus(),
     },
   ]);
-  function standaloneButton(event: CalendarEvent | FeedEvent, compact = false) {
-    return <button key={event.id} className={`${compact ? `${styles.event} ${styles.standaloneEvent}` : styles.agendaTask} ${feedClass(event)}`} onClick={() => setEditingEvent(event)} title={`${event.title} · ${eventRange(event)}${eventTime(event)}`}>
-      <PlanningIcon name="calendar" />
+  function standaloneButton(event: Occurrence<CalendarEvent | FeedEvent>, compact = false) {
+    return <button key={event.id} className={`${compact ? `${styles.event} ${styles.standaloneEvent}` : styles.agendaTask} ${feedClass(event)}`} onClick={() => openEvent(event)} title={`${event.title} · ${eventRange(event)}${eventTime(event)}${event.repeat ? " · repeats" : ""}`}>
+      <PlanningIcon name={event.repeat ? "repeat" : "calendar"} />
       {compact ? <span>{event.start_time ? `${event.start_time.slice(0, 5)} ` : ""}{event.title}</span> : <span><strong>{event.title}</strong><small>{eventRange(event)}{eventTime(event)}{event.location ? ` · ${event.location}` : ""}{"feed" in event ? ` · ${event.category || event.feed.label}` : ""}</small></span>}
     </button>;
   }
@@ -199,8 +260,8 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
                     const place = { gridColumn: `${start + 1} / ${end + 2}`, gridRow: lane + 1 };
                     const { event } = span;
                     return <button key={span.id} className={`${styles.spanEvent} ${edges} ${feedClass(event)}`} style={place}
-                      title={`${event.title} · ${eventRange(event)}${eventTime(event)}`} onClick={() => setEditingEvent(event)}>
-                      <PlanningIcon name="calendar" /><span>{event.start_time ? `${event.start_time.slice(0, 5)} ` : ""}{event.title}</span>
+                      title={`${event.title} · ${eventRange(event)}${eventTime(event)}${event.repeat ? " · repeats" : ""}`} onClick={() => openEvent(event)}>
+                      <PlanningIcon name={event.repeat ? "repeat" : "calendar"} /><span>{event.start_time ? `${event.start_time.slice(0, 5)} ` : ""}{event.title}</span>
                     </button>;
                   })}
                 </div>
@@ -220,9 +281,13 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
     {feedsOpen && <CalendarFeedsDialog project={project} feeds={feeds} canEdit={canEdit} errors={feedErrors} onClose={() => setFeedsOpen(false)}
       onAdded={() => setFeedsReload(n => n + 1)} onReload={() => setFeedsReload(n => n + 1)}
       onRemoved={id => { setFeeds(c => c.filter(f => f.id !== id)); setFeedEvents(({ [id]: _, ...rest }) => rest); setFeedErrors(({ [id]: _, ...rest }) => rest); }} />}
-    {editingEvent !== undefined && <EventDialog key={editingEvent?.id ?? "new"} event={editingEvent} date={selected} project={project} canEdit={canEdit && !(editingEvent && "feed" in editingEvent)} source={editingEvent && "feed" in editingEvent ? editingEvent.feed.label : undefined} onClose={() => setEditingEvent(undefined)} onSaved={event => {
+    {editingEvent !== undefined && <EventDialog key={`${editingEvent?.id ?? "new"}@${editingOccurrence ?? ""}`} event={editingEvent} occurrence={editingOccurrence ?? undefined} editingRef={eventEditingRef} date={selected} project={project} canEdit={canEdit && !(editingEvent && "feed" in editingEvent)} source={editingEvent && "feed" in editingEvent ? editingEvent.feed.label : undefined} onClose={() => { setEditingEvent(undefined); setEditingOccurrence(undefined); }} onSaved={(event, stay) => {
       setStandaloneEvents(current => [...current.filter(item => item.id !== event.id), event]);
-      setSelected(event.date); setMonth(new Date(`${event.date.slice(0, 7)}-01T12:00:00`)); setEventsError("");
+      // Keep an open dialog showing the latest agenda after a quick add.
+      setEditingEvent(current => current && current.id === event.id ? event : current);
+      setEventsError("");
+      if (stay) return;
+      setSelected(event.date); setMonth(new Date(`${event.date.slice(0, 7)}-01T12:00:00`));
     }} onDeleted={id => setStandaloneEvents(current => current.filter(event => event.id !== id))} />}
   </>;
 }

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { OnlineUser } from "@/lib/useSitePresence";
 import { setFollowed, useFollowed } from "@/lib/follow";
+import { publishFollowedView, withView } from "@/lib/followView";
 import NotificationBell from "./NotificationBell";
 import "./chrome.css";
 
@@ -83,6 +84,14 @@ export default function TopBar({
     if (target.pathname === pathname && target.pathname !== "/doc") window.location.assign(path);
     else router.push(path);
   };
+  // True when this tab is at `path` — same route and every param it names —
+  // ignoring extra params such as an open ?card=, which are views, not places.
+  const atPlace = (path: string) => {
+    const target = new URL(path, window.location.origin);
+    if (target.pathname !== window.location.pathname) return false;
+    const here = new URLSearchParams(window.location.search);
+    return [...target.searchParams].every(([k, v]) => here.get(k) === v);
+  };
   const others = (online ?? []).filter((u) => u.key !== selfKey);
   const self = (online ?? []).find((u) => u.key === selfKey);
   const here = (u: PresenceUser) => !!self?.path && u.key !== selfKey && u.path === self.path;
@@ -144,10 +153,19 @@ export default function TopBar({
     const path = followedUser.path;
     if (!path || path === lastFollowPath.current) return;
     lastFollowPath.current = path;
-    if (path !== window.location.pathname + window.location.search) goTo(path);
+    // Arriving with their view in the URL opens it on load; after that, the
+    // followed view below keeps it in step without reloading.
+    if (!atPlace(path)) goTo(withView(path, followedUser.view));
     // goTo is stable enough: it only reads the current pathname.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followed, followedUser?.path, !!followedUser]);
+  // Hand their open task / event / panel to this page while we're at the same place.
+  const followedViewKey = JSON.stringify(followedUser?.view ?? {});
+  const samePlace = !!followedUser?.path && !!self?.path && followedUser.path === self.path;
+  useEffect(() => {
+    publishFollowedView(followed && samePlace ? JSON.parse(followedViewKey) : undefined);
+  }, [followed, samePlace, followedViewKey]);
+  useEffect(() => () => publishFollowedView(undefined), []);
   const follow = (u: PresenceUser) => {
     setWhoOpen(false);
     setFollowed({ key: u.key, name: u.name, color: u.color, initials: u.initials });
@@ -235,7 +253,7 @@ export default function TopBar({
                       role="menuitem"
                       className="who-row"
                       disabled={!u.path}
-                      onClick={() => u.path && goTo(u.path)}
+                      onClick={() => u.path && goTo(withView(u.path, u.view))}
                       title={u.path ? `Go to ${u.label ?? "where they are"}` : undefined}
                     >
                       <span className={"avatar" + (here(u) ? " is-here" : "")} style={{ background: u.color, "--c": u.color } as React.CSSProperties}>{u.initials}</span>

@@ -7,7 +7,7 @@ export const eventEndDate = (event: CalendarEvent) => event.end_date || event.da
 export const eventCoversDate = (event: CalendarEvent, date: string) => event.date <= date && eventEndDate(event) >= date;
 export const spanCoversDate = (span: DateSpan, date: string) => span.from <= date && span.to >= date;
 export const spanOverlaps = (span: DateSpan, from: string, to: string) => span.from <= to && span.to >= from;
-export const eventSpan = (event: CalendarEvent) => ({ id: event.id, from: event.date, to: eventEndDate(event), event });
+export const eventSpan = <T extends CalendarEvent>(event: T) => ({ id: event.id, from: event.date, to: eventEndDate(event), event });
 
 /** Inclusive day ranges, clipped to a week, with stable non-overlapping lanes shared by every kind of span. */
 export function calendarWeekLayout<T extends DateSpan>(spans: T[], dates: string[]) {
