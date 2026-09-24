@@ -3,15 +3,15 @@
 --   calendar_events.repeat         null (one-off) or 'day' | 'week' | '2weeks' | 'month'
 --   calendar_events.repeat_until   last day an occurrence may start on (null = forever)
 --   calendar_events.skipped_dates  occurrences deleted one at a time ("delete this one")
---   calendar_events.agenda         [{ "id": "...", "text": "..." }] — the checklist;
---                                  for a repeating event it's the template every
---                                  occurrence starts from
+--   calendar_events.agenda         [{ "id": "...", "text": "..." }] — a one-off's
+--                                  checklist (repeating events keep theirs per
+--                                  occurrence, below)
 --   calendar_events.repeat_weekends  false = no occurrences on Saturday / Sunday
 --   calendar_agenda_checks         which items are ticked, per occurrence, so each
 --                                  week's standup starts unticked
---   calendar_event_notes           meeting notes of one occurrence of a repeating
---                                  event (every occurrence starts empty; one-offs
---                                  keep using calendar_events.notes)
+--   calendar_event_notes           meeting notes and agenda of one occurrence of a
+--                                  repeating event — every occurrence starts empty
+--                                  (one-offs keep using calendar_events.notes/agenda)
 --
 -- Occurrences are computed in the client (lib/calendarRecurrence.ts); only the
 -- rule is stored. Apply after migrate-event-attendees.sql. Safe to rerun.
@@ -84,11 +84,16 @@ create table if not exists public.calendar_event_notes (
   occurrence date not null,
   project_id uuid not null references public.projects(id) on delete cascade,
   notes text not null default '' check (char_length(notes) <= 5000),
+  agenda jsonb not null default '[]'::jsonb,
   updated_by uuid default auth.uid(),
   updated_at timestamptz not null default now(),
   primary key (event_id, occurrence)
 );
 create index if not exists calendar_event_notes_project on public.calendar_event_notes(project_id);
+-- Added after the table first shipped, so older databases get it too.
+alter table public.calendar_event_notes add column if not exists agenda jsonb not null default '[]'::jsonb;
+alter table public.calendar_event_notes drop constraint if exists calendar_event_notes_agenda_valid;
+alter table public.calendar_event_notes add constraint calendar_event_notes_agenda_valid check (public.event_agenda_valid(agenda));
 
 alter table public.calendar_event_notes enable row level security;
 drop policy if exists calendar_event_notes_read on public.calendar_event_notes;

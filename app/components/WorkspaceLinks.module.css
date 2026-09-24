@@ -1,0 +1,159 @@
+/* Team links in the top bar: brand icons, plus a pencil that edits them. */
+.root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: var(--sp-2);
+  margin-right: 2px;
+  border-right: 1px solid var(--line);
+}
+.link {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.link:hover {
+  background: var(--line-soft);
+  color: var(--brand, var(--ink));
+}
+.link:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+}
+.icon {
+  width: 17px;
+  height: 17px;
+}
+.edit svg {
+  width: 14px;
+  height: 14px;
+}
+.edit {
+  color: var(--ink-faint);
+}
+.edit.empty {
+  display: inline-flex;
+  gap: 6px;
+  width: auto;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 55;
+  width: 340px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-menu);
+}
+.head {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.field .icon {
+  flex: none;
+  color: var(--brand);
+}
+.field input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.field input:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+}
+.hint,
+.error {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+.error {
+  color: var(--danger);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+.actions button {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.actions .save {
+  border-color: var(--ember);
+  background: var(--ember);
+  color: #fff;
+}
+.actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Phones: the icons stay, the divider goes. */
+@media (max-width: 640px) {
+  .root {
+    padding-right: 0;
+    border-right: 0;
+  }
+  .link {
+    width: 28px;
+    height: 28px;
+  }
+  .panel {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: 64px;
+    width: auto;
+  }
+}

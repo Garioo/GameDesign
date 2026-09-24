@@ -1,4 +1,5 @@
 "use client";
+import { backdropClose } from "@/lib/dialogBackdrop";
 import { useEffect, useRef, useState } from "react";
 import { automaticBoardEndDate, updateBoardEndDate, type Board } from "@/lib/boardRepo";
 import { boardColor, BOARD_PALETTE } from "@/lib/boardColors";
@@ -202,6 +203,7 @@ export default function StageDialog({
         e.preventDefault();
         if (!saving) onClose();
       }}
+      {...backdropClose(() => { if (!saving) onClose(); })}
     >
       <form
         onSubmit={(e) => {

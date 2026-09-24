@@ -1,4 +1,5 @@
 "use client";
+import { backdropClose } from "@/lib/dialogBackdrop";
 import { useEffect, useRef, useState } from "react";
 export interface PlanningAction {
   title: string;
@@ -29,6 +30,7 @@ export default function PlanningDialog({
         e.preventDefault();
         if (!busy) onClose();
       }}
+      {...backdropClose(() => { if (!busy) onClose(); })}
     >
       <form
         onSubmit={async (e) => {

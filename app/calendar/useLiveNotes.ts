@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getOccurrenceNotes, saveEventNotes, saveOccurrenceNotes, type CalendarEvent } from "@/lib/calendarEventsRepo";
+import { getOccurrence, saveEventNotes, saveOccurrenceNotes, type AgendaItem, type CalendarEvent } from "@/lib/calendarEventsRepo";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import type { SaveState } from "@/app/components/SaveStatus";
 
@@ -10,10 +10,11 @@ import type { SaveState } from "@/app/components/SaveStatus";
  * Meeting notes on a calendar event, typed live.
  *
  * A one-off event keeps its notes on the event; each occurrence of a
- * repeating event has its own (calendar_event_notes), so every meeting starts
- * with an empty page. Keystrokes go out over a per-occurrence Realtime
- * broadcast (throttled), so everyone with it open sees the text as it's
- * written; the database write is debounced and is what late joiners and
+ * repeating event has its own notes and agenda (calendar_event_notes), so
+ * every meeting starts with an empty page (this hook also loads and live-
+ * refreshes that occurrence's agenda for the dialog). Keystrokes go out over
+ * a per-occurrence Realtime broadcast (throttled), so everyone with it open
+ * sees the text as it's written; the database write is debounced and is what late joiners and
  * reloads get. While you're typing, incoming text is ignored so your cursor
  * never jumps — the last person to type wins, fine for one note-taker at a time.
  * ------------------------------------------------------------------------- */
@@ -39,6 +40,8 @@ export function useLiveNotes({ project, event, occurrence, enabled, me, onSaved 
   const [notes, setNotes] = useState(occurrence ? "" : event?.notes ?? "");
   const [loaded, setLoaded] = useState(!occurrence);
   const [fetched, setFetched] = useState<string | null>(null);
+  // The occurrence's own agenda (repeating events only).
+  const [agenda, setAgenda] = useState<AgendaItem[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [typer, setTyper] = useState<Typer | null>(null);
   const notesRef = useRef(notes);
@@ -55,10 +58,12 @@ export function useLiveNotes({ project, event, occurrence, enabled, me, onSaved 
   const apply = (text: string) => { notesRef.current = text; setNotes(text); };
   const typingNow = () => Date.now() - lastLocal.current < TYPING_MS;
 
-  // Occurrence notes: fetch, and refetch when someone saves.
+  // Occurrence notes + agenda: fetch, and refetch when someone saves.
   const refetch = async () => {
     if (!eventId || !occurrence) return;
-    setFetched(await getOccurrenceNotes(eventId, occurrence));
+    const row = await getOccurrence(eventId, occurrence);
+    setFetched(row.notes);
+    setAgenda(row.agenda);
     setLoaded(true);
   };
   useEffect(() => { refetch().catch(console.error); }, [eventId, occurrence]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -139,5 +144,5 @@ export function useLiveNotes({ project, event, occurrence, enabled, me, onSaved 
     saveTimer.current = setTimeout(() => void saveRef.current(), SAVE_MS);
   };
 
-  return { notes, notesRef, loaded, change, saveState, retry: () => void save(), typer };
+  return { notes, notesRef, loaded, change, saveState, retry: () => void save(), typer, agenda, setAgenda };
 }

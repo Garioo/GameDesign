@@ -31,6 +31,7 @@ export default function PageLinkTextarea({
   formatShortcuts = false,
   rows,
   maxLength,
+  autoFocus,
   hint = "Type [[ or @ to link a page, section, canvas, board or task.",
 }: {
   value: string;
@@ -41,6 +42,7 @@ export default function PageLinkTextarea({
   formatShortcuts?: boolean;
   rows?: number;
   maxLength?: number;
+  autoFocus?: boolean;
   hint?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -121,6 +123,7 @@ export default function PageLinkTextarea({
         placeholder={placeholder}
         rows={rows}
         maxLength={maxLength}
+        autoFocus={autoFocus}
         onChange={(e) => {
           emit(e.target.value);
           readTrigger(e.target.value, e.target.selectionStart);

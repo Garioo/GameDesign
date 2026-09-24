@@ -120,10 +120,25 @@ export default function MilestonesPage() {
     { id: "ms-reached", keys: "r", label: showReached ? "Hide reached milestones" : "Show reached milestones", group: "Page", enabled: reached.length > 0, run: () => setShowReached((v) => !v) },
   ]);
 
-  // The timeline strip spans today → the last dated open milestone (at least a month).
-  const dated = open.filter((m) => m.dueDate);
-  const span = Math.max(30, ...dated.map((m) => daysUntil(m.dueDate!, today) + 3));
-  const pos = (m: Milestone) => Math.min(100, Math.max(0, (daysUntil(m.dueDate!, today) / span) * 100));
+  // The timeline strip spans the earliest overdue milestone (or today) → the last dated
+  // open milestone (at least a month ahead), so overdue stops don't pile up on today.
+  const dated = open.filter((m) => m.dueDate).sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));
+  const days = dated.map((m) => daysUntil(m.dueDate!, today));
+  const first = Math.min(0, ...days);
+  const span = Math.max(30, ...days.map((d) => d + 3)) - first;
+  const at = (d: number) => ((d - first) / span) * 100;
+  const pos = (m: Milestone) => at(daysUntil(m.dueDate!, today));
+  // Labels closer than this share no row; later ones stack a row higher.
+  const LABEL_GAP = 12;
+  const lanes: number[] = [];
+  const laneOf = new Map<string, number>();
+  for (const m of dated) {
+    const p = pos(m);
+    let lane = lanes.findIndex((last) => p - last >= LABEL_GAP);
+    if (lane === -1) lane = lanes.length < 3 ? lanes.length : lanes.indexOf(Math.min(...lanes));
+    lanes[lane] = p;
+    laneOf.set(m.id, lane);
+  }
 
   const renderCard = (m: Milestone, i: number) => {
     const prog = milestoneProgress(m.id, tasks, blocked);
@@ -240,21 +255,25 @@ export default function MilestonesPage() {
         )}
 
         {dated.length > 0 && (
-          <section className={styles.timeline} aria-label="Timeline">
+          <section className={styles.timeline} aria-label="Timeline" style={{ "--lanes": lanes.length } as React.CSSProperties}>
             <div className={styles.track}>
-              <span className={styles.todayMark} style={{ left: 0 }}><span>Today</span></span>
-              {dated.map((m) => (
-                <Link
-                  key={m.id}
-                  href={`#m-${m.id}`}
-                  className={`${styles.stop} ${styles[`u_${urgency(m, today)}`] ?? ""}`}
-                  style={{ left: `${pos(m)}%` }}
-                  title={`${m.name} · ${formatDay(m.dueDate!)}`}
-                >
-                  <span className={styles.stopDiamond} aria-hidden="true" />
-                  <span className={styles.stopLabel}>{m.name}</span>
-                </Link>
-              ))}
+              <span className={styles.todayMark} style={{ left: `${at(0)}%` }}><span>Today</span></span>
+              {dated.map((m) => {
+                const p = pos(m);
+                const edge = p < 8 ? styles.stopStart : p > 92 ? styles.stopEnd : "";
+                return (
+                  <Link
+                    key={m.id}
+                    href={`#m-${m.id}`}
+                    className={`${styles.stop} ${edge} ${styles[`u_${urgency(m, today)}`] ?? ""}`}
+                    style={{ left: `${p}%`, "--lane": laneOf.get(m.id) ?? 0 } as React.CSSProperties}
+                    title={`${m.name} · ${formatDay(m.dueDate!)}`}
+                  >
+                    <span className={styles.stopDiamond} aria-hidden="true" />
+                    <span className={styles.stopLabel}>{m.name}</span>
+                  </Link>
+                );
+              })}
             </div>
           </section>
         )}

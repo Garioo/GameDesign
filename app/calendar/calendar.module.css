@@ -53,7 +53,7 @@
 .addEvent { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ember-deep); padding: 10px; margin-bottom: 16px; cursor: pointer; }
 .eventNotice, .eventError { margin: 12px 28px; font-size: 13px; }
 .eventError { color: #a13923; }
-.eventDialog { position: fixed; inset: 0; margin: auto; box-sizing: border-box; width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--line); border-radius: 14px; padding: 26px; color: var(--ink); background: var(--surface); box-shadow: 0 20px 80px #241e1833; }
+.eventDialog { position: fixed; inset: 0; margin: auto; box-sizing: border-box; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--line); border-radius: 14px; padding: 26px; color: var(--ink); background: var(--surface); box-shadow: 0 20px 80px #241e1833; }
 .eventDialog::backdrop { background: #241e1855; }
 .dialogHeading { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; margin-bottom: 24px; }
 .dialogHeading h2 { font-size: 22px; margin: 0 0 8px; }
@@ -201,3 +201,22 @@
 .eventDialog .agendaAdd { justify-self: start; display: inline-flex; align-items: center; gap: 4px; }
 .eventFacts dt.notesHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .typing { font-weight: 400; font-size: 12px; }
+.eventDialog .notesToggle { margin-left: auto; padding: 4px 10px; font-size: 12px; font-weight: 500; }
+
+/* read-view footer: delete (quiet, left) · edit (primary, right) */
+.eventDialog footer.viewFooter { justify-content: space-between; align-items: center; }
+.deleteMenu { position: relative; }
+.deleteMenu summary { list-style: none; }
+.deleteMenu summary::-webkit-details-marker { display: none; }
+.eventDialog .deleteButton, .eventDialog button.deleteButton { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 0; background: none; color: var(--ink-soft); border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.eventDialog .deleteButton:hover, .eventDialog button.deleteButton:hover, .deleteMenu[open] .deleteButton { color: var(--danger); background: var(--danger-tint); }
+.deleteButton svg { width: 15px; height: 15px; }
+.deletePanel { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 2; width: 260px; padding: 6px; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px #241e1826; }
+.eventDialog .deletePanel > button { display: grid; gap: 2px; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 6px; }
+.eventDialog .deletePanel > button:hover { background: var(--bg); }
+.deletePanel strong { font-size: 13px; font-weight: 600; }
+.deletePanel small { font-size: 12px; color: var(--ink-soft); }
+.eventDialog .deletePanel > button.danger strong { color: var(--danger); }
+.deletePanel p { margin: 6px 8px 10px; font-size: 13px; line-height: 1.45; }
+.deleteConfirm { display: flex; justify-content: flex-end; gap: 6px; padding: 0 4px 4px; }
+.eventDialog .deleteConfirm button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }

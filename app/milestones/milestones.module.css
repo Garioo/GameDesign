@@ -98,7 +98,8 @@
 /* ── timeline strip ── */
 .timeline {
   margin: 0 0 28px;
-  padding: 44px 24px 22px;
+  /* room above for each row of labels, below for the Today label */
+  padding: calc(44px + (var(--lanes, 1) - 1) * 20px) 32px 36px;
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
   background: var(--surface);
@@ -107,13 +108,14 @@
 .track {
   position: relative;
   height: 4px;
-  margin: 0 40px 0 8px;
+  margin: 0 8px;
   border-radius: 99px;
   background: linear-gradient(90deg, var(--ember-tint2), var(--line));
 }
 .todayMark {
   position: absolute;
   top: -6px;
+  z-index: 0;
   width: 16px;
   height: 16px;
   margin-left: -8px;
@@ -138,8 +140,22 @@
   flex-direction: column;
   align-items: center;
   transform: translateX(-50%);
+  z-index: 1;
   text-decoration: none;
   color: var(--ink);
+}
+.stop:hover {
+  z-index: 2;
+}
+/* leader from the diamond up to its label's row */
+.stop::before {
+  content: "";
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  width: 1px;
+  height: calc(8px + var(--lane, 0) * 20px);
+  background: var(--line);
 }
 .stopDiamond {
   width: 16px;
@@ -156,13 +172,29 @@
 }
 .stopLabel {
   position: absolute;
-  bottom: 24px;
-  max-width: 140px;
+  bottom: calc(24px + var(--lane, 0) * 20px);
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11.5px;
   font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface);
+}
+.stop:hover .stopLabel {
+  max-width: none;
+  color: var(--ember-deep);
+}
+/* near the ends, labels grow inward instead of spilling out of the strip */
+.stopStart .stopLabel {
+  left: 50%;
+  margin-left: -8px;
+}
+.stopEnd .stopLabel {
+  right: 50%;
+  margin-right: -8px;
 }
 .stop.u_overdue .stopDiamond,
 .card.u_overdue .diamond {

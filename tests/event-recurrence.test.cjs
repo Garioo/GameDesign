@@ -46,6 +46,12 @@ test('repeating events validate their rule and agenda, and ticks are per occurre
   const notesOn=d=>db.query('select notes from calendar_event_notes where event_id=$1 and occurrence=$2',[event.id,d]).then(r=>r.rows[0]?.notes??'');
   assert.equal(await notesOn('2026-09-07'),'Shipped it, twice');
   assert.equal(await notesOn('2026-09-21'),'');
+  // …and so is its agenda: each occurrence has its own, empty until written.
+  await db.query(`update calendar_event_notes set agenda='[{"id":"x","text":"Retro"}]' where event_id=$1 and occurrence='2026-09-07'`,[event.id]);
+  const agendaOn=d=>db.query('select agenda from calendar_event_notes where event_id=$1 and occurrence=$2',[event.id,d]).then(r=>r.rows[0]?.agenda??[]);
+  assert.deepEqual(await agendaOn('2026-09-07'),[{id:'x',text:'Retro'}]);
+  assert.deepEqual(await agendaOn('2026-09-21'),[]);
+  await assert.rejects(db.query(`update calendar_event_notes set agenda='[{"id":"x","text":" "}]' where event_id=$1`,[event.id]),/check constraint/);
   await assert.rejects(db.query("insert into calendar_event_notes(event_id,occurrence,project_id,notes) values($1,'2026-09-21',$2,'x')",[event.id,id(2)]),/row-level security/);
   await assert.rejects(db.query("insert into calendar_event_notes(event_id,occurrence,project_id,notes) values($1,'2026-09-21',$2,$3)",[event.id,id(1),'x'.repeat(5001)]),/check constraint/);
   await db.exec("set test.role='viewer'");

@@ -1,4 +1,5 @@
 "use client";
+import { backdropClose } from "@/lib/dialogBackdrop";
 import { useEffect, useRef, useState } from "react";
 import {
   createCategory,
@@ -48,6 +49,7 @@ export default function CategoryManager({
         e.preventDefault();
         if (!busy) onClose();
       }}
+      {...backdropClose(() => { if (!busy) onClose(); })}
     >
       <header>
         <div>

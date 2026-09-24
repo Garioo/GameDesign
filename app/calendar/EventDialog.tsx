@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteCalendarEvent, listAgendaChecks, saveAgenda, saveCalendarEvent, setAgendaCheck, skipOccurrence, type AgendaItem, type CalendarEvent, type CalendarEventDraft } from "@/lib/calendarEventsRepo";
+import { deleteCalendarEvent, listAgendaChecks, restoreCalendarEvent, saveAgenda, saveCalendarEvent, saveOccurrenceAgenda, setAgendaCheck, skipOccurrence, unskipOccurrence, type AgendaItem, type CalendarEvent, type CalendarEventDraft } from "@/lib/calendarEventsRepo";
 import { addDays, type Repeat } from "@/lib/calendarRecurrence";
 import { EVERY_LABEL } from "@/lib/planning";
 import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
@@ -16,11 +16,12 @@ import { PlanningIcon } from "@/app/board/PlanningIcons";
 import { supabase } from "@/lib/supabase";
 import SaveStatus from "@/app/components/SaveStatus";
 import { useLiveNotes, type Typer } from "./useLiveNotes";
+import { backdropClose } from "@/lib/dialogBackdrop";
 import styles from "./calendar.module.css";
 
 const newItem = (text = ""): AgendaItem => ({ id: crypto.randomUUID(), text });
 
-export default function EventDialog({ event, occurrence, editingRef, date, project, canEdit, source, onClose, onSaved, onDeleted }: {
+export default function EventDialog({ event, occurrence, editingRef, date, project, canEdit, source, onClose, onSaved, onDeleted, onUndoable }: {
   /** The stored event — for a repeating one, the whole series. */
   event: CalendarEvent | null;
   /** Start date of the occurrence that was opened (repeating events). */
@@ -36,6 +37,8 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
   /** `stay` = keep the calendar where it is (agenda edits, skipped occurrences). */
   onSaved: (event: CalendarEvent, stay?: boolean) => void;
   onDeleted: (id: string) => void;
+  /** Offer an Undo for something just done (shown after the dialog closes). */
+  onUndoable?: (message: string, undo: () => Promise<void>) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   // What the form started from, to tell whether anything was changed.
@@ -43,9 +46,13 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
   const [draft, setDraft] = useState<CalendarEventDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<false | "one" | "all">(false);
+  // Deleting a whole series asks once (its occurrences' notes go too); everything else is undoable.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteMenu = useRef<HTMLDetailsElement>(null);
   // Existing events open as a read view; new ones go straight to the form.
   const [editing, setEditing] = useState(!event);
+  // Notes read as formatted text until someone chooses to write in them.
+  const [writingNotes, setWritingNotes] = useState(false);
   useEffect(() => { if (editingRef) editingRef.current = editing; }, [editing, editingRef]);
   useEffect(() => () => { if (editingRef) editingRef.current = false; }, [editingRef]);
   const [members, setMembers] = useState<ProfileInfo[]>([]);
@@ -95,6 +102,25 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
     return () => { active = false; };
   }, [members]);
   const live = useLiveNotes({ project, event, occurrence: repeats ? day : null, enabled: !!event && !source, me, onSaved: saved => onSaved(saved, true) });
+
+  // The agenda on screen: a one-off's own, or this occurrence's (every occurrence starts empty).
+  const agenda = repeats ? live.agenda : event?.agenda ?? [];
+  // Quick add / remove from the read view.
+  async function changeAgenda(next: AgendaItem[]) {
+    if (!event) return;
+    setBusy(true); setError("");
+    try {
+      if (repeats) { await saveOccurrenceAgenda(project, event.id, day, next); live.setAgenda(next); }
+      else onSaved(await saveAgenda(project, event.id, next), true);
+    }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function quickAdd() {
+    const text = agendaDraft.trim();
+    if (!event || !text) return;
+    setAgendaDraft("");
+    await changeAgenda([...agenda, newItem(text.slice(0, 300))]);
+  }
   async function toggleItem(id: string) {
     if (!event) return;
     const on = !checked.has(id);
@@ -102,19 +128,6 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
     set(on);
     try { await setAgendaCheck(project, event.id, day, id, on); }
     catch (e) { set(!on); setError((e as Error).message); }
-  }
-  // Quick add / remove from the read view; for a repeating event it changes every occurrence.
-  async function changeAgenda(agenda: AgendaItem[]) {
-    if (!event) return;
-    setBusy(true); setError("");
-    try { onSaved(await saveAgenda(project, event.id, agenda), true); }
-    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-  async function quickAdd() {
-    const text = agendaDraft.trim();
-    if (!event || !text) return;
-    setAgendaDraft("");
-    await changeAgenda([...event.agenda, newItem(text.slice(0, 300))]);
   }
 
   function update<K extends keyof CalendarEventDraft>(key: K, value: CalendarEventDraft[K]) { setDraft(old => ({ ...old, [key]: value })); }
@@ -133,15 +146,22 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
   const setAgendaText = (id: string, text: string) => setDraft(old => ({ ...old, agenda: old.agenda.map(item => item.id === id ? { ...item, text } : item) }));
   async function remove(which: "one" | "all") {
     if (!event) return;
-    if (confirmDelete !== which) { setConfirmDelete(which); return; }
+    if (which === "all" && repeats && !confirmDelete) { setConfirmDelete(true); return; }
     setBusy(true); setError("");
     try {
-      if (which === "one") onSaved(await skipOccurrence(project, event, day), true);
-      else { await deleteCalendarEvent(project, event.id); onDeleted(event.id); }
+      if (which === "one") {
+        onSaved(await skipOccurrence(project, event, day), true);
+        onUndoable?.(`Removed ${event.title} on ${shortDate(day)}`, async () => onSaved(await unskipOccurrence(project, event.id, day), true));
+      } else {
+        await deleteCalendarEvent(project, event.id);
+        onDeleted(event.id);
+        if (!repeats) onUndoable?.(`Deleted ${event.title}`, async () => onSaved(await restoreCalendarEvent(project, event), true));
+      }
       onClose();
     }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+
   // Anything typed into the form that Save hasn't sent yet.
   const dirty = editing && (JSON.stringify(draft) !== JSON.stringify(initial) || guestDraft.trim() !== "");
   const okToDropEdits = () => confirmDiscard(dirty, event ? "your edits to this event" : "this new event");
@@ -162,13 +182,17 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
   const shownMembers = readOnly ? members.filter(m => draft.attendees.includes(m.id)) : members;
   // The occurrence on screen, with its own dates.
   const shown = event && repeats && occurrence ? { ...event, date: occurrence, end_date: event.end_date ? addDays(occurrence, dayDiff(event.date, event.end_date)) : null } : event;
-  const deleteAllLabel = confirmDelete === "all" ? "Confirm delete" : repeats ? "Delete series" : "Delete event";
-  const status = <>
-    {error && <p role="alert" className={styles.eventError}>{error}</p>}
-    {confirmDelete === "one" && <p role="status">Delete only the {longDate(day)} occurrence? The rest of the series stays.</p>}
-    {confirmDelete === "all" && <p role="status">{repeats ? "Delete every occurrence of this event for everyone in the workspace?" : "Delete this event for everyone in the workspace?"}</p>}
-  </>;
-  return <dialog ref={dialog} className={styles.eventDialog} onCancel={e => { e.preventDefault(); if (!busy) close(); }} aria-labelledby="event-dialog-title">
+  const status = error && <p role="alert" className={styles.eventError}>{error}</p>;
+  const backdrop = backdropClose(() => { if (!busy) close(); });
+  return <dialog ref={dialog} className={styles.eventDialog} aria-labelledby="event-dialog-title"
+    onCancel={e => { e.preventDefault(); if (!busy) close(); }}
+    onPointerDown={e => {
+      backdrop.onPointerDown(e);
+      // Close the delete menu when pressing anywhere else.
+      const menu = deleteMenu.current;
+      if (menu?.open && !menu.contains(e.target as Node)) { menu.open = false; setConfirmDelete(false); }
+    }}
+    onClick={backdrop.onClick}>
     {event && shown && !editing ? <div>
       <div className={styles.dialogHeading}><div><h2 id="event-dialog-title">{event.title}</h2><p>{eventWhen(shown)}</p></div><button type="button" aria-label="Close event" disabled={busy} onClick={onClose}><Icon name="close" /></button></div>
       <dl className={styles.eventFacts}>
@@ -180,26 +204,26 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
             {event.guests.map(g => <span key={g} className={`${styles.attendee} ${styles.attendeeOn}`}><span className={`${styles.attendeeAvatar} ${styles.guestAvatar}`}>{g.trim().charAt(0).toUpperCase()}</span>{g}</span>)}
           </div> : <span className={styles.timeNote}>No attendees.</span>}
         </dd></div>}
-        {!source && (event.agenda.length > 0 || canEdit) && <div><dt>
-          Agenda{event.agenda.length > 0 && <span className={styles.agendaCount}> · {event.agenda.filter(i => checked.has(i.id)).length}/{event.agenda.length} done{repeats ? ` on ${shortDate(day)}` : ""}</span>}
+        {!source && (agenda.length > 0 || canEdit) && <div><dt>
+          {repeats ? `Agenda · ${shortDate(day)}` : "Agenda"}{agenda.length > 0 && <span className={styles.agendaCount}> · {agenda.filter(i => checked.has(i.id)).length}/{agenda.length} done</span>}
         </dt><dd>
-          {event.agenda.length > 0 && <ul className={styles.agendaList}>
-            {event.agenda.map(item => <li key={item.id} className={checked.has(item.id) ? styles.agendaDone : undefined}>
+          {agenda.length > 0 && <ul className={styles.agendaList}>
+            {agenda.map(item => <li key={item.id} className={checked.has(item.id) ? styles.agendaDone : undefined}>
               <label className={styles.checkbox}>
                 <input type="checkbox" checked={checked.has(item.id)} disabled={!canEdit} onChange={() => void toggleItem(item.id)} />
                 <LinkedText text={item.text} targets={linkTargets} />
               </label>
-              {canEdit && <button type="button" className={styles.agendaRemove} disabled={busy} aria-label={`Remove “${item.text}” from the agenda`} title={repeats ? "Remove from every occurrence" : "Remove"}
-                onClick={() => void changeAgenda(event.agenda.filter(i => i.id !== item.id))}><Icon name="close" /></button>}
+              {canEdit && <button type="button" className={styles.agendaRemove} disabled={busy} aria-label={`Remove “${item.text}” from the agenda`} title="Remove"
+                onClick={() => void changeAgenda(agenda.filter(i => i.id !== item.id))}><Icon name="close" /></button>}
             </li>)}
           </ul>}
           {canEdit && <div className={styles.guestAdd}>
             <input aria-label="Add an agenda item" maxLength={300} value={agendaDraft} disabled={busy} onChange={e => setAgendaDraft(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void quickAdd(); } }}
-              placeholder={event.agenda.length ? "Add an item" : "Add the first agenda item"} />
+              placeholder={agenda.length ? "Add an item" : "Add the first agenda item"} />
             <button type="button" disabled={busy || !agendaDraft.trim()} onClick={() => void quickAdd()}><Icon name="plus" /> Add</button>
           </div>}
-          {canEdit && repeats && <p className={styles.timeNote}>Items are shared by every occurrence; ticks are just for this one.</p>}
+          {canEdit && repeats && <p className={styles.timeNote}>This agenda is just for this occurrence; the next one starts empty.</p>}
         </dd></div>}
         {source
           ? event.notes && <div><dt>Notes</dt><dd className={styles.eventNotes}><LinkedText text={event.notes} targets={linkTargets} formatting={false} /></dd></div>
@@ -207,9 +231,12 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
               <span>{repeats ? `Notes · ${shortDate(day)}` : "Notes"}</span>
               {live.typer && <span className={styles.typing} style={{ color: live.typer.color }}>{live.typer.name} is typing…</span>}
               {canEdit && <SaveStatus state={live.saveState} onRetry={live.retry} />}
+              {canEdit && live.loaded && <button type="button" className={styles.notesToggle} onClick={() => setWritingNotes(w => !w)}>
+                {writingNotes ? "Done" : live.notes ? "Edit" : "Write"}
+              </button>}
             </dt><dd>
-              {canEdit
-                ? <PageLinkTextarea value={live.notes} onChange={live.change} targets={linkTargets} formatShortcuts rows={6} maxLength={5000}
+              {canEdit && writingNotes
+                ? <PageLinkTextarea value={live.notes} onChange={live.change} targets={linkTargets} formatShortcuts rows={12} maxLength={5000} autoFocus
                     placeholder={live.loaded ? (repeats ? "Notes for this meeting — everyone here sees them as you type" : "Meeting notes — everyone here sees them as you type") : "Loading notes…"}
                     hint="Saved automatically · ⌘B bold · ⌘I italic · type [[ or @ to link a page, section, canvas, board or task" />
                 : live.notes
@@ -220,12 +247,30 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
       </dl>
       <p className={styles.timeNote}>{source ? `From the subscribed calendar “${source}”. Change it in Moodle.` : "Everyone in the workspace can see this event."}</p>
       {status}
-      <footer>
-        {canEdit && repeats && <button type="button" disabled={busy} onClick={() => remove("one")}>{confirmDelete === "one" ? "Confirm" : "Delete this one"}</button>}
-        {canEdit && <button type="button" disabled={busy} onClick={() => remove("all")}>{deleteAllLabel}</button>}
-        <button type="button" disabled={busy} onClick={onClose}>Close</button>
-        {canEdit && <button className="planning-primary" type="button" disabled={busy} onClick={startEditing}>{repeats ? "Edit series" : "Edit event"}</button>}
-      </footer>
+      {canEdit && <footer className={styles.viewFooter}>
+        {repeats
+          ? <details ref={deleteMenu} className={styles.deleteMenu} onToggle={e => { if (!e.currentTarget.open) setConfirmDelete(false); }}>
+              <summary className={styles.deleteButton} aria-label="Delete…"><Icon name="trash" /> Delete</summary>
+              <div className={styles.deletePanel} role="menu">
+                {confirmDelete ? <>
+                  <p>Delete every occurrence, with their notes and agendas, for everyone?</p>
+                  <div className={styles.deleteConfirm}>
+                    <button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep</button>
+                    <button type="button" className={styles.danger} disabled={busy} onClick={() => void remove("all")}>Delete all</button>
+                  </div>
+                </> : <>
+                  <button type="button" role="menuitem" disabled={busy} onClick={() => void remove("one")}>
+                    <strong>Only {shortDate(day)}</strong><small>The rest of the series stays</small>
+                  </button>
+                  <button type="button" role="menuitem" className={styles.danger} disabled={busy} onClick={() => void remove("all")}>
+                    <strong>All occurrences</strong><small>The whole series</small>
+                  </button>
+                </>}
+              </div>
+            </details>
+          : <button type="button" className={styles.deleteButton} disabled={busy} onClick={() => void remove("all")}><Icon name="trash" /> Delete</button>}
+        <button className="planning-primary" type="button" disabled={busy} onClick={startEditing} title={repeats ? "Changes apply to every occurrence" : undefined}>Edit</button>
+      </footer>}
     </div> : <form onSubmit={async e => {
       e.preventDefault(); if (!canEdit || busy) return;
       setBusy(true); setError("");
@@ -283,7 +328,7 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
           {readOnly && !draft.attendees.length && !draft.guests.length && <p className={styles.timeNote}>No attendees.</p>}
           {canEdit && <p className={styles.timeNote}>Members you add get a notification. Guests are only listed by name.</p>}
         </div>}
-        {!source && <div className={styles.attendees} role="group" aria-labelledby="event-agenda-label">
+        {!source && !draft.repeat && <div className={styles.attendees} role="group" aria-labelledby="event-agenda-label">
           <span id="event-agenda-label" className={styles.attendeesLabel}>Agenda</span>
           {draft.agenda.map((item, index) => <div key={item.id} className={styles.guestAdd}>
             <input aria-label={`Agenda item ${index + 1}`} maxLength={300} value={item.text} placeholder="Agenda item" onChange={e => setAgendaText(item.id, e.target.value)}
@@ -291,7 +336,7 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
             <button type="button" aria-label={`Remove agenda item ${index + 1}`} onClick={() => update("agenda", draft.agenda.filter(i => i.id !== item.id))}><Icon name="close" /></button>
           </div>)}
           <button type="button" className={styles.agendaAdd} disabled={draft.agenda.length >= 50} onClick={() => update("agenda", [...draft.agenda, newItem()])}><Icon name="plus" /> Add agenda item</button>
-          <p className={styles.timeNote}>{draft.repeat ? "A checklist every occurrence starts with, unticked." : "A checklist to tick off during the event."}</p>
+          <p className={styles.timeNote}>A checklist to tick off during the event.</p>
         </div>}
         {/* Notes of existing events are written live in the event view; a
             repeating event's notes belong to each occurrence, so it has none here. */}
@@ -300,11 +345,10 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
           <PageLinkTextarea value={draft.notes} onChange={v => update("notes", v)} targets={linkTargets} formatShortcuts rows={4} maxLength={5000}
             hint="⌘B bold · ⌘I italic · type [[ or @ to link a page, section, canvas, board or task" />
         </div>}
-        {!source && (event || draft.repeat) && <p className={styles.timeNote}>{draft.repeat ? "Each occurrence gets its own meeting notes, written in the event view." : "Notes are written live in the event view."}</p>}
+        {!source && (event || draft.repeat) && <p className={styles.timeNote}>{draft.repeat ? "Each occurrence gets its own agenda and meeting notes, starting empty — write them in the event view." : "Notes are written live in the event view."}</p>}
       </fieldset>
       {status}
       <footer>
-        {event && canEdit && <button type="button" disabled={busy} onClick={() => remove("all")}>{deleteAllLabel}</button>}
         <button type="button" disabled={busy} onClick={stopEditing}>Cancel</button>
         {canEdit && <button className="planning-primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save event"}</button>}
       </footer>

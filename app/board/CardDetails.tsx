@@ -23,8 +23,10 @@ let commentChannelSeq = 0;
 
 /** A task's comment thread, kept live over realtime. Viewers can comment too. */
 export function CardComments({ cardId, people, currentUserId }: { cardId: string; people: ProfileInfo[]; currentUserId: string }) {
-  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [comments, setComments] = useState<CommentRow[] | null>(null);
   const [error, setError] = useState("");
+  // With no comments yet the thread stays folded into one button until someone writes.
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -54,11 +56,20 @@ export function CardComments({ cardId, people, currentUserId }: { cardId: string
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const reload = () => listComments({ cardId }).then(setComments).catch(fail);
 
+  if (!error && !composing && comments?.length === 0) {
+    return (
+      <section className={styles.discussion} aria-label="Task discussion">
+        <button type="button" className={styles.linkBtn} onClick={() => setComposing(true)}><Icon name="comment" /> Add a comment</button>
+      </section>
+    );
+  }
+  if (!error && !comments) return null;
+
   return (
     <section className={styles.discussion} aria-label="Task discussion">
       {error && <p role="alert" className={styles.error}>{error.includes("card_id") ? "Task comments need a database update. Apply supabase/migrate-card-comments.sql." : error}</p>}
       <Comments
-        comments={comments}
+        comments={comments ?? []}
         people={people}
         currentUserId={currentUserId}
         onAdd={(body, parentId) => addComment({ cardId }, currentUserId, body, parentId ?? null).then(reload).catch(fail)}

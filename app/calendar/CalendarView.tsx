@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listCalendarEvents, type CalendarEvent } from "@/lib/calendarEventsRepo";
 import { listCalendarFeeds, loadFeedEvents, type CalendarFeed, type FeedEvent } from "@/lib/calendarFeedsRepo";
 import { calendarWeekLayout, eventCoversDate, eventEndDate, eventSpan } from "@/lib/calendarLayout";
@@ -17,6 +17,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import Link from "next/link";
 import { usePlanning } from "../board/TaskPlanning";
 import { useFollowedView, useShareView } from "@/lib/followView";
+import UndoToast from "@/app/components/UndoToast";
 
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -41,6 +42,8 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   const [editingOccurrence, setEditingOccurrence] = useState<string | undefined>();
   const openEvent = (shown: Occurrence<CalendarEvent | FeedEvent>) => { setEditingEvent(shown.series); setEditingOccurrence(shown.occurrence); };
   const eventEditingRef = useRef(false);
+  const [toast, setToast] = useState<{ message: string; undo: () => Promise<void> } | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
 
   // Followers see the same view, day and open event (lib/followView).
   useShareView("calendar", {
@@ -288,6 +291,9 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
       setEventsError("");
       if (stay) return;
       setSelected(event.date); setMonth(new Date(`${event.date.slice(0, 7)}-01T12:00:00`));
-    }} onDeleted={id => setStandaloneEvents(current => current.filter(event => event.id !== id))} />}
+    }} onDeleted={id => setStandaloneEvents(current => current.filter(event => event.id !== id))}
+      onUndoable={(message, undo) => setToast({ message, undo })} />}
+    {toast && <UndoToast message={toast.message} onDismiss={dismissToast}
+      onUndo={() => { toast.undo().catch(e => setEventsError((e as Error).message)); }} />}
   </>;
 }

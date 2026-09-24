@@ -88,3 +88,56 @@ export async function leaveWorkspace(projectId: string, userId: string): Promise
     .eq("user_id", userId);
   if (error) throw new Error(`leaveWorkspace failed: ${error.message}`);
 }
+
+/* ---------------------------------------------------------------------------
+ * Workspace links: the team's Discord, Overleaf, Drive and GitHub, shown as
+ * icons in the top bar (supabase/migrate-workspace-links.sql).
+ * ------------------------------------------------------------------------- */
+
+export const WORKSPACE_LINK_KINDS = ["discord", "overleaf", "drive", "github"] as const;
+export type WorkspaceLinkKind = (typeof WORKSPACE_LINK_KINDS)[number];
+export type WorkspaceLinks = Partial<Record<WorkspaceLinkKind, string>>;
+
+/** The saved links; GitHub falls back to the workspace's linked repository. */
+export async function getWorkspaceLinks(projectId: string): Promise<WorkspaceLinks> {
+  const { data, error } = await supabase.from("projects").select("links, repo").eq("id", projectId).maybeSingle();
+  if (error) {
+    // Before the migration there is no links column: show just the repository, if any.
+    if (!error.message.includes("links")) throw new Error(`getWorkspaceLinks failed: ${error.message}`);
+    const { data: old } = await supabase.from("projects").select("repo").eq("id", projectId).maybeSingle();
+    return old?.repo ? { github: `https://github.com/${old.repo}` } : {};
+  }
+  const saved = (data?.links ?? {}) as WorkspaceLinks;
+  const links: WorkspaceLinks = {};
+  for (const kind of WORKSPACE_LINK_KINDS) if (typeof saved[kind] === "string" && saved[kind]) links[kind] = saved[kind];
+  if (!links.github && data?.repo) links.github = `https://github.com/${data.repo}`;
+  return links;
+}
+
+/** Only http(s) addresses are kept; a bare "discord.gg/…" gets https:// added. */
+export function cleanWorkspaceLink(raw: string): string {
+  const text = raw.trim();
+  if (!text) return "";
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  let url: URL;
+  try { url = new URL(withScheme); } catch { throw new ValidationError(`“${text}” isn't a web address`); }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new ValidationError("Links must start with https://");
+  if (url.href.length > 2000) throw new ValidationError("That link is too long");
+  return url.href;
+}
+
+export async function updateWorkspaceLinks(projectId: string, links: WorkspaceLinks): Promise<void> {
+  const clean: WorkspaceLinks = {};
+  for (const kind of WORKSPACE_LINK_KINDS) {
+    const url = cleanWorkspaceLink(links[kind] ?? "");
+    if (url) clean[kind] = url;
+  }
+  const { data, error } = await supabase.from("projects").update({ links: clean }).eq("id", projectId).select("id");
+  if (error) {
+    throw new Error(error.message.includes("links")
+      ? "Workspace links need a database update. Apply supabase/migrate-workspace-links.sql in Supabase."
+      : `updateWorkspaceLinks failed: ${error.message}`);
+  }
+  // RLS filters instead of erroring: no row back means viewer access.
+  if (!data?.length) throw new Error("Only editors can change the workspace links.");
+}

@@ -6,6 +6,7 @@ import type { OnlineUser } from "@/lib/useSitePresence";
 import { setFollowed, useFollowed } from "@/lib/follow";
 import { publishFollowedView, withView } from "@/lib/followView";
 import NotificationBell from "./NotificationBell";
+import WorkspaceLinks from "./WorkspaceLinks";
 import "./chrome.css";
 
 /** Someone online; `path` / `label` say where they are (lib/useSitePresence). */
@@ -200,6 +201,7 @@ export default function TopBar({
         ))}
       </div>
       <div className="top-right">
+        {workspaceId && <WorkspaceLinks workspaceId={workspaceId} />}
         {online && (
           <div className="who-wrap" ref={whoRef}>
             <button

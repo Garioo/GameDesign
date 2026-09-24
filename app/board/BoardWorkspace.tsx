@@ -30,7 +30,7 @@ import { supabase } from "@/lib/supabase";
 import { ensureSession, type SessionInfo } from "@/lib/session";
 import { listCanvases, type CanvasInfo } from "@/lib/canvasRepo";
 import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
-import type { MentionTarget } from "@/app/doc/mentions";
+import { mentionHref, type MentionTarget } from "@/app/doc/mentions";
 import { plainLinkedText } from "@/lib/pageLinks";
 import { loadLinkTargets } from "@/lib/linkTargets";
 import LinkedText from "@/app/components/LinkedText";
@@ -51,6 +51,9 @@ import {
   loadBoards,
   moveCard,
   openBoardCardCanvas,
+  setCardOwner,
+  setCardPages,
+  setCardPriority,
   type Board as BoardData,
   type BoardCard as CardData,
   type BoardCategory,
@@ -647,11 +650,16 @@ type CardModalProps = {
   onSave: (card: CardData, snapshot: ScheduleSnapshot) => Promise<void>;
   onDelete: (card: CardData) => void;
   onMakeCanvas: (card: CardData, existingCanvasId?: string) => Promise<void>;
+  /** Quick changes made straight from the task view, without the edit form. */
+  onQuickChange: (id: string, change: QuickChange) => Promise<void>;
   /** Pages and canvases a description can link to (also used for current titles). */
   linkTargets: MentionTarget[];
   /** Set while the edit form is open, so following someone never closes it under you. */
   editingRef?: { current: boolean };
 };
+
+type QuickChange = { priority: string | null } | { owner: string; assigned: boolean } | { pageIds: string[] };
+const PRIORITIES = ["high", "medium", "low"] as const;
 
 /** Task dialog: a read-only view by default; editors switch to the form with Edit. */
 function CardModal(props: CardModalProps) {
@@ -663,6 +671,10 @@ function CardModal(props: CardModalProps) {
   const [canvasBusy, setCanvasBusy] = useState(false);
   const [canvasError, setCanvasError] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [quickError, setQuickError] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [linkingPage, setLinkingPage] = useState(false);
+  const [pageQuery, setPageQuery] = useState("");
   const cardBoard = boards.find(b => b.cols.some(c => c.cards.some(k => k.id === card.id)));
   const cardCol = cardBoard?.cols.find(c => c.cards.some(k => k.id === card.id));
   const parent = card.parentId ? boards.flatMap(b => b.cols.flatMap(c => c.cards)).find(k => k.id === card.parentId) : undefined;
@@ -705,6 +717,21 @@ function CardModal(props: CardModalProps) {
     document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};
   },[card.id]);
 
+  async function quick(change: QuickChange) {
+    setQuickError("");
+    try { await props.onQuickChange(card.id, change); }
+    catch (e) { setQuickError(e instanceof Error ? e.message : "Could not update the task."); }
+  }
+  const pageTargets = props.linkTargets.filter(t => t.kind === "page");
+  const linkedPages = card.pageIds.map(id => pageTargets.find(t => t.ref === id) ?? { ref: id, title: "Page unavailable", group: "", kind: "page" as const });
+  const pageMatches = pageTargets
+    .filter(t => !card.pageIds.includes(t.ref) && `${t.title} ${t.group}`.toLowerCase().includes(pageQuery.trim().toLowerCase()))
+    .slice(0, 8);
+  function linkPage(id: string) {
+    setPageQuery(""); setLinkingPage(false);
+    void quick({ pageIds: [...card.pageIds, id] });
+  }
+
   async function createCanvas() {
     if (canvasBusy) return;
     setCanvasBusy(true); setCanvasError("");
@@ -721,6 +748,11 @@ function CardModal(props: CardModalProps) {
             ? <h2>Edit task</h2>
             : <span className={cardStyles.crumb}>{cardBoard?.name ?? "Task"}{cardCol ? ` · ${cardCol.name}` : ""}</span>}
           {!editing && canEdit && <button type="button" className="modal-save" onClick={() => setEditing(true)}>Edit</button>}
+          {!editing && (card.canvasId
+            ? <Link className={`modal-cancel ${cardStyles.canvasLink}`} href={`/doc/canvas?c=${card.canvasId}`} title="Open the canvas linked to this task"><Icon name="grid" /> Canvas</Link>
+            : canEdit && <button type="button" className={`modal-cancel ${cardStyles.canvasLink}`} disabled={canvasBusy} onClick={createCanvas} title="Open this task as a canvas">
+                <Icon name="grid" /> {canvasBusy ? "Opening…" : "Open as canvas"}
+              </button>)}
           <button type="button" className="modal-cancel" onClick={async () => {
             try {
               await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(cardBoard?.id ?? "")}&card=${encodeURIComponent(card.id)}`);
@@ -755,11 +787,19 @@ function CardModal(props: CardModalProps) {
                       </select>
                     </label>
                   : <span className={cardStyles.stageChip}><span className={cardStyles.stageDot} style={{ background: cardCol.color }} />{cardCol.name}</span>)}
-                {card.priority && <span className={`card-priority ${card.priority}`}>{card.priority[0].toUpperCase() + card.priority.slice(1)} priority</span>}
+                {canEdit
+                  ? <label className={`${cardStyles.stageChip} ${cardStyles.stagePicker} ${cardStyles.priorityPicker} ${card.priority ? cardStyles[`p_${card.priority}`] ?? "" : cardStyles.p_none}`}>
+                      <select aria-label="Task priority" value={card.priority ?? ""} onChange={e => void quick({ priority: e.target.value || null })}>
+                        <option value="">No priority</option>
+                        {PRIORITIES.map(p => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)} priority</option>)}
+                      </select>
+                    </label>
+                  : card.priority && <span className={`card-priority ${card.priority}`}>{card.priority[0].toUpperCase() + card.priority.slice(1)} priority</span>}
                 {(category?.name || card.kind) && <span className="card-tag">{category?.name ?? card.kind}</span>}
               </div>
 
               {stageError && <p role="alert" className="gantt-error">{stageError}</p>}
+              {quickError && <p role="alert" className="gantt-error">{quickError}</p>}
               <div className={cardStyles.section}>
                 <div className="modal-label">Description</div>
                 {card.sub
@@ -770,14 +810,53 @@ function CardModal(props: CardModalProps) {
               </div>
 
               <div className={cardStyles.section}>
-                <div className="modal-label">Assignees</div>
-                {owners.length
-                  ? <div className={cardStyles.people}>{owners.map(o => (
-                      <span key={o.id} className={cardStyles.person}>
-                        <span className="owner-chip-avatar" style={{ background: o.color }}>{o.initials}</span>{o.name}
-                      </span>))}</div>
-                  : <p className={cardStyles.muted}>Unassigned</p>}
+                <div className={cardStyles.sectionHead}>
+                  <div className="modal-label">Assignees</div>
+                  {canEdit && people.length > 0 && <button type="button" className={cardStyles.linkBtn} aria-expanded={assigning} onClick={() => setAssigning(a => !a)}>
+                    {assigning ? "Done" : owners.length ? "Change" : <><Icon name="plus" /> Assign</>}
+                  </button>}
+                </div>
+                {assigning
+                  ? <div className="owner-chips">{people.map(p => {
+                      const on = card.ownerIds.includes(p.id);
+                      return <button key={p.id} type="button" aria-pressed={on} className={`owner-chip${on ? " active" : ""}`} onClick={() => void quick({ owner: p.id, assigned: !on })}>
+                        <span className="owner-chip-avatar" style={{ background: p.color }}>{p.initials}</span>{p.name}
+                      </button>;
+                    })}</div>
+                  : owners.length
+                    ? <div className={cardStyles.people}>{owners.map(o => (
+                        <span key={o.id} className={cardStyles.person}>
+                          <span className="owner-chip-avatar" style={{ background: o.color }}>{o.initials}</span>{o.name}
+                        </span>))}</div>
+                    : <p className={cardStyles.muted}>Unassigned</p>}
               </div>
+
+              {(linkedPages.length > 0 || canEdit) && <div className={cardStyles.section}>
+                <div className="modal-label">Linked pages</div>
+                {linkedPages.length > 0 && <ul className={cardStyles.pageLinks}>
+                  {linkedPages.map(pg => <li key={pg.ref}>
+                    <Link href={mentionHref(pg.ref)}><Icon name="file" /><span>{pg.title}</span>{pg.group && <small>{pg.group}</small>}</Link>
+                    {canEdit && <button type="button" className={cardStyles.pageUnlink} aria-label={`Unlink “${pg.title}”`} title="Unlink"
+                      onClick={() => void quick({ pageIds: card.pageIds.filter(id => id !== pg.ref) })}><Icon name="close" /></button>}
+                  </li>)}
+                </ul>}
+                {canEdit && (linkingPage
+                  ? <div className={cardStyles.pagePicker}>
+                      <input className="modal-input" autoFocus placeholder="Search pages…" aria-label="Search pages to link" value={pageQuery}
+                        onChange={e => setPageQuery(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Escape") { e.nativeEvent.stopPropagation(); setLinkingPage(false); setPageQuery(""); }
+                          if (e.key === "Enter" && pageMatches[0]) { e.preventDefault(); linkPage(pageMatches[0].ref); }
+                        }} />
+                      <ul role="listbox" aria-label="Pages">
+                        {pageMatches.map(t => <li key={t.ref}><button type="button" onClick={() => linkPage(t.ref)}>
+                          <Icon name="file" /><span>{t.title}</span><small>{t.group}</small>
+                        </button></li>)}
+                        {pageMatches.length === 0 && <li className={cardStyles.muted}>{pageTargets.length ? "No matching pages." : "No pages in this workspace yet."}</li>}
+                      </ul>
+                    </div>
+                  : <button type="button" className={cardStyles.linkBtn} onClick={() => setLinkingPage(true)}><Icon name="link" /> Link a page</button>)}
+              </div>}
 
               <TaskPlanningSection taskId={card.id} onOpenCard={onOpenCard} editable={false} />
 
@@ -788,15 +867,7 @@ function CardModal(props: CardModalProps) {
                 </div>
               )}
 
-              <div className={cardStyles.section}>
-                <div className="modal-label">Canvas</div>
-                {card.canvasId
-                  ? <Link className={`modal-cancel ${cardStyles.canvasLink}`} href={`/doc/canvas?c=${card.canvasId}`}>Open linked canvas <Icon name="external" /></Link>
-                  : canEdit
-                    ? <button type="button" className="modal-cancel" disabled={canvasBusy} onClick={createCanvas}>{canvasBusy ? "Opening…" : "Open as canvas"}</button>
-                    : <p className={cardStyles.muted}>No linked canvas.</p>}
-                {canvasError && <p role="alert" className="gantt-error">{canvasError}</p>}
-              </div>
+              {canvasError && <p role="alert" className="gantt-error">{canvasError}</p>}
             </div>
           )}
           <div>
@@ -1247,6 +1318,24 @@ export default function BoardWorkspace() {
   }
 
   /** Reuse the persistent link; only a newly created canvas receives the seed note. */
+  /** Priority, one assignee or the linked pages, changed from the task view. Shown at once, then saved. */
+  async function handleQuickChange(id: string, change: QuickChange) {
+    if (!session || !canEdit) return;
+    const patch = (k: CardData): CardData =>
+      "priority" in change ? { ...k, priority: change.priority }
+      : "pageIds" in change ? { ...k, pageIds: change.pageIds }
+      : { ...k, ownerIds: change.assigned ? [...new Set([...k.ownerIds, change.owner])] : k.ownerIds.filter(o => o !== change.owner) };
+    setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({ ...c, cards: c.cards.map(k => k.id === id ? patch(k) : k) })) })));
+    try {
+      if ("priority" in change) await setCardPriority(id, change.priority);
+      else if ("pageIds" in change) await setCardPages(id, change.pageIds);
+      else await setCardOwner(id, change.owner, change.assigned);
+    } catch (e) {
+      setBoards(await loadBoards(session.workspaceId).catch(() => boards));
+      throw e;
+    }
+  }
+
   async function handleMakeCanvas(card: CardData, existingCanvasId?: string) {
     const canvas = await openBoardCardCanvas(card.id, existingCanvasId);
     setBoards(prev => prev.map(b => ({ ...b, cols: b.cols.map(c => ({ ...c,
@@ -1592,6 +1681,7 @@ export default function BoardWorkspace() {
             onSave={handleSaveCard}
             onDelete={handleDeleteCard}
             onMakeCanvas={handleMakeCanvas}
+            onQuickChange={handleQuickChange}
             linkTargets={linkTargets}
           />
         )}

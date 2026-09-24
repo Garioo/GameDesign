@@ -25,7 +25,7 @@ export interface CalendarEvent {
   skipped_dates: string[];
   /** false = a repeating event skips Saturdays and Sundays. */
   repeat_weekends: boolean;
-  /** Checklist; for a repeating event, every occurrence starts from it unticked. */
+  /** A one-off's checklist. Repeating events keep theirs per occurrence (getOccurrence), so every one starts empty. */
   agenda: AgendaItem[];
 }
 export type CalendarEventDraft = Omit<CalendarEvent, "id">;
@@ -45,11 +45,12 @@ export async function saveCalendarEvent(project: string, draft: CalendarEventDra
   const agenda = draft.agenda.map(item => ({ id: item.id, text: item.text.trim() })).filter(item => item.text);
   const repeat = draft.repeat ?? null;
   const clean = {
-    ...draft, title: draft.title.trim(), location: draft.location.trim(), attendees: [...new Set(draft.attendees)], guests, agenda,
+    ...draft, title: draft.title.trim(), location: draft.location.trim(), attendees: [...new Set(draft.attendees)], guests,
     repeat, repeat_until: repeat ? draft.repeat_until || null : null, skipped_dates: repeat ? draft.skipped_dates : [],
     repeat_weekends: repeat ? draft.repeat_weekends : true,
-    // A repeating event's notes live per occurrence (calendar_event_notes), so every one starts empty.
+    // A repeating event's notes and agenda live per occurrence (calendar_event_notes), so every one starts empty.
     notes: repeat ? "" : draft.notes.trim(),
+    agenda: repeat ? [] : agenda,
   };
   if (agenda.length > 50 || agenda.some(item => item.text.length > 300)) throw new Error("An agenda can have up to 50 items of up to 300 characters.");
   if (clean.repeat_until && clean.repeat_until < clean.date) throw new Error("A repeating event must end on or after its first date.");
@@ -64,9 +65,10 @@ export async function saveCalendarEvent(project: string, draft: CalendarEventDra
     : supabase.from("calendar_events").insert({ ...clean, project_id: project });
   const { data, error } = await query.select(fields).single();
   if (error) throw eventError(error);
-  // Turning a one-off with notes into a series: its notes become the first occurrence's.
+  // Turning a one-off into a series: its notes and agenda become the first occurrence's.
   const carried = draft.notes.trim();
   if (repeat && carried) await saveOccurrenceNotes(project, data.id, data.date, carried);
+  if (repeat && agenda.length) await saveOccurrenceAgenda(project, data.id, data.date, agenda);
   return data;
 }
 export async function deleteCalendarEvent(project: string, id: string): Promise<void> {
@@ -112,11 +114,19 @@ export async function saveEventNotes(project: string, eventId: string, notes: st
   return data;
 }
 
-/** Meeting notes of one occurrence of a repeating event ("" if none yet). */
-export async function getOccurrenceNotes(eventId: string, occurrence: string): Promise<string> {
-  const { data, error } = await supabase.from("calendar_event_notes").select("notes").eq("event_id", eventId).eq("occurrence", occurrence).maybeSingle();
+/** Notes and agenda of one occurrence of a repeating event (empty until someone writes them). */
+export async function getOccurrence(eventId: string, occurrence: string): Promise<{ notes: string; agenda: AgendaItem[] }> {
+  const { data, error } = await supabase.from("calendar_event_notes").select("notes,agenda").eq("event_id", eventId).eq("occurrence", occurrence).maybeSingle();
   if (error) throw eventError(error);
-  return (data?.notes as string | undefined) ?? "";
+  return { notes: (data?.notes as string | undefined) ?? "", agenda: (data?.agenda as AgendaItem[] | undefined) ?? [] };
+}
+
+/** Replace one occurrence's agenda (its notes are left alone). */
+export async function saveOccurrenceAgenda(project: string, eventId: string, occurrence: string, agenda: AgendaItem[]): Promise<void> {
+  if (agenda.length > 50 || agenda.some(item => !item.text.trim() || item.text.length > 300)) throw new Error("An agenda can have up to 50 items of up to 300 characters.");
+  const { error } = await supabase.from("calendar_event_notes")
+    .upsert({ project_id: project, event_id: eventId, occurrence, agenda, updated_at: new Date().toISOString() }, { onConflict: "event_id,occurrence" });
+  if (error) throw eventError(error);
 }
 
 export async function saveOccurrenceNotes(project: string, eventId: string, occurrence: string, notes: string): Promise<void> {
@@ -124,4 +134,21 @@ export async function saveOccurrenceNotes(project: string, eventId: string, occu
   const { error } = await supabase.from("calendar_event_notes")
     .upsert({ project_id: project, event_id: eventId, occurrence, notes, updated_at: new Date().toISOString() }, { onConflict: "event_id,occurrence" });
   if (error) throw eventError(error);
+}
+
+/** Undo skipOccurrence: bring one occurrence back (its notes and agenda were never removed). */
+export async function unskipOccurrence(project: string, eventId: string, occurrence: string): Promise<CalendarEvent> {
+  const { data: row, error: readError } = await supabase.from("calendar_events").select("skipped_dates").eq("project_id", project).eq("id", eventId).single();
+  if (readError) throw eventError(readError);
+  const skipped_dates = ((row?.skipped_dates as string[] | null) ?? []).filter(d => d !== occurrence);
+  const { data, error } = await supabase.from("calendar_events").update({ skipped_dates }).eq("project_id", project).eq("id", eventId).select(fields).single();
+  if (error) throw eventError(error);
+  return data;
+}
+
+/** Undo a deleted one-off event: put the same row (same id, so links keep working) back. */
+export async function restoreCalendarEvent(project: string, event: CalendarEvent): Promise<CalendarEvent> {
+  const { data, error } = await supabase.from("calendar_events").insert({ ...event, project_id: project }).select(fields).single();
+  if (error) throw eventError(error);
+  return data;
 }

@@ -371,8 +371,14 @@
   padding-right: 8px;
 }
 .canvasLink {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   text-decoration: none;
+}
+.canvasLink svg {
+  width: 14px;
+  height: 14px;
 }
 /* Editors change status right on the task: the stage chip is a select. */
 .stagePicker {
@@ -406,3 +412,135 @@
   cursor: default;
 }
 
+
+/* ── quick edits in the task view ── */
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sectionHead .linkBtn {
+  font-size: 12.5px;
+}
+.priorityPicker.p_none {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+.priorityPicker.p_high { background: #fbe6dc; color: #934b32; }
+.priorityPicker.p_medium { background: #f7ecd2; color: #7a5614; }
+.priorityPicker.p_low { background: var(--line-soft); color: var(--ink-soft); }
+
+/* ── linked pages ── */
+.pageLinks,
+.pagePicker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.pageLinks {
+  margin-bottom: 6px;
+}
+.pageLinks li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+}
+.pageLinks li:hover {
+  background: var(--line-soft);
+}
+.pageLinks a,
+.pagePicker button {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+}
+.pageLinks a:hover span {
+  color: var(--ember-deep);
+}
+.pageLinks svg,
+.pagePicker svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--ink-faint);
+}
+.pageLinks span,
+.pagePicker span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pageLinks small,
+.pagePicker small {
+  margin-left: auto;
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+.pageUnlink {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  opacity: 0;
+}
+.pageLinks li:hover .pageUnlink,
+.pageUnlink:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .pageUnlink { opacity: 1; }
+}
+.pageUnlink:hover {
+  color: var(--ink);
+  background: var(--line);
+}
+.pagePicker {
+  display: grid;
+  gap: 6px;
+}
+.pagePicker ul {
+  max-height: 240px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.pagePicker button {
+  width: 100%;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.pagePicker button:hover,
+.pagePicker button:focus-visible {
+  background: var(--ember-tint);
+}
+.pagePicker li.muted {
+  padding: 6px 8px;
+}

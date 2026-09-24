@@ -19,6 +19,8 @@ export interface BoardCard {
   priority: string | null;
   ownerIds: string[];
   canvasId?: string | null;
+  /** Pages linked to the task (supabase/migrate-card-page-links.sql). */
+  pageIds: string[];
   /** Legacy per-task deadline, kept only so a board's automatic end date can still be inferred from old data (see automaticBoardEndDate). Tasks no longer set or edit this. */
   deadline?: string | null;
   columnId?: string;
@@ -72,6 +74,7 @@ interface CardRow {
   priority: string | null;
   owners: string[] | null;
   canvas_id?: string | null;
+  page_ids?: string[] | null;
   deadline: string | null;
   milestone_id?: string | null;
   recurrence_id?: string | null;
@@ -114,6 +117,7 @@ export async function loadBoards(workspaceId: string): Promise<Board[]> {
       priority: r.priority,
       ownerIds: r.owners ?? [],
       canvasId: r.canvas_id,
+      pageIds: r.page_ids ?? [],
       deadline: r.deadline,
       columnId: r.column_id,
       parentId: r.parent_id ?? null,
@@ -234,6 +238,7 @@ export async function createCard(
     sub: data.sub,
     kind: data.kind,
     tags: data.tags ?? [],
+    pageIds: [],
     priority: data.priority,
     ownerIds: data.owners ?? [],
     columnId,
@@ -289,6 +294,17 @@ export async function moveCard(
 export async function setCardPriority(cardId: string, priority: string | null): Promise<void> {
   const { error } = await supabase.from("board_cards").update({ priority }).eq("id", cardId);
   if (error) throw new Error(`setCardPriority failed: ${error.message}`);
+}
+
+/** Replace the pages linked to a task. */
+export async function setCardPages(cardId: string, pageIds: string[]): Promise<void> {
+  const { data, error } = await supabase.from("board_cards").update({ page_ids: pageIds }).eq("id", cardId).select("id");
+  if (error) {
+    throw new Error(error.message.includes("page_ids")
+      ? "Linking pages needs a database update. Apply supabase/migrate-card-page-links.sql in Supabase."
+      : `setCardPages failed: ${error.message}`);
+  }
+  if (!data?.length) throw new Error("Only editors can link pages to a task.");
 }
 
 /**
