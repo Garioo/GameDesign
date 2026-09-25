@@ -238,6 +238,12 @@ export default function CanvasPage() {
 
 
   const active = canvases.find((c) => c.id === activeId) ?? canvases[0] ?? null;
+
+  // Name the browser tab after the open canvas (the route's static title is just "Canvas").
+  const tabTitle = active ? active.name.trim() || "Untitled canvas" : null;
+  useEffect(() => {
+    if (tabTitle) document.title = `${tabTitle} · Foundry`;
+  }, [tabTitle]);
   // Online teammates, site-wide, each with where they are (this canvas for us).
   const onlineList = useSitePresence(
     session,

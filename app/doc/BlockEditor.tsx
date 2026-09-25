@@ -1453,7 +1453,21 @@ function BlockRow({
     const el = ref.current;
     if (!el || isChromeBlock(block.type)) return;
     const clean = sanitizeHtml(block.text);
-    if (sanitizeHtml(el.innerHTML) !== clean) el.innerHTML = clean;
+    if (sanitizeHtml(el.innerHTML) === clean) return;
+    if (document.activeElement !== el) {
+      el.innerHTML = clean;
+      return;
+    }
+    // Someone else edited the block we're typing in: replacing innerHTML would throw the caret
+    // to the start, so put it back, shifted by however much text changed before it.
+    const before = el.innerText;
+    const caret = caretOffset(el);
+    el.innerHTML = clean;
+    const after = el.innerText;
+    let common = 0;
+    while (common < before.length && common < after.length && before[common] === after[common]) common++;
+    const pos = caret <= common ? caret : caret + after.length - before.length;
+    placeCaret(el, Math.max(0, Math.min(pos, after.length)));
   }, [block.text, block.type]);
 
   // Decorate mentions of deleted pages as dangling. Class-only: the sanitizer

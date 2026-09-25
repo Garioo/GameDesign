@@ -546,27 +546,49 @@ export async function savePage(doc: DesignDoc): Promise<void> {
   if (error) throw new Error(`savePage failed: ${error.message}`);
 }
 
-/** Persist a page's blocks: upsert current, delete removed. */
-export async function saveBlocks(pageId: string, blocks: Block[]): Promise<void> {
+/** What the server last had for each block on a page (id -> signature), for diffing saves. */
+export type BlockBaseline = Map<string, string>;
+export const blockSignature = (b: Block, position: number): string =>
+  JSON.stringify([b.type, blockContent(b), position]);
+export const baselineOf = (blocks: Block[]): BlockBaseline =>
+  new Map(blocks.map((b, i) => [b.id, blockSignature(b, i)]));
+
+/**
+ * Persist a page's blocks. With a baseline (the page as last shared with other editors), only
+ * blocks this client changed are written and only blocks it removed are deleted, so a save
+ * can't overwrite someone else's concurrent text or delete a block it hasn't received yet.
+ * The baseline is updated in place once the write succeeds. Without one, the page is replaced.
+ */
+export async function saveBlocks(pageId: string, blocks: Block[], baseline?: BlockBaseline): Promise<void> {
   if (blocks.length > LIMITS.blockCount) {
     throw new ValidationError(`Too many blocks on one page (max ${LIMITS.blockCount})`);
   }
   const rows = blocks.map((b, i) => blockToRow(b, pageId, i));
   for (const row of rows) assertMaxBytes(row.content, LIMITS.blockBytes, "Block content");
   const incoming = new Set(blocks.map((b) => b.id));
+  const signatures = blocks.map((b, i) => blockSignature(b, i));
 
-  const { data: existing, error: existingError } = await supabase.from("blocks").select("id").eq("page_id", pageId);
-  if (existingError) throw new Error(`saveBlocks existing failed: ${existingError.message}`);
-  const toDelete = (existing ?? [])
-    .map((r) => r.id as string)
-    .filter((id) => !incoming.has(id));
+  let changed = rows;
+  let toDelete: string[];
+  if (baseline) {
+    changed = rows.filter((r, i) => baseline.get(r.id) !== signatures[i]);
+    toDelete = [...baseline.keys()].filter((id) => !incoming.has(id));
+  } else {
+    const { data: existing, error: existingError } = await supabase.from("blocks").select("id").eq("page_id", pageId);
+    if (existingError) throw new Error(`saveBlocks existing failed: ${existingError.message}`);
+    toDelete = (existing ?? []).map((r) => r.id as string).filter((id) => !incoming.has(id));
+  }
 
-  if (rows.length) {
-    const { error } = await supabase.from("blocks").upsert(rows, { onConflict: "id" });
+  if (changed.length) {
+    const { error } = await supabase.from("blocks").upsert(changed, { onConflict: "id" });
     if (error) throw new Error(`saveBlocks upsert failed: ${error.message}`);
   }
   if (toDelete.length) {
     const { error } = await supabase.from("blocks").delete().in("id", toDelete);
     if (error) throw new Error(`saveBlocks delete failed: ${error.message}`);
+  }
+  if (baseline) {
+    rows.forEach((r, i) => baseline.set(r.id, signatures[i]));
+    for (const id of toDelete) baseline.delete(id);
   }
 }

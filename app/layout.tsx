@@ -13,7 +13,8 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Foundry",
+  // Each section's layout sets its own title, so the tab reads e.g. "Calendar · Foundry".
+  title: { default: "Foundry", template: "%s · Foundry" },
   description: "A shared workspace for your team's docs, canvases, boards and plans.",
 };
 

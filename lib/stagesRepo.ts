@@ -28,9 +28,8 @@ export async function saveBoardStages(
   name: string,
   stages: StageDraft[],
   transfers: Record<string, string> = {},
-  /** Sets the board's own color; omit to leave it as-is (or '#64748b' on creation). Omitting the
-   *  key entirely (rather than sending null) also keeps this call compatible with a workspace
-   *  that hasn't applied the board-color migration yet, as long as no color change is requested. */
+  /** Sets the board's own color; omit to leave it as-is (or '#64748b' on creation). When omitted, the
+   *  call still works on a workspace without the board-color migration (via a 6-arg retry). */
   color?: string,
 ): Promise<string> {
   const params: Record<string, unknown> = {
@@ -41,8 +40,16 @@ export async function saveBoardStages(
     p_stages: stages,
     p_transfers: transfers,
   };
-  if (color !== undefined) params.p_color = color;
-  const { data, error } = await supabase.rpc("save_board_stages", params);
+  // Always send p_color (null = keep as-is) so PostgREST resolves to the 7-arg function even if a
+  // stale 6-arg overload is still present; otherwise it can't choose between them.
+  let { data, error } = await supabase.rpc("save_board_stages", {
+    ...params,
+    p_color: color ?? null,
+  });
+  // Workspace without the board-color migration: retry via the 6-arg signature when no color
+  // change was requested.
+  if (error?.code === "PGRST202" && color === undefined)
+    ({ data, error } = await supabase.rpc("save_board_stages", params));
   if (error)
     throw new Error(
       error.code === "PGRST202"

@@ -31,6 +31,9 @@ import {
   cleanSectionColor,
   reorderSections,
   saveBlocks,
+  baselineOf,
+  blockSignature,
+  type BlockBaseline,
   savePage,
   seedIfEmpty,
   updatePagePlacement,
@@ -255,6 +258,20 @@ function DocPageInner() {
   const activeIdRef = useRef<string | null>(null); // current page, for realtime handlers
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const suppress = useRef<Record<string, number>>({}); // pageId -> ignore-echo-until ts
+  // Each page's blocks as last shared with other editors (DB rows + live edits received).
+  // Saves diff against it, so they only write what this client changed.
+  const known = useRef<Record<string, BlockBaseline>>({});
+  // Text typed here in the last few seconds, per block. Keystrokes don't go through React
+  // state, so without this a remote snapshot that predates them would reset the block
+  // under the caret.
+  const localText = useRef(new Map<string, { text: string; at: number }>());
+  const withLocalText = (blocks: Block[]) => {
+    const now = Date.now();
+    return blocks.map((b) => {
+      const l = localText.current.get(b.id);
+      return l && now - l.at < 3000 ? { ...b, text: l.text } : b;
+    });
+  };
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const throttle = useRef<
     Record<string, { last: number; timer: ReturnType<typeof setTimeout> | null; pending: unknown }>
@@ -377,6 +394,7 @@ function DocPageInner() {
         setPeople(members);
         setWorkspace(wsInfo);
         setCanvases(boards);
+        for (const d of loaded) known.current[d.id] = baselineOf(d.blocks);
         setDocs(loaded);
         // Land on the page in the URL when valid, else the first page.
         // (Read from location, not useSearchParams, so this effect doesn't
@@ -410,7 +428,10 @@ function DocPageInner() {
         const current = new Map(prev.map(doc => [doc.id, doc]));
         return fresh.map(doc => {
           const existing = current.get(doc.id);
-          if (!existing) return doc;
+          if (!existing) {
+            known.current[doc.id] ??= baselineOf(doc.blocks);
+            return doc;
+          }
           // Keep local editor content and pending edits; refresh sidebar metadata.
           if ((suppress.current[doc.id] ?? 0) > Date.now()) return existing;
           return { ...existing, title: doc.title, sectionId: doc.sectionId,
@@ -428,8 +449,9 @@ function DocPageInner() {
 
     const refetchBlocks = async (pageId: string) => {
       const blocks = await fetchPageBlocks(pageId);
+      known.current[pageId] = baselineOf(blocks);
       setDocs((prev) =>
-        prev.map((d) => (d.id === pageId ? { ...d, blocks } : d)),
+        prev.map((d) => (d.id === pageId ? { ...d, blocks: withLocalText(blocks) } : d)),
       );
     };
 
@@ -459,16 +481,21 @@ function DocPageInner() {
           | { t: "ws"; info: WorkspaceInfo };
         if (p.t === "block") {
           // live per-keystroke text for a single block (no cross-block clobber)
+          localText.current.delete(p.blockId); // their newer text for this block wins
           setDocs((prev) =>
-            prev.map((d) =>
-              d.id === p.pageId
-                ? { ...d, blocks: d.blocks.map((b) => (b.id === p.blockId ? { ...b, text: p.text } : b)) }
-                : d,
-            ),
+            prev.map((d) => {
+              if (d.id !== p.pageId) return d;
+              const blocks = d.blocks.map((b) => (b.id === p.blockId ? { ...b, text: p.text } : b));
+              const i = blocks.findIndex((b) => b.id === p.blockId);
+              const base = known.current[p.pageId];
+              if (i >= 0 && base?.has(p.blockId)) base.set(p.blockId, blockSignature(blocks[i], i));
+              return { ...d, blocks };
+            }),
           );
         } else if (p.t === "blocks") {
+          known.current[p.pageId] = baselineOf(p.blocks);
           setDocs((prev) =>
-            prev.map((d) => (d.id === p.pageId ? { ...d, blocks: p.blocks } : d)),
+            prev.map((d) => (d.id === p.pageId ? { ...d, blocks: withLocalText(p.blocks) } : d)),
           );
         } else if (p.t === "page") {
           setDocs((prev) => prev.map((d) => (d.id === p.id ? { ...d, ...p.page } : d)));
@@ -521,6 +548,7 @@ function DocPageInner() {
 
           if (payload.eventType === "INSERT") {
             const blocks = await fetchPageBlocks(row.id);
+            known.current[row.id] ??= baselineOf(blocks);
             let secName = sections.find((s) => s.id === row.section_id)?.name;
             if (!secName && row.section_id) {
               const secs = await listSections(wsId);
@@ -666,6 +694,12 @@ function DocPageInner() {
 
   // Keep the realtime handlers pointed at the page currently in view.
   activeIdRef.current = active?.id ?? null;
+
+  // Name the browser tab after the open page (the route's static title is just "Pages").
+  const tabTitle = active ? active.title.trim() || "Untitled page" : null;
+  useEffect(() => {
+    if (tabTitle) document.title = `${tabTitle} · Foundry`;
+  }, [tabTitle]);
 
   // Incoming backlinks: pages that reference the current page, either through
   // an inline @-mention in their body (shown with the mentioning block as a
@@ -844,7 +878,10 @@ function DocPageInner() {
     saveTimers.current[key] = setTimeout(() => {
       delete saveTimers.current[key];
       suppress.current[pageId] = Date.now() + 1500;
-      trackSave(key, () => saveBlocks(pageId, blocks).then(() => clearDraft(pageId)));
+      // The baseline is read when the request runs (incl. retries), not when scheduled.
+      trackSave(key, () =>
+        saveBlocks(pageId, blocks, known.current[pageId]).then(() => clearDraft(pageId)),
+      );
     }, 600);
   };
   const scheduleSavePage = (doc: DesignDoc) => {
@@ -894,6 +931,7 @@ function DocPageInner() {
     try {
       const doc = await createPage(wsId, sectionId, sectionName);
       suppress.current[doc.id] = Date.now() + 2500; // ignore our own INSERT echo
+      known.current[doc.id] = baselineOf(doc.blocks);
       setDocs((prev) => [...prev, doc]);
       setActiveId(doc.id);
       router.replace(`/doc?page=${doc.id}`, { scroll: false });
@@ -1487,6 +1525,7 @@ function DocPageInner() {
               }}
               onLiveInput={(blockId, text, blocks) => {
                 // instant: per-block delta to other clients (no local re-render)
+                localText.current.set(blockId, { text, at: Date.now() });
                 broadcast(`bt:${blockId}`, { t: "block", pageId: active.id, blockId, text });
                 // durable: debounced full-array write
                 scheduleSaveBlocks(active.id, blocks);
