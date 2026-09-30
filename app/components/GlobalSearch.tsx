@@ -8,6 +8,7 @@ import { storedActiveWorkspace } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 import { setCardOwner } from "@/lib/boardRepo";
 import { navigateWithTransition } from "@/lib/viewTransition";
+import { isRiverBeta, riverPathFor } from "@/lib/beta";
 import { useShortcutList } from "@/lib/shortcuts";
 import CommandPalette, { type PaletteAction } from "./CommandPalette";
 
@@ -110,7 +111,13 @@ export default function GlobalSearch({
   }, [config?.pages, loaded, ownerPatch]);
 
   const go = useCallback(
-    (href: string) => {
+    (to: string) => {
+      // Results link to classic pages; with the new design on, go straight to its version.
+      let href = to;
+      if (isRiverBeta()) {
+        const url = new URL(to, window.location.origin);
+        href = (riverPathFor(url.pathname, url.searchParams) ?? to) + url.hash;
+      }
       // Routes read their query parameters on load, so a same-route jump reloads.
       const target = new URL(href, window.location.origin);
       if (target.pathname === pathname) window.location.assign(href);

@@ -1,0 +1,233 @@
+/* ============================================================
+   Pages in the new design (beta). The classic page screen
+   (app/doc/DocScreen.tsx) renders with .river-doc; overriding
+   the design tokens here restyles the contents tree, editor,
+   comments and dialogs without touching the classic pages.
+   ============================================================ */
+
+.river-doc {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --ink: #171717;
+  --ink-soft: #525252;
+  --ink-faint: #8a8a8a;
+  --line: #e5e5e5;
+  --line-soft: #f0f0f0;
+  --ember: #5b3df5;
+  --ember-deep: #4a2fe0;
+  --ember-tint: #f1eeff;
+  --ember-tint2: #e6e0ff;
+  --accent: #5b3df5;
+  --muted: #525252;
+  --grad-ember: linear-gradient(150deg, #7b62ff, #5b3df5);
+  --font-ui: var(--river-ui, "Geist"), "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--river-ui, "Geist"), "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-ui);
+  background: #ffffff !important;
+  /* room for the Today / Plan / Pages tabs on the right edge */
+  padding-right: 64px;
+}
+
+/* no top bar here, so the contents list and the comment rail start at the top */
+.river-doc .sidebar,
+.river-doc .rail {
+  top: 0;
+  height: 100vh;
+}
+.river-doc .main {
+  padding: 0 48px 120px;
+}
+.river-doc .doc {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.river-doc .doc-title {
+  font-family: var(--river-display, "Epilogue"), var(--font-ui);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+}
+
+/* the slim page bar that replaces the top bar */
+.river-docbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -48px 30px;
+  padding: 10px 48px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(6px);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.river-docbar-btn {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  background: #fff;
+  font: 600 12.5px var(--font-ui);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.river-docbar-btn:hover {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink-faint);
+}
+.river-docbar-crumb {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.river-docbar-sp {
+  flex: 1;
+}
+.river-docbar-av {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 600 10px var(--font-ui);
+}
+
+@media (max-width: 760px) {
+  .river-doc {
+    padding-right: 0;
+  }
+  .river-doc .main {
+    padding: 0 16px 100px;
+  }
+  .river-docbar {
+    margin: 0 -16px 20px;
+    padding: 8px 16px;
+  }
+}
+/* The contents drawer (phones) needs its own sheet. */
+@media (max-width: 860px) {
+  .river-doc .sidebar {
+    background: var(--bg);
+  }
+}
+/* Let the page column shrink so a long crumb truncates instead of widening the page. */
+.river-doc .main {
+  min-width: 0;
+}
+
+/* ---------- the contents list (was the sidebar) ---------- */
+.river-doc .sidebar {
+  padding: 22px 14px 40px 20px;
+}
+.river-doc .sidebar .section-head,
+.river-doc .sidebar .nav-label-row {
+  display: none;
+}
+.river-toc-ey {
+  margin: 0 0 10px 4px;
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.river-toc-find {
+  width: 100%;
+  height: 36px;
+  margin-bottom: 14px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+  background: #fff;
+  outline: 0;
+  font: 14px var(--font-ui);
+  color: var(--ink);
+}
+.river-toc-find:focus {
+  box-shadow: 0 0 0 2px var(--ember);
+}
+.river-doc .nav-item {
+  border-radius: 9px;
+  font-size: 14px;
+}
+.river-doc .nav-item.is-active,
+.river-doc .nav-item.is-active:hover {
+  background: #171717;
+  color: #fff;
+}
+.river-doc .nav-item.is-active::before {
+  display: none;
+}
+.river-doc .nav-item.is-active .nav-icon {
+  color: #fff;
+}
+
+/* ---------- the margin: comments first ---------- */
+.river-rail-head {
+  justify-content: space-between;
+  font: 600 12px var(--font-ui) !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------- linked from, under the page ---------- */
+.river-linked {
+  margin-top: 44px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.river-linked h4 {
+  margin: 0 0 8px;
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.river-linked p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-faint);
+}
+.river-linked button {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: 600 14.5px var(--font-ui);
+  color: var(--ink);
+  cursor: pointer;
+}
+.river-linked button:hover {
+  color: var(--ember);
+}
+.river-linked small {
+  display: block;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* ---------- comments beside their paragraphs (wide screens) ----------
+   The margin scrolls with the page, so each thread can line up with its
+   text (positions come from Comments' aligned mode). Below 1180px the
+   classic drawer takes over again. */
+@media (min-width: 1181px) {
+  .river-doc .body {
+    align-items: stretch;
+  }
+  .river-doc .rail {
+    position: relative;
+    top: auto;
+    height: auto;
+    overflow: visible;
+    padding-top: 22px;
+  }
+}

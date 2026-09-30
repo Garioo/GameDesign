@@ -519,3 +519,58 @@
   width: 14px;
   height: 14px;
 }
+
+/* ---------------- beta ---------------- */
+.betaRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  cursor: pointer;
+}
+.betaText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.betaName {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+/* a plain checkbox drawn as a switch */
+.betaSwitch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 11px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.betaSwitch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(42, 36, 30, 0.25);
+  transition: left 0.2s;
+}
+.betaSwitch:checked {
+  background: var(--ember);
+}
+.betaSwitch:checked::after {
+  left: 19px;
+}
+.betaSwitch:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}

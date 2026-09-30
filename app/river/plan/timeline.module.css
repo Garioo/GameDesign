@@ -1,0 +1,931 @@
+/* The Gantt, horizontal (.hz, default) and vertical. Tokens come from .river. */
+
+.wrap {
+  position: relative;
+  height: calc(100vh - 110px);
+  overflow: auto;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--rule);
+  background: var(--paper);
+  overscroll-behavior: contain;
+}
+
+/* ---------- header row ---------- */
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: flex;
+  background: var(--paper);
+  border-bottom: 1.5px solid var(--ink);
+}
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 13;
+  flex: none;
+  width: var(--lw);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 14px 10px;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+  font: 600 11px var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.hcell {
+  flex: none;
+  min-width: 0;
+  padding: 14px 12px 12px 14px;
+  border-left: 1px solid var(--rule);
+}
+.dense .hcell {
+  padding: 9px 8px 8px 12px;
+}
+.hcat {
+  background: color-mix(in srgb, var(--c) 5%, var(--paper));
+}
+.hn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.sq {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--c);
+}
+.arr {
+  flex: none;
+  color: var(--c);
+  font-weight: 700;
+}
+.nm {
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 16px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+.nm:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.dense .nm {
+  font-size: 15px;
+}
+.hcat .nm {
+  font-weight: 500;
+  font-size: 14.5px;
+}
+.chev {
+  flex: none;
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  color: var(--ink2);
+  transition: transform 0.2s;
+}
+.chevOn {
+  transform: rotate(180deg);
+  background: var(--c);
+  color: #fff;
+  box-shadow: none;
+}
+.hs {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.hp {
+  height: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--rule2);
+}
+.hp i {
+  display: block;
+  height: 100%;
+  background: var(--c);
+}
+
+/* ---------- date column ---------- */
+.body {
+  position: relative;
+  display: flex;
+}
+.gut {
+  position: sticky;
+  left: 0;
+  z-index: 8;
+  flex: none;
+  width: var(--lw);
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+.band {
+  position: absolute;
+  left: 0;
+  width: var(--lw);
+  padding: 7px 14px 0;
+  border-top: 1px solid var(--rule);
+  background: var(--tint);
+  white-space: nowrap;
+}
+.band b {
+  display: block;
+  font: 700 16px/1.25 var(--ui);
+}
+.band span {
+  font-size: 13px;
+  color: var(--ink2);
+}
+.dense .band {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+.dense .band b {
+  display: inline;
+  font-size: 13.5px;
+  line-height: 1;
+}
+.dense .band span {
+  font-size: 12px;
+}
+.bandCur {
+  background: var(--now-tint);
+}
+.bandCur b {
+  color: var(--now);
+}
+.bandPast {
+  opacity: 0.65;
+}
+.day {
+  position: absolute;
+  left: 0;
+  width: var(--lw);
+  padding: 0 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  font: 500 14px var(--ui);
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dense .day {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.we {
+  background: var(--tint);
+}
+.dn {
+  flex: none;
+  align-self: flex-start;
+  margin-left: -6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  line-height: 1.3;
+}
+.dense .dn {
+  align-self: center;
+}
+.today .dn {
+  background: var(--now);
+  color: #fff;
+  font-weight: 600;
+}
+.hot .dn {
+  background: var(--c);
+  color: #fff;
+  font-weight: 700;
+}
+.gms,
+.gev {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.gms {
+  font-weight: 600;
+  color: var(--due);
+}
+.gev {
+  color: var(--ink2);
+}
+
+/* Phones: a slim date column, just the date. */
+.narrow .band,
+.narrow .day,
+.narrow .corner {
+  padding-left: 10px;
+  padding-right: 6px;
+}
+.narrow .band span,
+.narrow .gms,
+.narrow .gev {
+  display: none;
+}
+
+/* ---------- the chart ---------- */
+.track {
+  position: relative;
+  flex: none;
+}
+.tband {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--rule);
+  background: var(--tint);
+}
+.tbandCur {
+  background: var(--now-tint);
+}
+.col {
+  position: absolute;
+  top: 0;
+  border-left: 1px solid var(--rule2);
+}
+.bar {
+  position: absolute;
+  z-index: 3;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--c) 10%, var(--paper));
+  box-shadow: inset 5px 0 0 var(--c);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.bar:hover {
+  background: color-mix(in srgb, var(--c) 17%, var(--paper));
+}
+.barCat {
+  box-shadow: inset 3px 0 0 var(--c);
+}
+.dragging {
+  cursor: grabbing;
+  box-shadow: inset 5px 0 0 var(--c), 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.vin {
+  position: sticky;
+  top: 90px;
+  padding: 12px 12px 0 18px;
+  pointer-events: none;
+}
+.dense .vin {
+  top: 74px;
+  padding: 7px 8px 0 13px;
+}
+.vin b,
+.vdue b {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vin b {
+  font: 700 17px/1.25 var(--ui);
+}
+.vin span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--ink2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dense .vin b {
+  font-size: 15px;
+}
+.dense .vin span {
+  margin-top: 1px;
+  font-size: 12px;
+}
+.barCat .vin b {
+  font-size: 14px;
+}
+.vdue {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 12px 12px 18px;
+  pointer-events: none;
+}
+.dense .vdue {
+  padding: 0 8px 7px 13px;
+}
+.vdue b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.vdue b::before {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.dense .vdue b {
+  font-size: 13px;
+}
+.vdue span {
+  display: block;
+  margin-left: 16px;
+  font-size: 12px;
+  color: var(--ink2);
+}
+.short .vin {
+  display: none;
+}
+.tiny .vdue span {
+  display: none;
+}
+.edgeT,
+.edgeB {
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  z-index: 2;
+  height: 12px;
+  cursor: ns-resize;
+}
+.edgeT {
+  top: -6px;
+}
+.edgeB {
+  bottom: -6px;
+}
+.unsched {
+  position: absolute;
+  z-index: 3;
+  padding: 3px 10px;
+  border: 1.5px dashed var(--rule);
+  border-radius: 7px;
+  background: var(--paper);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink2);
+}
+.unsched:hover {
+  border-color: var(--c);
+  color: var(--c);
+}
+.ms {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  border-top: 2px dashed var(--due);
+  pointer-events: none;
+}
+.ms span {
+  position: absolute;
+  right: 8px;
+  top: -10px;
+  padding: 1px 8px;
+  border-radius: 5px;
+  background: var(--due);
+  color: #fff;
+  font: 600 11.5px var(--ui);
+  white-space: nowrap;
+}
+.nowl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  border-top: 2px solid var(--now);
+  pointer-events: none;
+}
+.guide {
+  position: absolute;
+  left: 0;
+  z-index: 5;
+  border-top: 2px dashed var(--c);
+  pointer-events: none;
+}
+.deps {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  overflow: visible;
+  color: var(--ink2);
+  pointer-events: none;
+}
+.deps path {
+  fill: none;
+  stroke: var(--ink2);
+  stroke-width: 1.6;
+}
+.deps path.bad {
+  stroke: var(--due);
+}
+
+/* =====================================================================
+   Horizontal: boards as rows, time runs right. Kept quiet on purpose —
+   soft board-coloured bars, no stripes, few lines.
+   ===================================================================== */
+.hHead {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: flex;
+  height: var(--hh);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+.hCorner {
+  position: sticky;
+  left: 0;
+  z-index: 13;
+  flex: none;
+  width: var(--lw);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 16px 12px;
+  background: var(--paper);
+  font: 600 11px var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.hScale {
+  position: relative;
+  flex: none;
+}
+.hWeek {
+  position: absolute;
+  top: 6px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.hWeek b {
+  font: 700 13.5px var(--ui);
+}
+.hWeek span {
+  font-size: 12px;
+  color: var(--ink3);
+}
+.hWeekCur b {
+  color: var(--now);
+}
+.hDay {
+  position: absolute;
+  top: 32px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.hDay b {
+  min-width: 20px;
+  padding: 3px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink2);
+  text-align: center;
+}
+.hDay.today b {
+  background: var(--now);
+  color: #fff;
+  font-weight: 600;
+}
+.hDay.hot b {
+  background: var(--ink);
+  color: #fff;
+}
+.hMs {
+  position: absolute;
+  bottom: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  background: var(--due);
+}
+.hz:not(.dense) .hDay b {
+  font-size: 13.5px;
+}
+
+/* names down the side */
+.hLabels {
+  position: sticky;
+  left: 0;
+  z-index: 8;
+  flex: none;
+  width: var(--lw);
+  background: var(--paper);
+}
+.hLab {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 14px 0 16px;
+}
+.hLabCat {
+  padding-left: 34px;
+}
+.hLabCat .nm {
+  font-size: 13.5px;
+  color: var(--ink2);
+}
+.hLabCat .arr {
+  display: none;
+}
+.hLabHot .nm {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hLabDue {
+  flex: none;
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hLabCat .hLabDue {
+  font-weight: 500;
+  color: var(--ink2);
+}
+.hLabPast,
+.hLabCat .hLabPast {
+  font-weight: 500;
+  color: var(--ink3);
+}
+.hLab .chev {
+  margin-left: 2px;
+  width: 22px;
+  height: 22px;
+  box-shadow: none;
+  color: var(--ink3);
+}
+.hLab .chevOn {
+  background: none;
+  color: var(--ink);
+}
+.hLabSub {
+  padding-left: 17px;
+  font-size: 12px;
+  color: var(--ink3);
+  white-space: nowrap;
+}
+
+/* the chart */
+.hWk {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--rule2);
+}
+.hBar {
+  position: absolute;
+  z-index: 3;
+  overflow: clip; /* not hidden: that would stop the name sticking */
+  text-align: left;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 18%, var(--paper));
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition: background 0.15s;
+}
+.hBar:hover {
+  background: color-mix(in srgb, var(--c) 26%, var(--paper));
+}
+.hBarCat {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c) 10%, var(--paper));
+}
+.hBarCat:hover {
+  background: color-mix(in srgb, var(--c) 17%, var(--paper));
+}
+.hBar.dragging {
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--c) 26%, var(--paper));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+/* the name stays in view while the bar scrolls under the name column */
+.hin {
+  position: sticky;
+  left: calc(var(--lw) + 8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  height: 100%;
+  padding: 0 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.hin b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 600 14px var(--ui);
+}
+.hin span {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.hBarCat .hin b {
+  font-size: 13px;
+  font-weight: 500;
+}
+.hz:not(.dense) .hin b {
+  font-size: 15px;
+}
+.hDue {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.hDue em {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--ink2);
+}
+.hDue em::after {
+  content: " ·";
+  color: var(--ink3);
+}
+.hDue b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.hDue span {
+  font-size: 12px;
+  color: var(--ink3);
+}
+.hz:not(.dense) .hDue b {
+  font-size: 14px;
+}
+.edgeL,
+.edgeR {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 10px;
+  cursor: ew-resize;
+}
+.edgeL {
+  left: 0;
+}
+.edgeR {
+  right: 0;
+}
+.hNow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  border-left: 1.5px solid var(--now);
+  pointer-events: none;
+}
+.hz .unsched {
+  white-space: nowrap;
+}
+.narrow .hLab {
+  padding-left: 10px;
+  padding-right: 6px;
+}
+.narrow .hLabCat {
+  padding-left: 20px;
+}
+.hDay.we {
+  background: none;
+}
+
+/* milestones: their own row on top */
+.hMsLab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--rule2);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--due);
+}
+.hMsRow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-bottom: 1px solid var(--rule2);
+  background: color-mix(in srgb, var(--due-tint) 45%, transparent);
+}
+.hMsTag {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.hMsTag i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: var(--due);
+}
+.hMsTag:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hMsPast {
+  color: var(--ink3);
+}
+.hMsPast i {
+  background: color-mix(in srgb, var(--due) 45%, var(--paper));
+}
+
+/* ---------- Show menu: pick which boards and categories appear ---------- */
+.pick {
+  position: relative;
+}
+.pickBtn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.pickBtn span {
+  margin-left: 2px;
+  color: var(--ink3);
+}
+.pickBtnOn {
+  background: var(--now-tint);
+  box-shadow: none;
+  color: var(--now);
+}
+.pickMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 300px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--sheet);
+  box-shadow: 0 0 0 1px var(--rule), var(--shadow);
+}
+.pickHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  font-size: 13px;
+}
+.pickHead button {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--now);
+}
+.pickList {
+  max-height: min(60vh, 460px);
+  overflow: auto;
+}
+.pickGroup + .pickGroup {
+  border-top: 1px solid var(--rule2);
+}
+.pickRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pickRow:hover {
+  background: var(--tint);
+}
+.pickRow input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+.pickRow span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pickRow em {
+  flex: none;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink3);
+}
+.pickRow:has(input:not(:checked)) span {
+  color: var(--ink3);
+}
+.pickCat {
+  padding-left: 30px;
+  font-weight: 500;
+  font-size: 13px;
+}
+.pickFoot {
+  margin: 4px 10px 6px;
+  font-size: 11.5px;
+  color: var(--ink3);
+}
+.linkBtn {
+  font-weight: 600;
+  color: var(--now);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* the part of a bar that's already behind us goes grey */
+.hPast,
+.vPast {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  background: #e9e9e8;
+  pointer-events: none;
+}
+.hPast {
+  bottom: 0;
+}
+.hBarCat .hPast {
+  background: #f1f1f0;
+}
+.vPast {
+  right: 0;
+  border-radius: 10px 10px 0 0;
+}
+.hin,
+.vin {
+  z-index: 1;
+}

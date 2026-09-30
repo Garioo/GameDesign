@@ -1,0 +1,262 @@
+<title>Foundry Metro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;800;900&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#0f1626; --panel:#151e33; --panel2:#1b2640; --line:#26334f; --text:#e9edf5; --muted:#8a97b3; --faint:#56627d;
+  --R:#ff7a45; --D:#46a8ff; --B:#3ccf8e; --P:#f5c542; --alert:#ff5a6e;
+  --ui:"Overpass","Helvetica Neue",Arial,sans-serif; --mono:"Overpass Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 var(--ui);display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--P);outline-offset:2px}
+
+/* service bar: brand, three places, line filters, search */
+.bar{flex:none;display:flex;align-items:center;gap:14px;padding:12px 18px;padding-top:calc(12px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:18px;letter-spacing:-.02em}
+.logo i{width:26px;height:26px;border-radius:50%;border:5px solid var(--text);position:relative}
+.logo i::after{content:"";position:absolute;left:-9px;right:-9px;top:50%;height:5px;margin-top:-2.5px;background:var(--text)}
+.places{display:flex;background:var(--panel);border-radius:10px;padding:3px;margin-left:8px}
+.places button{padding:7px 14px;border-radius:8px;font-weight:700;font-size:13px;color:var(--muted)}
+.places button.on{background:var(--text);color:var(--bg)}
+.lines{display:flex;gap:6px;margin-left:auto}
+.lp{display:flex;align-items:center;gap:7px;height:30px;padding:0 12px 0 5px;border-radius:15px;background:var(--panel);font-weight:700;font-size:12.5px;transition:opacity .2s}
+.lp b{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;color:var(--bg);font:800 11px var(--ui)}
+.lp.off{opacity:.35}
+.where{height:32px;width:220px;border-radius:16px;background:var(--panel);border:1px solid var(--line);color:var(--text);padding:0 14px;font:inherit;outline:0}
+.where::placeholder{color:var(--faint)}
+.clock{font:600 13px var(--mono);color:var(--P)}
+
+.main{flex:1;display:grid;grid-template-columns:360px 1fr;min-height:0}
+/* departures = today / my work */
+.dep{border-right:1px solid var(--line);overflow:auto;padding:18px}
+.dep h2{margin:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;justify-content:space-between}
+.board{margin-top:12px;background:#0a0f1b;border-radius:12px;padding:6px 0;border:1px solid var(--line)}
+.dr{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #172038;font-family:var(--mono);font-size:12.5px;cursor:pointer}
+.dr:first-child{border-top:0}
+.dr:hover{background:#121a2d}
+.dr .t{color:var(--P);font-weight:600}
+.dr .n{font-family:var(--ui);font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;min-width:0}
+.dr .n span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr .n b{flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:var(--bg);font:800 10px var(--ui)}
+.dr .s{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.s.board-g{color:var(--B)}.s.late{color:var(--alert)}.s.ok{color:var(--muted)}
+.blink{animation:blink 1.4s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.alerts{margin-top:22px}
+.al{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line);font-size:13.5px}
+.al i{flex:none;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font:800 12px var(--ui);font-style:normal;background:var(--panel2)}
+.al i.w{background:var(--alert);color:#fff}
+.al small{display:block;color:var(--muted);font:400 11px var(--mono);margin-top:3px}
+.ride{margin-top:22px;background:var(--panel);border-radius:12px;padding:14px}
+.ride .big{font-size:30px;font-weight:900;letter-spacing:-.03em}
+.ride .big small{font-size:13px;font-weight:600;color:var(--muted);margin-left:6px;letter-spacing:0}
+.spark{display:flex;align-items:flex-end;gap:4px;height:40px;margin-top:10px}
+.spark i{flex:1;background:var(--faint);border-radius:2px}
+.spark i:last-child{background:var(--P)}
+.spark+div{display:flex;justify-content:space-between;font:400 10px var(--mono);color:var(--faint);margin-top:4px}
+
+/* map */
+.map{position:relative;overflow:auto}
+.map svg{display:block;min-width:1100px;width:100%;height:auto}
+.wk text{font:600 11px var(--mono);fill:var(--faint)}
+.wk line{stroke:#1a2440;stroke-width:1}
+.track{fill:none;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;transition:opacity .25s}
+.track.done{stroke-width:9;opacity:.35}
+.st{cursor:pointer}
+.st circle{stroke-width:4;fill:var(--bg);transition:r .15s}
+.st.done circle{fill:var(--sc)}
+.st:hover circle{r:9}
+.st.sel circle{stroke:var(--text);r:10}
+.st text{font:700 11.5px var(--ui);fill:var(--text);paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
+.st.done text{fill:var(--muted)}
+.st.moved circle{animation:ping .9s ease-out}
+@keyframes ping{0%{stroke-width:14}100%{stroke-width:4}}
+.xfer{fill:none;stroke:var(--text);stroke-width:2;stroke-dasharray:2 5;stroke-linecap:round;opacity:.55}
+.ic rect{fill:var(--text)}
+.ic text{font:900 13px var(--ui);fill:var(--text)}
+.ic .d{font:600 11px var(--mono);fill:var(--muted)}
+.now line{stroke:var(--P);stroke-width:2;stroke-dasharray:6 4}
+.now text{font:600 11px var(--mono);fill:var(--P)}
+.train rect{stroke:var(--bg);stroke-width:3}
+.train{animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{50%{transform:translateX(3px)}}
+.dim{opacity:.18}
+
+/* station sign */
+.sign{position:absolute;right:20px;bottom:20px;width:min(360px,calc(100% - 40px));background:var(--text);color:var(--bg);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.45);transform:translateY(20px);opacity:0;pointer-events:none;transition:.25s}
+.sign.on{transform:none;opacity:1;pointer-events:auto}
+.sign .ln{display:flex;align-items:center;gap:8px;font:700 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:#4a5670}
+.sign .ln b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:var(--bg);font:800 11px var(--ui)}
+.sign h3{margin:8px 0 12px;font-size:26px;font-weight:900;letter-spacing:-.03em;line-height:1.05}
+.sign dl{display:grid;grid-template-columns:86px 1fr;gap:6px 10px;margin:0;font-size:13px}
+.sign dt{color:#5f6b84;font:600 11px var(--mono);text-transform:uppercase;padding-top:2px}
+.sign dd{margin:0;font-weight:600}
+.sign .acts{display:flex;gap:6px;margin-top:14px}
+.sign .acts button{flex:1;height:36px;border-radius:10px;background:var(--bg);color:var(--text);font-weight:700;font-size:13px}
+.sign .acts button.sec{background:#dfe4ee;color:var(--bg)}
+.sign .x{position:absolute;right:12px;top:12px;width:28px;height:28px;border-radius:50%;color:#5f6b84}
+
+.guide{position:absolute;inset:0;background:var(--bg);padding:28px;overflow:auto;display:none}
+.guide.on{display:block}
+.guide h2{margin:0 0 18px;font-size:34px;font-weight:900;letter-spacing:-.03em}
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.gc{background:var(--panel);border-radius:14px;padding:16px;border-top:6px solid var(--gc)}
+.gc h4{margin:0 0 6px;font-size:17px}
+.gc p{margin:0;color:var(--muted);font-size:13px}
+.gc small{display:block;margin-top:10px;font:400 11px var(--mono);color:var(--faint)}
+
+.note{position:fixed;right:20px;top:76px;width:300px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:12.5px;line-height:1.55;color:#b8c2d8;z-index:30}
+.note b{color:var(--text);font-size:14px}
+.note ul{margin:8px 0 0;padding-left:16px}
+.note .hide{position:absolute;right:12px;top:10px;color:var(--faint);font-size:12px}
+.note.min{width:auto}.note.min ul,.note.min .hide{display:none}
+@media (max-width:900px){
+  .main{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .dep{max-height:36vh;border-right:0;border-bottom:1px solid var(--line)}
+  .alerts,.ride,.lines,.where,.note{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="bar">
+  <div class="logo"><i></i>Foundry</div>
+  <nav class="places" aria-label="Places">
+    <button class="on" data-p="map">Map</button><button data-p="dep">Departures</button><button data-p="guide">Guide</button>
+  </nav>
+  <div class="lines" id="lines"></div>
+  <input class="where" id="where" placeholder="Where to?  ⌘K">
+  <span class="clock" id="clock">Fri 14:20</span>
+</header>
+
+<div class="main">
+  <aside class="dep" id="dep">
+    <h2><span>Your departures</span><span>My work</span></h2>
+    <div class="board" id="board"></div>
+    <div class="alerts">
+      <h2><span>Service alerts</span><span>3</span></h2>
+      <div class="al"><i class="w">!</i><div><b>User test script</b> waits for Synthesize findings (Research line)<small>blocker · due tomorrow</small></div></div>
+      <div class="al"><i>@</i><div>Anna mentioned you in <b>Tech notes: timeline</b><small>12 min ago</small></div></div>
+      <div class="al"><i>◷</i><div>Supervisor meeting Mon 10:00, agenda in Report draft<small>calendar</small></div></div>
+    </div>
+    <div class="ride">
+      <h2><span>Last week's ridership</span><span>digest</span></h2>
+      <div class="big">11<small>stations reached · +3 vs wk 37</small></div>
+      <div class="spark"><i style="height:30%"></i><i style="height:45%"></i><i style="height:38%"></i><i style="height:60%"></i><i style="height:52%"></i><i style="height:74%"></i><i style="height:66%"></i><i style="height:100%"></i></div>
+      <div><span>wk 31</span><span>wk 38</span></div>
+    </div>
+  </aside>
+  <section class="map" id="map">
+    <svg id="svg" viewBox="0 0 1480 520" role="img" aria-label="Project transit map"></svg>
+    <div class="sign" id="sign"></div>
+    <div class="guide" id="guide"><h2>Guide</h2><div class="gg">
+      <div class="gc" style="--gc:var(--R)"><h4>Interview notes</h4><p>People plan in week-sized chunks and re-plan every Monday.</p><small>Research line · 3 stations link here</small></div>
+      <div class="gc" style="--gc:var(--D)"><h4>Design principles</h4><p>Every screen answers “what now?” before “what else?”.</p><small>Design line · Jonas</small></div>
+      <div class="gc" style="--gc:var(--B)"><h4>Tech notes: timeline</h4><p>Dates change through one scheduling call, so dependents shift together.</p><small>Build line · you</small></div>
+      <div class="gc" style="--gc:var(--P)"><h4>Report draft</h4><p>Teams on short projects spend more time maintaining the plan than using it.</p><small>Report line · 2,140 words</small></div>
+      <div class="gc" style="--gc:var(--muted)"><h4>Planner flows</h4><p>Canvas sketch, 14 shapes.</p><small>not on a line yet</small></div>
+    </div></div>
+  </section>
+</div>
+
+<div class="note" id="note"><button class="hide" id="noteHide">hide</button>
+  <b>Concept 5 · Metro</b>
+  <ul>
+    <li>The Gantt is a transit map. Each workstream is a line, each task a station, and milestones are the interchanges where every line has to meet.</li>
+    <li>Dependencies are transfers. <b>Delay 1 day</b> on a station pushes everything after it, so you can see the knock-on effect.</li>
+    <li>Today is your <b>Departures</b> board (my work, with status). Notifications are service alerts, and the digest is ridership.</li>
+    <li>Three places sit in one bar: Map, Departures and Guide (pages).</li>
+  </ul></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DAY=86400000, d=s=>Math.round(Date.parse("2026-"+s+"T00:00:00Z")/DAY), wd=n=>(((n+3)%7)+7)%7;
+const TODAY=d("09-25"), FROM=d("09-14"), PX=25, X0=40;
+const X=n=>X0+(n-FROM)*PX;
+const LINES=[["R","Research","var(--R)",110],["D","Design","var(--D)",200],["B","Build","var(--B)",290],["P","Report","var(--P)",380]];
+const CY=245, GAP=13;
+let TASKS=[
+ ["r1","Interview users","09-14","09-22","done","A","R"],["r2","Synthesize findings","09-21","09-26","prog","S","R",["r1"]],["r3","User test script","09-29","10-02","todo","S","R",["r2"]],["r4","Run user tests","10-19","10-22","todo","A","R",["r3","b3"]],
+ ["d1","Moodboard","09-15","09-18","done","J","D"],["d2","Wireframes","09-22","09-30","prog","J","D",["d1"]],["d3","Visual system","10-01","10-06","todo","J","D",["d2"]],["d4","Prototype polish","10-05","10-08","todo","M","D",["d3","b2"]],
+ ["b1","Data model","09-17","09-24","rev","M","B"],["b2","Timeline engine","09-25","10-06","prog","M","B",["b1"]],["b3","Sync & presence","10-12","10-16","todo","A","B",["b2"]],["b4","Bug bash","10-26","10-30","todo","M","B",["b3"]],
+ ["p1","Report outline","09-24","09-29","prog","S","P"],["p2","Method chapter","10-12","10-19","todo","M","P",["p1"]],["p3","Results","10-26","11-02","todo","S","P",["p2","r4"]],["p4","Final edit","11-03","11-05","todo","A","P",["p3"]],
+].map(([id,t,s,e,st,p,l,dep])=>({id,t,s:d(s),e:d(e),st,p,l,dep:dep||[]}));
+const IC=[["Prototype review","10-09"],["User test day","10-23"],["Hand-in","11-06"]].map(([n,s])=>({n,day:d(s),x:X(d(s)+1)}));
+const PPL={M:"You",A:"Anna",J:"Jonas",S:"Sofie"};
+let hidden=new Set(), sel=null, moved=new Set();
+const fmt=n=>{const x=new Date(n*DAY);return `${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][wd(n)]} ${x.getUTCDate()} ${["Sep","Oct","Nov"][x.getUTCMonth()-8]}`};
+
+function pts(li){ // polyline for a line, bending into each interchange at 45°
+  const base=LINES[li][3], conv=CY+(li-1.5)*GAP, dy=Math.abs(conv-base), P=[[X0-10,base]];
+  IC.forEach(ic=>{P.push([ic.x-24-dy,base],[ic.x-24,conv],[ic.x+24,conv]);if(ic!==IC[IC.length-1])P.push([ic.x+24+dy,base])});
+  return P;
+}
+function yAt(P,x){for(let i=1;i<P.length;i++){const[a,b]=[P[i-1],P[i]];if(x>=a[0]&&x<=b[0])return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0])}return P[P.length-1][1]}
+function path(P){return "M"+P.map(p=>p.join(" ")).join(" L")}
+
+function draw(){
+  let s="";
+  // week grid
+  s+=`<g class="wk">`;for(let w=0;w<9;w++){const n=FROM+w*7,x=X(n),dt=new Date(n*DAY);s+=`<line x1="${x}" y1="30" x2="${x}" y2="500"/><text x="${x+6}" y="24">WK ${38+w} · ${dt.getUTCDate()} ${["SEP","OCT","NOV"][dt.getUTCMonth()-8]}</text>`}s+=`</g>`;
+  // tracks: done part muted, rest bright
+  LINES.forEach(([k,name,c],li)=>{if(hidden.has(k))return;const P=pts(li);
+    s+=`<path class="track" d="${path(P)}" stroke="${c}"/>`;
+    s+=`<rect x="${X0-18}" y="${P[0][1]-14}" width="8" height="28" rx="2" fill="${c}"/>`;
+    s+=`<text x="${X0-24}" y="${P[0][1]+4}" text-anchor="end" style="font:800 12px var(--ui);fill:${c}">${k}</text>`});
+  // interchanges
+  IC.forEach(ic=>{const visible=LINES.filter(l=>!hidden.has(l[0])).length||1;const h=GAP*4+18;
+    s+=`<g class="ic"><rect x="${ic.x-30}" y="${CY-h/2}" width="60" height="${h}" rx="30" fill="var(--text)"/><rect x="${ic.x-24}" y="${CY-h/2+6}" width="48" height="${h-12}" rx="24" style="fill:var(--bg)"/>
+    <text x="${ic.x}" y="${CY+h/2+22}" text-anchor="middle">${ic.n}</text><text class="d" x="${ic.x}" y="${CY+h/2+38}" text-anchor="middle">${fmt(ic.day)} · ${ic.day-TODAY}d</text></g>`});
+  // transfers between lines
+  TASKS.forEach(t=>t.dep.forEach(id=>{const b=TASKS.find(x=>x.id===id);if(b.l===t.l||hidden.has(b.l)||hidden.has(t.l))return;
+    const bi=LINES.findIndex(l=>l[0]===b.l),ti=LINES.findIndex(l=>l[0]===t.l);const x1=X(b.e)+PX/2,y1=yAt(pts(bi),x1),x2=X(t.s)+PX/2,y2=yAt(pts(ti),x2);
+    s+=`<path class="xfer" d="M${x1} ${y1} C ${x1+40} ${y1}, ${x2-40} ${y2}, ${x2} ${y2}"/>`}));
+  // now
+  const nx=X(TODAY)+PX*.58;s+=`<g class="now"><line x1="${nx}" y1="34" x2="${nx}" y2="505"/><text x="${nx+6}" y="505">NOW · FRI 14:20</text></g>`;
+  // stations + trains
+  const crit=critical();
+  TASKS.forEach((t,i)=>{if(hidden.has(t.l))return;const li=LINES.findIndex(l=>l[0]===t.l),P=pts(li),x=X(t.e)+PX/2,y=yAt(P,x),c=LINES[li][2];
+    const up=i%2===0, ly=up?y-16:y+26;
+    s+=`<g class="st ${t.st==="done"?"done":""} ${sel===t.id?"sel":""} ${moved.has(t.id)?"moved":""} ${sel&&!crit.has(t.id)&&showCrit?"dim":""}" data-id="${t.id}" style="--sc:${c}"><circle cx="${x}" cy="${y}" r="7" stroke="${c}"/><text x="${x}" y="${ly}" text-anchor="middle">${t.t}</text></g>`;
+    if(t.st==="prog"||t.st==="rev"){const tx=Math.min(Math.max(nx,X(t.s)+10),x-14),ty=yAt(P,tx);s+=`<g class="train"><rect x="${tx-11}" y="${ty-7}" width="22" height="14" rx="7" fill="${c}"/></g>`}
+  });
+  $("svg").innerHTML=s;moved.clear();
+  $("svg").querySelectorAll(".st").forEach(g=>g.onclick=()=>openSign(g.dataset.id));
+}
+let showCrit=false;
+function critical(){const out=new Set();if(!sel)return out;const walk=(id,dir)=>{if(out.has(id)&&id!==sel)return;out.add(id);
+  if(dir<=0)TASKS.find(t=>t.id===id).dep.forEach(x=>walk(x,-1));if(dir>=0)TASKS.filter(t=>t.dep.includes(id)).forEach(t=>walk(t.id,1))};walk(sel,0);return out}
+function downstream(id,acc=new Set()){TASKS.filter(t=>t.dep.includes(id)).forEach(t=>{if(!acc.has(t.id)){acc.add(t.id);downstream(t.id,acc)}});return acc}
+function openSign(id){sel=id;showCrit=true;const t=TASKS.find(x=>x.id===id),L=LINES.find(l=>l[0]===t.l);const deps=t.dep.map(x=>TASKS.find(y=>y.id===x));const down=downstream(id);
+  const ic=IC.find(i=>i.day>=t.e);
+  $("sign").innerHTML=`<button class="x" id="sx" aria-label="Close">✕</button><div class="ln"><b style="background:${L[2]}">${L[0]}</b>${L[1]} line · ${{todo:"Scheduled",prog:"Boarding",rev:"At platform (review)",done:"Arrived"}[t.st]}</div>
+   <h3>${t.t}</h3><dl><dt>Arrives</dt><dd>${fmt(t.e)} · ${t.e-TODAY>=0?"in "+(t.e-TODAY)+" days":Math.abs(t.e-TODAY)+" days ago"}</dd><dt>Crew</dt><dd>${PPL[t.p]}</dd>
+   <dt>Transfers</dt><dd>${deps.length?deps.map(x=>`${x.st==="done"?"✓":"●"} ${x.t}`).join("<br>"):"none, starts on its own"}</dd>
+   <dt>Then</dt><dd>${down.size} station${down.size===1?"":"s"} wait on this${ic?`, then ${ic.n} (${ic.day-t.e}d slack)`:""}</dd></dl>
+   <div class="acts"><button id="arr">${t.st==="done"?"Reopen":"Mark arrived"}</button><button class="sec" id="dly">Delay 1 day</button></div>`;
+  $("sign").classList.add("on");$("sx").onclick=closeSign;
+  $("arr").onclick=()=>{t.st=t.st==="done"?"todo":"done";draw();openSign(id)};
+  $("dly").onclick=()=>{[id,...down].forEach(x=>{const k=TASKS.find(y=>y.id===x);k.s++;k.e++;moved.add(x)});draw();openSign(id);drawBoard()};
+  draw();
+}
+function closeSign(){sel=null;showCrit=false;$("sign").classList.remove("on");draw()}
+
+function drawBoard(){
+  const mine=TASKS.filter(t=>t.p==="M"||t.id==="r2").sort((a,b)=>a.e-b.e);
+  $("board").innerHTML=mine.map(t=>{const L=LINES.find(l=>l[0]===t.l);const late=t.dep.some(x=>{const b=TASKS.find(y=>y.id===x);return b.st!=="done"&&b.e>=t.s});
+    const [cls,txt]=t.st==="done"?["ok","Arrived"]:t.st==="prog"?["board-g blink","Boarding"]:t.st==="rev"?["board-g","Review"]:late?["late","Waiting"]:["ok","On time"];
+    const dd=t.e-TODAY;return `<div class="dr" data-id="${t.id}"><span class="t">${dd<=0?"now":dd+"d"}</span><span class="n"><b style="background:${L[2]}">${L[0]}</b><span>${t.id==="r2"?"Review: ":""}${t.t}</span></span><span class="s ${cls}">${txt}</span></div>`}).join("");
+  $("board").querySelectorAll(".dr").forEach(r=>r.onclick=()=>{place("map");openSign(r.dataset.id)});
+}
+$("lines").innerHTML=LINES.map(([k,n,c])=>`<button class="lp" data-l="${k}"><b style="background:${c}">${k}</b>${n}</button>`).join("");
+document.querySelectorAll(".lp").forEach(b=>b.onclick=()=>{const k=b.dataset.l;hidden.has(k)?hidden.delete(k):hidden.add(k);b.classList.toggle("off");draw()});
+function place(p){document.querySelectorAll("[data-p]").forEach(b=>b.classList.toggle("on",b.dataset.p===p));$("guide").classList.toggle("on",p==="guide");if(p==="dep"){$("dep").scrollIntoView({behavior:"smooth"});$("board").animate([{boxShadow:"0 0 0 3px var(--P)"},{boxShadow:"0 0 0 0 transparent"}],{duration:900})}}
+document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>place(b.dataset.p));
+document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();$("where").focus()}if(e.key==="Escape")closeSign()});
+$("where").addEventListener("input",e=>{const q=e.target.value.toLowerCase();const hit=q&&TASKS.find(t=>t.t.toLowerCase().includes(q));if(hit)openSign(hit.id)});
+$("noteHide").onclick=()=>$("note").classList.toggle("min");
+draw();drawBoard();
+</script>

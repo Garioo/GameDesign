@@ -1,0 +1,284 @@
+/* ---------------------------------------------------------------------------
+ * The new design (beta). Its tokens live on .river so they never leak into
+ * the classic pages, which keep globals.css.
+ * ------------------------------------------------------------------------- */
+
+/* The tokens also go on <body> while River is open (see RiverShell), so
+   overlays portalled there — ⌘K, shortcut help — take them too. */
+.river,
+.tokens {
+  --paper: #ffffff;
+  --sheet: #ffffff;
+  --tint: #f5f5f4;
+  --ink: #171717;
+  --ink2: #525252;
+  --ink3: #8a8a8a;
+  --rule: #e5e5e5;
+  --rule2: #f0f0f0;
+  --now: #5b3df5;
+  --now-tint: #f1eeff;
+  --due: #e8492c;
+  --due-tint: #fdece8;
+  --solid: #171717;
+  --on-solid: #ffffff;
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+  /* Fallbacks keep headings their size even if a font variable is missing. */
+  --ui: var(--river-ui, "Geist"), "Helvetica Neue", Arial, sans-serif;
+  --display: var(--river-display, "Epilogue"), "Helvetica Neue", Arial, sans-serif;
+
+  /* The classic tokens too, so shared pieces (scoreboard, activity, comments,
+     event dialog, settings) take the new palette and font. */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --ink-soft: #525252;
+  --ink-faint: #8a8a8a;
+  --line: #e5e5e5;
+  --line-soft: #f0f0f0;
+  --ember: #5b3df5;
+  --ember-deep: #4a2fe0;
+  --ember-tint: #f1eeff;
+  --ember-tint2: #e6e0ff;
+  --accent: #5b3df5;
+  --muted: #525252;
+  --grad-ember: linear-gradient(150deg, #7b62ff, #5b3df5);
+  --font-ui: var(--ui);
+  --font-display: var(--ui);
+}
+.river {
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font: 14px/1.45 var(--ui);
+}
+/* Plain buttons and links, like the mockup. :where() keeps this weaker than
+   any component class, so every styled button still wins. */
+:where(.river) :global(button) {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+:where(.river) :global(button:disabled) {
+  cursor: default;
+  opacity: 0.6;
+}
+:where(.river) :global(a) {
+  color: inherit;
+}
+
+/* ---------- edge chrome ---------- */
+.brand {
+  position: fixed;
+  right: 14px;
+  top: 16px;
+  z-index: 30;
+  writing-mode: vertical-rl;
+  font: 900 16px var(--display);
+  letter-spacing: -0.05em;
+}
+.tabs {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tab {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 12px;
+  border-radius: 0 14px 14px 0;
+  background: var(--sheet);
+  box-shadow: 0 0 0 1px var(--rule);
+  color: var(--ink2);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition: padding 0.2s, background 0.2s, color 0.2s;
+}
+.tab:hover {
+  padding-left: 18px;
+  color: var(--ink);
+}
+.tabOn {
+  background: var(--solid);
+  color: var(--on-solid);
+  padding-left: 22px;
+}
+.tabOn:hover {
+  color: var(--on-solid);
+}
+.tabKey {
+  font-size: 9px;
+  opacity: 0.5;
+}
+/* search sits above the places: lighter, just the glass and its keys */
+.tabSearch {
+  margin-bottom: 8px;
+  padding: 12px 10px;
+  box-shadow: none;
+  background: var(--tint);
+  color: var(--ink3);
+}
+.tabSearch svg {
+  transform: rotate(180deg);
+}
+.tabSearch:hover {
+  padding-left: 14px;
+  color: var(--ink);
+}
+.tabBadge {
+  transform: rotate(180deg);
+  writing-mode: horizontal-tb;
+  min-width: 16px;
+  padding: 4px 2px;
+  border-radius: 8px;
+  background: var(--due);
+  color: #fff;
+  font-size: 10px;
+  text-align: center;
+}
+.corner {
+  position: fixed;
+  right: 12px;
+  bottom: 14px;
+  z-index: 30;
+}
+/* who's online: a column of faces under the brand; the list opens to the left */
+.presence {
+  position: fixed;
+  right: 8px;
+  top: 112px;
+  z-index: 31;
+}
+.presence :global(.who-btn) {
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 4px;
+  border-radius: 16px;
+}
+.presence :global(.online-text) {
+  display: none;
+}
+.presence :global(.avatar-stack) {
+  flex-direction: column;
+}
+.presence :global(.avatar-stack .avatar) {
+  margin: -7px 0 0;
+}
+.presence :global(.avatar-stack .avatar:first-child) {
+  margin-top: 0;
+}
+.presence :global(.who-menu) {
+  top: 0;
+  right: calc(100% + 10px);
+  text-align: left;
+}
+.presence :global(.presence-toasts) {
+  top: 0;
+  right: calc(100% + 12px);
+  width: max-content;
+}
+.loading {
+  padding: 40px;
+  color: var(--ink3);
+}
+
+/* Phones: the places become a bar along the bottom, settings at its end. */
+@media (max-width: 760px) {
+  .river {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+  .brand {
+    display: none;
+  }
+  .tabs {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    flex-direction: row;
+    gap: 0;
+    padding: 6px 104px calc(6px + env(safe-area-inset-bottom)) 8px;
+    background: var(--sheet);
+    box-shadow: 0 -1px 0 var(--rule);
+  }
+  .tab,
+  .tab:hover,
+  .tabOn,
+  .tabOn:hover {
+    flex: 1;
+    justify-content: center;
+    writing-mode: horizontal-tb;
+    transform: none;
+    padding: 10px 8px;
+    border-radius: 12px;
+    box-shadow: none;
+  }
+  .tabKey {
+    display: none;
+  }
+  .tabSearch,
+  .tabSearch:hover {
+    flex: 0 0 auto;
+    margin: 0 4px 0 0;
+    padding: 10px 12px;
+  }
+  .tabSearch svg {
+    transform: none;
+  }
+  .tabBadge {
+    transform: none;
+    padding: 1px 5px;
+  }
+  .presence {
+    top: auto;
+    right: 54px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .presence :global(.who-btn) {
+    flex-direction: row;
+    padding: 4px 6px;
+  }
+  /* one face and the dot; the list has everyone */
+  .presence :global(.avatar-stack .avatar:not(:first-child)) {
+    display: none;
+  }
+  .presence :global(.who-menu) {
+    top: auto;
+    right: -46px;
+    bottom: calc(100% + 14px);
+    width: min(300px, calc(100vw - 24px));
+  }
+  .presence :global(.presence-toasts) {
+    position: fixed;
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: calc(70px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+  .corner {
+    z-index: 31;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
+}
+/* ⌘K over River: a neutral veil, not the classic warm one */
+.tokens :global(.palette-backdrop) {
+  background: rgba(23, 23, 23, 0.24);
+}

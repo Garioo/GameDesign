@@ -1,0 +1,379 @@
+/* Plan (new design): header, controls, side panel. Tokens come from .river. */
+
+.page {
+  padding: 18px 72px 14px 20px;
+}
+.head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px 24px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.head h1 {
+  margin: 0;
+  font: 900 44px/0.88 var(--display);
+  letter-spacing: -0.055em;
+}
+.head h1 span {
+  display: block;
+  margin-bottom: 10px;
+  font: 600 12px var(--ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.sum {
+  margin: 0;
+  max-width: 460px;
+  font-size: 15px;
+  color: var(--ink2);
+}
+.sum b {
+  color: var(--ink);
+}
+.sp {
+  flex: 1;
+}
+.ctrls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.views,
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--sheet);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+.views a,
+.seg button {
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.views a:hover,
+.seg button:hover {
+  color: var(--ink);
+}
+.views .viewOn,
+.seg .segOn {
+  background: var(--solid);
+  color: var(--on-solid);
+}
+.views .viewOn:hover,
+.seg .segOn:hover {
+  color: var(--on-solid);
+}
+/* on/off switch */
+.sw {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sw i {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--rule);
+  transition: background 0.2s;
+}
+.sw i::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sheet);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: left 0.2s;
+}
+.swOn i {
+  background: var(--solid);
+}
+.swOn i::after {
+  left: 17px;
+}
+.primary {
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 9px;
+  background: var(--now);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
+.muted {
+  color: var(--ink3);
+  font-size: 14px;
+}
+.error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--due-tint);
+  color: #9b2c16;
+  font-size: 13.5px;
+}
+.tip,
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 70;
+  transform: translateX(-50%);
+  padding: 9px 14px;
+  border-radius: 11px;
+  background: var(--solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  font-size: 13px;
+  pointer-events: none;
+}
+.tip {
+  bottom: 70px;
+  background: var(--now);
+}
+
+/* ---------- side panel ---------- */
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  width: min(460px, 100%);
+  overflow: auto;
+  padding: 26px 28px 60px;
+  background: var(--sheet);
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.12);
+  transform: translateX(105%);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panelOn {
+  transform: none;
+}
+.panelX {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--ink3);
+}
+.panelX:hover {
+  background: var(--tint);
+  color: var(--ink);
+}
+.panelEb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 12px var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.panelEb i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--c, var(--ink));
+}
+/* shared panel parts */
+.ptitle {
+  width: 100%;
+  margin: 8px 0 18px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: 700 25px/1.2 var(--ui);
+  color: var(--ink);
+}
+.prow {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--rule2);
+  font-size: 14px;
+}
+.prow > span:first-child {
+  font-size: 13px;
+  color: var(--ink3);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chips button {
+  padding: 5px 10px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.chips button:hover {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink3);
+}
+.chips .chipOn {
+  background: var(--solid);
+  color: var(--on-solid);
+  box-shadow: none;
+}
+.chips .chipOn:hover {
+  color: var(--on-solid);
+}
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px !important;
+  border-radius: 14px !important;
+}
+.person.chipOn {
+  background: var(--now-tint) !important;
+  color: var(--ink) !important;
+  box-shadow: inset 0 0 0 2px var(--now) !important;
+}
+.av {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: #fff;
+  font: 600 10px var(--ui);
+}
+.avs {
+  display: flex;
+}
+.avs .av + .av {
+  margin-left: -5px;
+  box-shadow: 0 0 0 2px var(--sheet);
+}
+.ph4 {
+  display: flex;
+  justify-content: space-between;
+  margin: 22px 0 6px;
+  font: 600 12px var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule2);
+  font-size: 14px;
+}
+.box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 11px;
+}
+.boxOn {
+  background: var(--solid);
+  box-shadow: none;
+}
+.stepDone span {
+  color: var(--ink3);
+  text-decoration: line-through;
+}
+.line {
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px dashed var(--rule);
+  outline: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+}
+.line:focus {
+  border-bottom-color: var(--now);
+}
+.area {
+  width: 100%;
+  min-height: 90px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  outline: 0;
+  resize: vertical;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.area:focus {
+  box-shadow: inset 0 0 0 2px var(--now);
+}
+.hint {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--ink3);
+}
+.pbtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+.pbtns button,
+.pbtns a {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 13px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+}
+.pbtns .del {
+  color: #b0431f;
+}
+.pbtns .pri {
+  background: var(--solid);
+  color: var(--on-solid);
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 12px;
+  }
+  .panel {
+    padding: 18px 16px 60px;
+  }
+}

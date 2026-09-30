@@ -1,0 +1,278 @@
+<title>Foundry Say</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#ebebe6; --card:#f7f7f3; --ink:#111110; --ink2:#55554f; --ink3:#95958c; --rule:#d7d7cf;
+  --hi:#ffe14d; --hi2:#fff3a8; --who:#cfe3ff; --when:#d8f5d0; --tag:#f6d8ec; --over:#ff5a36;
+  --ui:"Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif; --mono:"Martian Mono", ui-monospace, Menlo, monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--ui)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:24px;padding-block:28px 120px}
+
+/* nav is three words */
+.nav{display:flex;align-items:baseline;gap:28px;font-size:15px}
+.nav .brand{font-weight:800;letter-spacing:-.03em;margin-right:auto;font-size:17px}
+.nav a{color:var(--ink3);text-decoration:none;font-weight:500;position:relative}
+.nav a.on{color:var(--ink)}
+.nav a.on::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:3px;background:var(--ink)}
+.nav a:hover{color:var(--ink)}
+.nav a sup{font:500 9px var(--mono);margin-left:3px;color:var(--over)}
+.nav .me{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:12px;align-self:center}
+
+/* the one line */
+.say{margin-top:56px}
+.say h1{font-size:clamp(34px,5.4vw,64px);line-height:1;letter-spacing:-.045em;font-weight:800;margin:0 0 22px;text-wrap:balance}
+.say h1 span{color:var(--ink3)}
+.line{position:relative;background:var(--card);border:2px solid var(--ink);border-radius:18px;padding:18px 20px 14px;box-shadow:6px 6px 0 var(--ink)}
+.field{position:relative;font:500 clamp(18px,2.4vw,26px)/1.35 var(--ui);letter-spacing:-.01em}
+.field .mirror,.field textarea{margin:0;padding:0;border:0;font:inherit;letter-spacing:inherit;white-space:pre-wrap;word-wrap:break-word;width:100%}
+.field .mirror{position:absolute;inset:0;color:transparent;pointer-events:none}
+.field .mirror mark{color:transparent;border-radius:6px;padding:1px 0;box-shadow:0 0 0 3px var(--c)}
+.field textarea{position:relative;background:none;resize:none;outline:0;height:1.4em;overflow:hidden;color:var(--ink);caret-color:var(--ink)}
+.field textarea::placeholder{color:var(--ink3)}
+.parsed{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--rule);font:400 11px var(--mono);color:var(--ink2);align-items:center;min-height:34px}
+.chip{display:inline-flex;gap:6px;align-items:center;border-radius:20px;padding:5px 10px;background:var(--c,#e5e5de);color:var(--ink)}
+.chip b{font-weight:500;color:var(--ink2)}
+.parsed .go{margin-left:auto;background:var(--ink);color:var(--card);border-radius:20px;padding:7px 14px;font:500 11px var(--mono)}
+.hints{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font:400 11px var(--mono);color:var(--ink3)}
+.hints code{color:var(--ink);background:var(--card);border:1px solid var(--rule);padding:1px 6px;border-radius:5px;font:inherit}
+.hints button{text-decoration:underline;text-underline-offset:3px}
+
+/* section heads */
+.sec{margin-top:64px}
+.sec-h{display:flex;align-items:baseline;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.sec-h h2{margin:0;font-size:26px;letter-spacing:-.03em;font-weight:800}
+.sec-h p{margin:0;color:var(--ink2);font-size:14px}
+.sec-h .sp{flex:1}
+.seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:20px;overflow:hidden;font:500 11px var(--mono)}
+.seg button{padding:6px 12px}
+.seg button.on{background:var(--ink);color:var(--card)}
+
+/* today list: single-key actions */
+.today{background:var(--card);border-radius:18px;border:1px solid var(--rule)}
+.row{display:grid;grid-template-columns:28px 1fr auto auto;gap:14px;align-items:center;padding:14px 18px;border-top:1px solid var(--rule);cursor:default;transition:background .15s}
+.row:first-child{border-top:0}
+.row.cur{background:var(--hi2)}
+.row .box{width:20px;height:20px;border:2px solid var(--ink);border-radius:6px;display:grid;place-items:center;font-size:12px}
+.row.done .box{background:var(--ink);color:var(--card)}
+.row.done .what{text-decoration:line-through;color:var(--ink3)}
+.row .kind{font:400 10px var(--mono);color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:2px}
+.row .what{font-weight:500}
+.row .when{font:400 11px var(--mono);color:var(--ink2);white-space:nowrap}
+.row .keys{display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.row.cur .keys,.row:hover .keys{opacity:1}
+.keys kbd{font:500 10px var(--mono);border:1px solid var(--ink3);border-radius:5px;padding:2px 6px;background:var(--card)}
+.row.ev .box{border-style:dashed;border-radius:50%}
+.row.men .box{border:0;background:var(--who);border-radius:50%;font:700 10px var(--ui)}
+
+/* capacity gantt: rows are people, thickness is load */
+.cap{background:var(--card);border-radius:18px;border:1px solid var(--rule);overflow-x:auto}
+.cap-in{min-width:820px;position:relative;padding:0 0 12px}
+.weeks{display:grid;grid-template-columns:150px repeat(7,1fr);border-bottom:1px solid var(--rule);font:400 10px var(--mono);color:var(--ink3);position:sticky;top:0}
+.weeks div{padding:12px 10px 10px;border-left:1px solid var(--rule)}
+.weeks div:first-child{border-left:0}
+.weeks .cw{color:var(--ink);font-weight:500}
+.person{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid var(--rule);min-height:64px}
+.person:last-of-type{border-bottom:0}
+.pname{padding:14px 16px;display:flex;flex-direction:column;gap:4px;border-right:1px solid var(--rule)}
+.pname b{font-size:15px;letter-spacing:-.01em}
+.pname small{font:400 10px var(--mono);color:var(--ink3)}
+.meter{height:4px;border-radius:2px;background:#e5e5de;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ink)}
+.meter i.hot{background:var(--over)}
+.track{position:relative;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/7 - 1px),var(--rule) calc(100%/7 - 1px),var(--rule) calc(100%/7))}
+.word{position:absolute;height:24px;display:flex;align-items:center;padding:0 9px;border-radius:12px;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--ink);color:var(--card);cursor:pointer;transition:transform .15s}
+.word:hover{transform:translateY(-1px)}
+.word.todo{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.word.rev{background:var(--hi);color:var(--ink)}
+.word.done{background:#dcdcd4;color:var(--ink3)}
+.word.new{animation:drop .6s cubic-bezier(.2,1.5,.4,1)}
+@keyframes drop{from{transform:translateY(-30px);opacity:0}}
+.overload{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(255,90,54,.12) 0 6px,transparent 6px 12px);border-left:2px solid var(--over);border-right:2px solid var(--over);pointer-events:none}
+.overload span{position:absolute;bottom:2px;left:4px;font:500 9px var(--mono);color:var(--over);background:var(--card);padding:0 3px}
+.ms{position:absolute;top:0;bottom:0;border-left:2px dashed var(--ink);pointer-events:none;z-index:2}
+.ms span{position:absolute;top:-1px;left:4px;font:600 10px var(--mono);background:var(--ink);color:var(--card);padding:2px 6px;border-radius:0 0 6px 6px;white-space:nowrap}
+.nowl{position:absolute;top:0;bottom:0;border-left:2px solid var(--over);z-index:3;pointer-events:none}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font:400 10px var(--mono);color:var(--ink2);margin-top:12px}
+.legend i{display:inline-block;width:22px;height:10px;border-radius:5px;margin-right:6px;vertical-align:-1px}
+
+/* pages as sentences */
+.pages{columns:2 320px;column-gap:24px}
+.pg{break-inside:avoid;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--rule)}
+.pg h3{margin:0 0 6px;font-size:21px;letter-spacing:-.02em}
+.pg p{margin:0;color:var(--ink2);font-size:14px}
+.pg .by{font:400 10px var(--mono);color:var(--ink3);margin-top:8px}
+
+.note{position:fixed;right:16px;bottom:16px;width:310px;background:var(--ink);color:#d9d9d2;border-radius:16px;padding:16px 18px;font-size:12.5px;line-height:1.55;z-index:30}
+.note b{color:#fff;font-size:14px}
+.note ul{margin:8px 0 0;padding-left:16px}
+.note .hide{position:absolute;right:12px;top:10px;color:#888;font-size:12px}
+.note.min{width:auto}.note.min ul,.note.min .hide{display:none}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:var(--card);padding:10px 16px;border-radius:12px;font:500 13px var(--ui);transition:.25s;z-index:40}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:700px){.note{display:none}.nav{gap:16px}.row{grid-template-columns:24px 1fr auto}.row .keys{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <nav class="nav" aria-label="Places">
+    <span class="brand">Foundry</span>
+    <a href="#today" class="on">Today<sup>3</sup></a>
+    <a href="#plan">Plan</a>
+    <a href="#pages">Pages</a>
+    <span class="me" title="You">M</span>
+  </nav>
+
+  <section class="say">
+    <h1>Friday. Two things are due, <span>and Sofie is overloaded next week.</span></h1>
+    <div class="line">
+      <div class="field">
+        <div class="mirror" id="mirror" aria-hidden="true"></div>
+        <textarea id="inp" rows="1" spellcheck="false" placeholder="Type anything: a task, a page, a meeting…"></textarea>
+      </div>
+      <div class="parsed" id="parsed"></div>
+    </div>
+    <div class="hints">
+      <span><code>@name</code> who</span><span><code>fri</code> <code>oct 2</code> <code>→ tue</code> when</span><span><code>#stream</code> where</span><span><code>page:</code> write a page</span><span><code>meet</code> calendar</span>
+      <span>try: <button data-ex="Draft user test script @sofie mon → thu #research">a task</button> · <button data-ex="page: Notes from supervisor meeting #report">a page</button> · <button data-ex="meet Sprint review oct 2 14:00 @all">a meeting</button></span>
+    </div>
+  </section>
+
+  <section class="sec" id="today">
+    <div class="sec-h"><h2>Today</h2><p>Your tasks, calendar and mentions in one list. <b>J/K</b> to move, <b>X</b> done, <b>→</b> push a day.</p></div>
+    <div class="today" id="todayList"></div>
+  </section>
+
+  <section class="sec" id="plan">
+    <div class="sec-h"><h2>Plan</h2><p>One row per person. When someone has too much, the week lights up.</p><span class="sp"></span>
+      <div class="seg" role="group" aria-label="Group by"><button class="on" data-g="p">People</button><button data-g="s">Streams</button></div></div>
+    <div class="cap"><div class="cap-in" id="cap"></div></div>
+    <div class="legend"><span><i style="background:var(--card);box-shadow:inset 0 0 0 1.5px var(--ink)"></i>to do</span><span><i style="background:var(--ink)"></i>doing</span><span><i style="background:var(--hi)"></i>in review</span><span><i style="background:#dcdcd4"></i>done</span><span><i style="background:repeating-linear-gradient(135deg,rgba(255,90,54,.35) 0 3px,transparent 3px 6px)"></i>3+ tasks at once</span></div>
+  </section>
+
+  <section class="sec" id="pages">
+    <div class="sec-h"><h2>Pages</h2><p>Every page leads with its first sentence, so skimming is reading.</p></div>
+    <div class="pages">
+      <article class="pg"><h3>Interview notes</h3><p>People plan in week-sized chunks and re-plan every Monday; nobody reads a Gantt past the next milestone.</p><div class="by">Sofie · edited 2 h ago · 3 tasks link here</div></article>
+      <article class="pg"><h3>Design principles</h3><p>Every screen answers “what now?” before “what else?”, and creating something never needs a form.</p><div class="by">Jonas · edited yesterday · canvas attached</div></article>
+      <article class="pg"><h3>Tech notes: timeline</h3><p>Dates change through one scheduling call, so dependent tasks shift together.</p><div class="by">You · edited 40 min ago · Anna mentioned you</div></article>
+      <article class="pg"><h3>Report draft</h3><p>Teams on short projects spend more time maintaining the plan than using it.</p><div class="by">Sofie · 2,140 words · 4 comments open</div></article>
+    </div>
+  </section>
+</div>
+
+<div class="note" id="note"><button class="hide" id="noteHide">hide</button>
+  <b>Concept 2 · Say</b>
+  <ul>
+    <li>Creating is typing. One line makes tasks, pages and meetings, and it highlights what it understood as you write.</li>
+    <li>The nav is three words. Home, My Work, Digest and notifications become <b>Today</b>. Board, Gantt, Calendar and Milestones become <b>Plan</b>.</li>
+    <li>Capacity Gantt: rows are people, not tasks, so overload is visible at a glance.</li>
+    <li>The headline is a status sentence written for you.</li>
+  </ul></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DAY=86400000, d=s=>Math.round(Date.parse("2026-"+s+"T00:00:00Z")/DAY);
+const TODAY=d("09-25"), START=d("09-21"), WEEKS=7, SPAN=WEEKS*7;
+const PEOPLE=[["M","You"],["A","Anna"],["J","Jonas"],["S","Sofie"]];
+let TASKS=[
+ ["Interview 6 users","09-14","09-22","done","A","research"],["Synthesize findings","09-21","09-26","prog","S","research"],["User test script","09-29","10-02","todo","S","research"],["Run user tests","10-19","10-23","todo","A","research"],
+ ["Wireframes: planner","09-22","09-30","prog","J","design"],["Visual system","09-30","10-08","todo","J","design"],["Prototype polish","10-05","10-09","todo","M","design"],
+ ["Data model","09-17","09-24","rev","M","build"],["Timeline engine","09-25","10-07","prog","M","build"],["Sync & presence","10-06","10-16","todo","A","build"],["Bug bash","10-26","10-30","todo","M","build"],
+ ["Report outline","09-24","09-28","prog","S","report"],["Method chapter","10-12","10-20","todo","M","report"],["Results & discussion","10-26","11-03","todo","S","report"],["Final edit","11-02","11-05","todo","A","report"],
+ ["Consent forms","09-28","10-01","todo","S","research"],["Recruit testers","09-30","10-06","todo","S","research"]
+].map(([t,s,e,st,p,g],i)=>({id:i,t,s:d(s),e:d(e),st,p,g}));
+const MS=[["Prototype review","10-09"],["User test day","10-23"],["Hand-in","11-06"]];
+let group="p";
+
+function drawPlan(fresh){
+  const cap=$("cap"); const rows=group==="p"?PEOPLE:[["research","Research"],["design","Design"],["build","Build"],["report","Report"]];
+  let h=`<div class="weeks"><div>${group==="p"?"Person":"Stream"}</div>`;
+  for(let w=0;w<WEEKS;w++){const n=START+w*7, x=new Date(n*DAY);h+=`<div class="${TODAY>=n&&TODAY<n+7?'cw':''}">wk ${39+w} · ${x.getUTCDate()} ${["Sep","Oct","Nov"][x.getUTCMonth()-8]}</div>`}
+  h+="</div>";
+  rows.forEach(([k,name])=>{
+    const list=TASKS.filter(t=>(group==="p"?t.p:t.g)===k&&t.e>=START&&t.s<START+SPAN).sort((a,b)=>a.s-b.s);
+    const lanes=[];list.forEach(t=>{let r=lanes.findIndex(e=>e<t.s);if(r<0){r=lanes.length;lanes.push(0)}lanes[r]=t.e+1;t.row=r});
+    // overload: days with 3+ open tasks
+    const load={};list.filter(t=>t.st!=="done").forEach(t=>{for(let n=t.s;n<=t.e;n++)load[n]=(load[n]||0)+1});
+    const hot=[];let cur=null;for(let n=START;n<START+SPAN;n++){if((load[n]||0)>=3&&n%7!==2&&n%7!==3){if(!cur){cur={a:n,b:n};hot.push(cur)}else cur.b=n}else cur=null}
+    const open=list.filter(t=>t.st!=="done"&&t.s<=TODAY+7&&t.e>=TODAY).length;
+    const pct=Math.min(100,open*28);
+    h+=`<div class="person"><div class="pname"><b>${name}</b><small>${open} open this week</small><div class="meter"><i class="${pct>80?'hot':''}" style="width:${pct}%"></i></div></div><div class="track" style="height:${Math.max(1,lanes.length)*30+14}px">`;
+    hot.forEach(o=>{h+=`<div class="overload" style="left:${(o.a-START)/SPAN*100}%;width:${(o.b-o.a+1)/SPAN*100}%"><span>${Math.max(...Array.from({length:o.b-o.a+1},(_,i)=>load[o.a+i]))} at once</span></div>`});
+    list.forEach(t=>{const a=Math.max(t.s,START), b=Math.min(t.e,START+SPAN-1);
+      h+=`<div class="word ${t.st} ${fresh===t.id?'new':''}" style="left:calc(${(a-START)/SPAN*100}% + 2px);width:calc(${(b-a+1)/SPAN*100}% - 4px);top:${t.row*30+8}px" title="${t.t}">${group==="s"?`<span style="opacity:.6;margin-right:5px">${t.p}</span>`:""}${t.t}</div>`});
+    h+=`</div></div>`;
+  });
+  MS.forEach(([n,s])=>{h+=`<div class="ms" style="left:calc(150px + (100% - 150px) * ${(d(s)+1-START)/SPAN})"><span>◆ ${n}</span></div>`});
+  h+=`<div class="nowl" style="left:calc(150px + (100% - 150px) * ${(TODAY+.5-START)/SPAN})"></div>`;
+  cap.innerHTML=h;
+}
+document.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{group=b.dataset.g;document.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b));drawPlan()});
+
+/* ---- today ---- */
+let TODAYLIST=[
+ {k:"task",w:"Synthesize findings — you're reviewing Sofie's draft",when:"due tomorrow",c:""},
+ {k:"meeting",w:"Stand-up",when:"09:30 · 15 min",c:"ev"},
+ {k:"mention",w:"Anna: “@you can the drag writes be debounced?”",when:"Tech notes · 12 min ago",c:"men",av:"A"},
+ {k:"task",w:"Timeline engine",when:"started today · 13d",c:""},
+ {k:"review",w:"Data model — Jonas approved, merge it",when:"1 h ago",c:""},
+ {k:"meeting",w:"Supervisor meeting — agenda in Report draft",when:"Mon 10:00",c:"ev"},
+];
+let cur=0;
+function drawToday(){
+  $("todayList").innerHTML=TODAYLIST.map((r,i)=>`<div class="row ${r.c} ${r.done?'done':''} ${i===cur?'cur':''}" data-i="${i}"><span class="box">${r.done?"✓":r.av||""}</span><div><span class="kind">${r.k}</span><span class="what">${r.w}</span></div><span class="when">${r.when}</span><span class="keys"><kbd>X</kbd><kbd>→</kbd><kbd>↵</kbd></span></div>`).join("");
+  document.querySelectorAll(".row").forEach(r=>{r.onmouseenter=()=>{cur=+r.dataset.i;drawToday()};r.querySelector(".box").onclick=()=>{TODAYLIST[+r.dataset.i].done=!TODAYLIST[+r.dataset.i].done;drawToday()}});
+}
+
+/* ---- the line: live parsing ---- */
+const COLORS={who:"var(--who)",when:"var(--when)",tag:"var(--tag)",kind:"var(--hi)"};
+const DAYS="mon|tue|wed|thu|fri|sat|sun|today|tomorrow";
+const RX=new RegExp(`(@\\w+)|(#\\w+)|(^page:|^meet\\b)|((?:→\\s*)?(?:(?:${DAYS})|(?:oct|sep|nov)\\s+\\d{1,2})(?:\\s+\\d{1,2}:\\d{2})?)`,"gi");
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function parse(v){
+  const out={who:[],when:[],tag:[],kind:"task",title:v};let html="",last=0;
+  v.replace(RX,(m,a,b,c,w,i)=>{html+=esc(v.slice(last,i));const t=a?"who":b?"tag":c?"kind":"when";
+    html+=`<mark style="--c:${COLORS[t]}">${esc(m)}</mark>`;last=i+m.length;
+    if(t==="kind")out.kind=m.toLowerCase().startsWith("page")?"page":"meeting";else out[t].push(m.replace(/^[@#]/,"").replace(/^→\s*/,""));return m});
+  html+=esc(v.slice(last));out.title=v.replace(RX,"").replace(/\s+/g," ").trim();out.html=html;return out;
+}
+function onInput(){
+  const v=$("inp").value;const p=parse(v);$("mirror").innerHTML=p.html+" ";
+  $("inp").style.height="auto";$("inp").style.height=$("inp").scrollHeight+"px";
+  if(!v.trim()){$("parsed").innerHTML=`<span>Understood as you type. Press <b>Enter</b> to add, <b>Shift+Enter</b> for a new line.</span>`;return}
+  const who=p.who.length?p.who.join(", "):"you", when=p.when.length?p.when.join(" → "):"no date (stays in Today)", tag=p.tag.length?p.tag.join(", "):"inbox";
+  $("parsed").innerHTML=`<span class="chip" style="--c:var(--hi)"><b>make</b>${p.kind}</span><span class="chip"><b>title</b>${esc(p.title)||"…"}</span><span class="chip" style="--c:var(--who)"><b>who</b>${esc(who)}</span><span class="chip" style="--c:var(--when)"><b>when</b>${esc(when)}</span><span class="chip" style="--c:var(--tag)"><b>in</b>${esc(tag)}</span><button class="go" id="go">Add ↵</button>`;
+  $("go").onclick=commit;
+}
+const DOW={mon:d("09-28"),tue:d("09-29"),wed:d("09-30"),thu:d("10-01"),fri:d("09-25"),today:TODAY,tomorrow:TODAY+1};
+function toDay(s){s=s.toLowerCase().replace(/\s+\d{1,2}:\d{2}$/,"");if(DOW[s])return DOW[s];const m=s.match(/(sep|oct|nov)\s+(\d+)/);if(m)return d(`${{sep:"09",oct:"10",nov:"11"}[m[1]]}-${m[2].padStart(2,"0")}`);return null}
+function commit(){
+  const v=$("inp").value.trim();if(!v)return;const p=parse(v);
+  const pp=(p.who[0]||"you").toLowerCase();const code={you:"M",anna:"A",jonas:"J",sofie:"S"}[pp]||"M";
+  if(p.kind==="task"&&p.when.length){const s=toDay(p.when[0])||TODAY, e=p.when[1]?toDay(p.when[1])||s+2:s+2;
+    const t={id:Date.now(),t:p.title||"Untitled",s,e:Math.max(s,e),st:"todo",p:code,g:(p.tag[0]||"build").toLowerCase()};TASKS.push(t);drawPlan(t.id);toast(`Added to ${({M:"your",A:"Anna's",J:"Jonas's",S:"Sofie's"})[code]} row in Plan`);$("plan").scrollIntoView({behavior:"smooth",block:"center"})}
+  else{TODAYLIST.unshift({k:p.kind,w:p.title||v,when:p.when.join(" ")||"just now",c:p.kind==="meeting"?"ev":""});cur=0;drawToday();toast(p.kind==="page"?"Page created. It opens full screen when you press Enter on it.":"Added to Today")}
+  $("inp").value="";onInput();
+}
+$("inp").addEventListener("input",onInput);
+$("inp").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();commit()}});
+document.querySelectorAll("[data-ex]").forEach(b=>b.onclick=()=>{$("inp").value=b.dataset.ex;onInput();$("inp").focus()});
+document.addEventListener("keydown",e=>{
+  if(document.activeElement===$("inp")){if(e.key==="Escape")$("inp").blur();return}
+  if(e.key==="/"||((e.metaKey||e.ctrlKey)&&e.key==="k")){e.preventDefault();$("inp").focus();return}
+  if(e.key==="j"){cur=Math.min(TODAYLIST.length-1,cur+1);drawToday()}
+  if(e.key==="k"){cur=Math.max(0,cur-1);drawToday()}
+  if(e.key==="x"){TODAYLIST[cur].done=!TODAYLIST[cur].done;drawToday()}
+  if(e.key==="ArrowRight"){const r=TODAYLIST.splice(cur,1)[0];r.when="pushed to tomorrow";TODAYLIST.push(r);drawToday();toast("Pushed to tomorrow")}
+});
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),2400)}
+$("noteHide").onclick=()=>$("note").classList.toggle("min");
+drawToday();drawPlan();onInput();
+</script>

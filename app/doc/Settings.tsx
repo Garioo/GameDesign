@@ -16,6 +16,7 @@ import {
   type WorkspaceMember,
 } from "@/lib/workspacesRepo";
 import Icon from "@/app/components/Icon";
+import { setRiverBeta, useRiverBeta } from "@/lib/beta";
 import styles from "./Settings.module.css";
 
 export default function Settings({
@@ -37,6 +38,7 @@ export default function Settings({
   onSignOut: () => void;
   onLeave: () => void;
 }) {
+  const riverBeta = useRiverBeta();
   // profile draft
   const [name, setName] = useState(session.name);
   const [initials, setInitials] = useState(session.initials);
@@ -434,6 +436,33 @@ export default function Settings({
               </p>
             )}
             {memberError && <p className={styles.memberError}>{memberError}</p>}
+          </section>
+
+          {/* ---------- beta ---------- */}
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Beta</h3>
+              <span className={styles.rule} />
+            </div>
+            <label className={styles.betaRow}>
+              <span className={styles.betaText}>
+                <span className={styles.betaName}>New design</span>
+                <span className={styles.fine}>
+                  Try the redesigned Foundry: Today, Plan and Pages. It's still being built, and you can switch back any time.
+                  This only changes this browser.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className={styles.betaSwitch}
+                checked={riverBeta}
+                onChange={(e) => {
+                  setRiverBeta(e.target.checked);
+                  onClose();
+                }}
+              />
+            </label>
           </section>
 
           {/* ---------- account ---------- */}

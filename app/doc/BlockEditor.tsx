@@ -455,6 +455,7 @@ export default function BlockEditor({
   onBlockComment,
   blockThreads,
   apiRef,
+  onMakeTask,
 }: {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
@@ -486,6 +487,8 @@ export default function BlockEditor({
   // Open block comments (block id → comment ids), shown in the block's badge.
   blockThreads?: Map<string, string[]>;
   apiRef?: MutableRefObject<BlockEditorApi | null>;
+  // Turn selected text into a task (the new design's selection toolbar).
+  onMakeTask?: (text: string) => void;
 }) {
   // Belt and braces: even if some affordance slips through, no change events
   // ever leave a read-only editor.
@@ -1313,6 +1316,7 @@ export default function BlockEditor({
           onSubmit={annotate}
           people={people}
           openFor={commentOn ? { block: refs.current.get(commentOn.blockId) ?? null, at: commentOn.at } : null}
+          onMakeTask={onMakeTask}
         />
       )}
       {readOnly && onBlockComment && (

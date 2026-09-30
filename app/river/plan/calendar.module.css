@@ -1,0 +1,451 @@
+/* The calendar (new design). Tokens come from .river. */
+
+.tool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tool h2 {
+  min-width: 200px;
+  margin: 0 8px 0 4px;
+  font: 700 22px var(--ui);
+}
+.nav {
+  display: flex;
+  gap: 4px;
+}
+.nav button {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  background: var(--sheet);
+  font-weight: 600;
+  font-size: 13px;
+}
+.nav button:hover {
+  box-shadow: inset 0 0 0 1px var(--ink3);
+}
+
+/* chips and event lines shared by the views */
+.chip,
+.ev {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+.due {
+  background: color-mix(in srgb, var(--c) 16%, var(--paper));
+  box-shadow: inset 3px 0 0 var(--c);
+  font-weight: 600;
+}
+.ms {
+  background: var(--due);
+  color: #fff;
+  font-weight: 600;
+}
+.allday {
+  background: var(--solid);
+  color: var(--on-solid);
+  font-weight: 600;
+}
+.feed {
+  background: #eef6ff !important;
+  color: #1c4f8f !important;
+  box-shadow: inset 3px 0 0 #3b82d6 !important;
+}
+.ev b {
+  margin-right: 4px;
+  color: var(--ink2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ev:hover,
+.chip:hover {
+  filter: brightness(0.97);
+}
+.more {
+  padding: 1px 7px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+/* ---------- month ---------- */
+.month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
+}
+.dh {
+  padding: 8px 10px;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  font: 600 12px var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.cell {
+  min-width: 0;
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 6px 8px;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+.cell:hover {
+  background: var(--tint);
+}
+.out {
+  background: color-mix(in srgb, var(--tint) 60%, transparent);
+}
+.out .dn {
+  color: var(--ink3);
+}
+.weCell {
+  background: color-mix(in srgb, var(--tint) 45%, transparent);
+}
+.dn {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  padding: 2px 5px;
+  border-radius: 7px;
+  font: 600 13px var(--ui);
+  font-variant-numeric: tabular-nums;
+}
+.today .dn {
+  background: var(--now);
+  color: #fff;
+}
+
+/* ---------- week: day columns of event cards ---------- */
+.week {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.62fr));
+  min-height: calc(100vh - 230px);
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--rule);
+}
+.wd {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--rule);
+  cursor: pointer;
+}
+.wd:first-child {
+  border-left: 0;
+}
+.wd:hover {
+  background: var(--tint);
+}
+.wdWe {
+  background: color-mix(in srgb, var(--tint) 55%, transparent);
+}
+.wdh {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  text-align: left;
+}
+.wdh span {
+  display: block;
+  font: 600 11.5px var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.wdh b {
+  font: 700 17px var(--ui);
+}
+.wdh:hover b {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.wdToday .wdh {
+  background: var(--now-tint);
+}
+.wdToday .wdh b,
+.wdToday .wdh span {
+  color: var(--now);
+}
+.wl {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px 14px;
+}
+.we {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--sheet);
+  box-shadow: 0 0 0 1px var(--rule);
+  text-align: left;
+  font-size: 13.5px;
+}
+.we:hover {
+  box-shadow: 0 0 0 1px var(--ink3), 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+.we b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.we span {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.we small {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ink2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nowRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px;
+  color: var(--now);
+  font: 600 11.5px var(--ui);
+}
+.nowRow::after {
+  content: "";
+  flex: 1;
+  border-top: 2px solid var(--now);
+}
+.wadd {
+  margin-top: auto;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  color: var(--ink3);
+  opacity: 0;
+}
+.wd:hover .wadd {
+  opacity: 1;
+}
+
+/* ---------- day: meeting focus ---------- */
+.focus {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  min-height: calc(100vh - 240px);
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--rule);
+}
+.fl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+.ftop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule2);
+}
+.frow {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+  padding: 10px;
+  border-radius: 11px;
+  text-align: left;
+}
+.frow:hover {
+  background: var(--tint);
+}
+.frowOn {
+  background: var(--solid) !important;
+  color: var(--on-solid) !important;
+  box-shadow: none !important;
+}
+.frowOn small {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+.frow b {
+  padding-top: 1px;
+  font: 700 14px var(--ui);
+  font-variant-numeric: tabular-nums;
+}
+.frow strong {
+  display: block;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 14.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.frow small {
+  display: block;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--ink2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.fadd {
+  margin-top: auto;
+  padding: 10px;
+  text-align: left;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.fadd:hover {
+  color: var(--now);
+}
+.fd {
+  max-width: 760px;
+  padding: 26px 32px 40px;
+}
+.blank {
+  padding: 40px 0;
+  color: var(--ink2);
+}
+.blank b {
+  font-size: 18px;
+  color: var(--ink);
+}
+
+/* ---------- event details (panel and day focus) ---------- */
+.fhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 8px 0 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.fk {
+  font: 600 12px var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.fk em {
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--now);
+}
+.fhead h3 {
+  margin: 6px 0 4px;
+  font: 700 26px/1.15 var(--ui);
+}
+.fhead p {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--ink2);
+}
+.src {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #eef6ff;
+  color: #1c4f8f;
+  font-size: 13.5px;
+}
+.live {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--now);
+}
+.bigNotes {
+  min-height: 200px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .focus {
+    grid-template-columns: 1fr;
+  }
+  .fl {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .week {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}
+
+/* Phones: the month is a heat map of colour bars; tapping a day opens it. */
+@media (max-width: 760px) {
+  .dh {
+    padding: 6px 0;
+    text-align: center;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+  }
+  .cell {
+    min-height: 62px;
+    gap: 2px;
+    padding: 4px 3px 6px;
+  }
+  .dn {
+    font-size: 12px;
+    padding: 1px 4px;
+  }
+  .cell .chip,
+  .cell .ev {
+    height: 5px;
+    padding: 0;
+    border-radius: 3px;
+    font-size: 0;
+    pointer-events: none;
+  }
+  .cell .ev {
+    background: var(--ink3);
+  }
+  .cell .due {
+    background: var(--c);
+    box-shadow: none;
+  }
+  .cell .feed {
+    background: #3b82d6 !important;
+    box-shadow: none !important;
+  }
+  .cell .more {
+    padding: 0 2px;
+    font-size: 10px;
+    pointer-events: none;
+  }
+}

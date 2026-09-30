@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import RouteTransitionSignal from "./RouteTransitionSignal";
+import BetaGate from "./BetaGate";
 
 // Single-family typography: Hanken Grotesk everywhere. Headings differ by
 // size/weight only. --font-display still exists as an alias of --font-ui
@@ -34,6 +36,10 @@ export default function RootLayout({
       <body>
         {children}
         <RouteTransitionSignal />
+        {/* useSearchParams needs a Suspense boundary so static pages still prerender. */}
+        <Suspense fallback={null}>
+          <BetaGate />
+        </Suspense>
       </body>
     </html>
   );

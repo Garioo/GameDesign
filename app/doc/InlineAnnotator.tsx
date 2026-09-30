@@ -32,6 +32,7 @@ export default function InlineAnnotator({
   people = [],
   openFor,
   suggest = true,
+  onMakeTask,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   onSubmit: (req: AnnotationRequest) => Promise<void>;
@@ -41,6 +42,8 @@ export default function InlineAnnotator({
   openFor?: { block: HTMLElement | null; at: number } | null;
   /** Offer "Suggest edit" (off for people who can only comment). */
   suggest?: boolean;
+  /** Offer "Make task": turns the selected text into a task (new design only). */
+  onMakeTask?: (text: string) => void;
 }) {
   const [spot, setSpot] = useState<Spot | null>(null);
   const [form, setForm] = useState<(Spot & { kind: AnnotationKind; blocked: boolean }) | null>(null);
@@ -253,6 +256,11 @@ export default function InlineAnnotator({
       {suggest && (
         <button type="button" onClick={() => open("suggest")}>
           <Icon name="pencil" /> Suggest edit
+        </button>
+      )}
+      {onMakeTask && (
+        <button type="button" onClick={() => { onMakeTask(spot.quote); setSpot(null); }}>
+          <Icon name="task" /> Make task
         </button>
       )}
     </div>,

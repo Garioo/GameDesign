@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 import LinkedDocuments from "./LinkedDocuments";
 
 import { useEffect, useState } from "react";
@@ -73,6 +75,8 @@ interface SidebarProps {
   onMoveSection: (orderedIds: string[]) => void;
   /** False for viewers: navigation only, no create/rename/delete/drag. */
   canEdit?: boolean;
+  /** Shown above the tree (the new design's page search). */
+  top?: React.ReactNode;
 }
 
 const byPos = (a: DesignDoc, b: DesignDoc) => (a.position ?? 0) - (b.position ?? 0);
@@ -95,6 +99,7 @@ export default function Sidebar({
   onMovePage,
   onMoveSection,
   canEdit = true,
+  top,
 }: SidebarProps) {
   const [dragPage, setDragPage] = useState<string | null>(null);
   const [dragSection, setDragSection] = useState<string | null>(null);
@@ -329,6 +334,7 @@ export default function Sidebar({
 
   return (
     <aside className="sidebar">
+      {top}
       <div className="section-head">
         <span className="section-icon">
           <Sun className="section-icon-svg" />

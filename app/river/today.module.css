@@ -1,0 +1,597 @@
+/* Today (new design). Tokens come from .river in river.module.css. */
+
+.page {
+  padding: 18px 72px 60px 24px;
+}
+
+/* ---------- header ---------- */
+.head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px 28px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.head h1 {
+  margin: 0;
+  font: 900 44px/0.88 var(--display);
+  letter-spacing: -0.055em;
+}
+.eyebrow {
+  display: block;
+  margin-bottom: 12px;
+  font: 600 12px var(--ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.ws {
+  position: relative;
+  display: inline-block;
+}
+.wsBtn {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--ink2);
+  font-weight: 700;
+}
+.wsBtn:hover {
+  color: var(--ink);
+}
+.wsMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: 270px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--sheet);
+  box-shadow: var(--shadow), 0 0 0 1px var(--rule);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.wsMenu button,
+.wsMenu a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 9px;
+  text-align: left;
+  font: 500 14px var(--ui);
+  color: var(--ink);
+  text-decoration: none;
+}
+.wsMenu button:hover,
+.wsMenu a:hover {
+  background: var(--tint);
+}
+.wsMenu i {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--solid);
+  color: #fff;
+  font: 700 11px var(--ui);
+  font-style: normal;
+}
+.wsMenu i.wsNew {
+  background: var(--rule);
+  color: var(--ink);
+}
+.wsMenu small {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink3);
+}
+.sum {
+  margin: 0;
+  max-width: 560px;
+  font-size: 15px;
+  color: var(--ink2);
+}
+.sum b {
+  color: var(--ink);
+}
+.cont {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin-left: 8px;
+  padding: 0 11px;
+  border-radius: 14px;
+  background: var(--now-tint);
+  color: var(--now);
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: none;
+}
+.cont:hover {
+  background: var(--now);
+  color: #fff;
+}
+
+/* ---------- columns ---------- */
+.grid,
+.lower {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(340px, 1.3fr) minmax(290px, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+.lower {
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+.colh {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+  font: 600 11px var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.colh em {
+  font: 400 12px var(--ui);
+  letter-spacing: 0;
+  text-transform: none;
+  font-style: normal;
+}
+.gap {
+  margin-top: 26px;
+}
+.empty {
+  margin: 8px;
+  font-size: 13.5px;
+  color: var(--ink3);
+}
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--sheet);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+.seg button {
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink2);
+}
+.seg .segOn {
+  background: var(--solid);
+  color: var(--on-solid);
+}
+
+/* ---------- your day ---------- */
+.allDay {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.allDayChip {
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--solid);
+  color: var(--on-solid);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.hours {
+  --hp: 46px;
+  position: relative;
+  border-top: 2px solid var(--ink);
+}
+.hr {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 5px 0 0 2px;
+  border-top: 1px solid var(--rule2);
+  font: 500 12px var(--ui);
+  color: var(--ink3);
+  font-variant-numeric: tabular-nums;
+}
+.ev {
+  position: absolute;
+  left: 54px;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  overflow: hidden;
+  padding: 3px 10px;
+  border-radius: 9px;
+  background: var(--tint);
+  box-shadow: inset 3px 0 0 var(--ink3);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ev:hover {
+  box-shadow: inset 3px 0 0 var(--ink3), 0 0 0 1px var(--ink3);
+}
+.ev small {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--ink2);
+  font-variant-numeric: tabular-nums;
+}
+.evTall {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding-top: 7px;
+}
+.now {
+  position: absolute;
+  left: 44px;
+  right: 0;
+  z-index: 3;
+  border-top: 2px solid var(--now);
+  pointer-events: none;
+}
+.now::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--now);
+}
+.now span {
+  position: absolute;
+  left: -46px;
+  top: -9px;
+  padding: 0 3px;
+  background: var(--paper);
+  color: var(--now);
+  font: 600 11.5px var(--ui);
+}
+
+/* ---------- your tasks ---------- */
+.add {
+  width: 100%;
+  height: 40px;
+  margin-bottom: 4px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 11px;
+  box-shadow: 0 0 0 1px var(--rule);
+  background: var(--sheet);
+  font: inherit;
+  font-size: 14px;
+  outline: 0;
+}
+.add:focus {
+  box-shadow: 0 0 0 2px var(--now);
+}
+.sub {
+  display: flex;
+  justify-content: space-between;
+  margin: 16px 8px 4px;
+  font: 600 11.5px var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 10px;
+}
+.row:hover {
+  background: var(--tint);
+}
+.check {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 11px;
+}
+.check:hover {
+  background: var(--tint);
+}
+.checked {
+  background: var(--solid);
+  box-shadow: none;
+}
+.rowText {
+  min-width: 0;
+}
+.rowText b {
+  display: block;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rowText small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1px;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--c, var(--ink3));
+}
+.pageRow .dot {
+  border-radius: 50%;
+  background: #e8b400;
+}
+.doneRow b {
+  color: var(--ink3);
+  text-decoration: line-through;
+}
+.stage {
+  padding: 1px 7px;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.acts {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.row:hover .acts,
+.row:focus-within .acts {
+  opacity: 1;
+}
+.acts button,
+.acts a {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.more {
+  padding: 7px 8px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.more:hover {
+  background: var(--tint);
+  color: var(--ink);
+}
+
+/* ---------- needs you ---------- */
+.card {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--sheet);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+.card > div {
+  flex: 1;
+  min-width: 0;
+}
+.card h4 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.card p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink2);
+}
+.card small {
+  font-size: 12px;
+  color: var(--ink3);
+}
+.avatar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 600 10px var(--ui);
+}
+.cardActs {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+}
+.cardActs button {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.cardActs button:first-child {
+  background: var(--solid);
+  color: var(--on-solid);
+  box-shadow: none;
+}
+
+/* ---------- due soon ---------- */
+.due {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--rule2);
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+.due:hover b {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.due > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--c);
+}
+.due > i.diamond {
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+.due b {
+  font-weight: 600;
+}
+.due span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.due em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 13.5px;
+  text-align: right;
+}
+.due em.soon {
+  color: var(--due);
+}
+
+/* ---------- recently edited ---------- */
+.rec {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 9px 8px;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.rec:hover {
+  background: var(--tint);
+}
+.rec b {
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 14.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rec span {
+  grid-column: 1;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.rec em {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ink3);
+}
+.rec em i {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: #fff1b8;
+  color: #7a5a00;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .grid,
+  .lower {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .page {
+    padding: 12px 12px 32px;
+  }
+  .grid,
+  .lower {
+    grid-template-columns: 1fr;
+  }
+  .head h1 {
+    font-size: 36px;
+  }
+  .eyebrow {
+    white-space: normal;
+  }
+  /* A shorter day so the tasks are in reach. */
+  .hours {
+    --hp: 30px;
+  }
+  .evTall {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 3px;
+  }
+}

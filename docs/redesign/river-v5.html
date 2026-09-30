@@ -1,0 +1,621 @@
+<title>Foundry River 5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800;900&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#ffffff; --sheet:#ffffff; --tint:#f5f5f4; --ink:#171717; --ink2:#525252; --ink3:#8a8a8a; --rule:#e5e5e5; --rule2:#f0f0f0;
+  --now:#5b3df5; --now-tint:#f1eeff; --ms:#e8492c; --ms-tint:#fdece8;
+  --solid:#171717; --on-solid:#ffffff; --done-bg:#d4d4d4; --done-ink:#8a8a8a;
+  --shadow:0 16px 40px rgba(0,0,0,.10);
+  --ui:"Geist","Helvetica Neue",Arial,sans-serif; --display:"Epilogue","Helvetica Neue",Arial,sans-serif; --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 var(--ui)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--now);outline-offset:2px}
+.av{width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;font:700 9.5px var(--ui);color:#fff;flex:none}
+
+/* ---------- edge chrome ---------- */
+.brand{position:fixed;right:14px;top:16px;font-family:var(--display);font-weight:900;letter-spacing:-.05em;font-size:16px;z-index:30;writing-mode:vertical-rl}
+.tabs{position:fixed;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:30}
+.tabs button{writing-mode:vertical-rl;transform:rotate(180deg);padding:18px 12px;border-radius:0 14px 14px 0;background:var(--sheet);font-weight:600;font-size:14px;color:var(--ink2);box-shadow:0 0 0 1px var(--rule);transition:padding .2s,background .2s,color .2s;display:flex;align-items:center;gap:8px}
+.tabs button:hover{padding-left:18px;color:var(--ink)}
+.tabs button.on{background:var(--solid);color:var(--on-solid);padding-left:22px}
+.tabs button b{font:500 10px var(--mono);background:var(--ms);color:#fff;border-radius:8px;padding:4px 2px;transform:rotate(180deg);writing-mode:horizontal-tb;min-width:16px;text-align:center}
+.tabs button b:empty{display:none}
+.tabs .kk{font:500 9px var(--mono);opacity:.5}
+
+.view{display:none;max-width:1240px;margin:0 auto;padding-inline:24px;padding-right:96px;padding-block:28px 160px}
+.view.on{display:block;animation:rise .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+.head{display:flex;align-items:flex-end;gap:20px 28px;flex-wrap:wrap;margin-bottom:22px;padding-top:12px}
+.head h1{margin:0;font-family:var(--display);font-size:clamp(40px,5vw,64px);font-weight:900;letter-spacing:-.055em;line-height:.88}
+.head h1 span{display:block;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
+.head .sum{font-size:15px;color:var(--ink2);max-width:440px;margin:0;padding-bottom:2px}
+.head .sum b{color:var(--ink)}
+.head .sp{flex:1}
+.ctrls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--sheet);box-shadow:0 0 0 1px var(--rule);border-radius:10px;padding:3px}
+.seg button{padding:6px 11px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.seg button.on{background:var(--solid);color:var(--on-solid)}
+.mine{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--rule);position:relative;transition:.2s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--sheet);transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.mine.on .sw{background:var(--solid)}.mine.on .sw::after{left:17px}
+.newbtn{height:32px;padding:0 12px;border-radius:10px;background:var(--now);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+.newbtn kbd{font:500 10px var(--mono);border:1px solid rgba(255,255,255,.4);border-radius:4px;padding:0 4px}
+
+/* ---------- PLAN ---------- */
+.cols{position:sticky;top:0;z-index:14;display:grid;grid-template-columns:132px repeat(4,minmax(0,1fr));background:var(--paper);border-bottom:2px solid var(--ink)}
+.cols > div{padding:14px 12px 10px;display:flex;flex-direction:column;gap:2px;position:relative}
+.cols .nm{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+.cols small{font:400 12.5px var(--ui);color:var(--ink2)}
+.loose{align-self:flex-start;margin-top:4px;font:500 10.5px var(--mono);color:var(--ink2);padding:2px 7px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--rule)}
+.loose:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.drop{position:absolute;left:8px;top:calc(100% + 4px);width:260px;background:var(--sheet);border-radius:14px;box-shadow:var(--shadow),0 0 0 1px var(--rule);padding:12px;z-index:30;font-size:13px}
+.drop p{margin:0 0 8px;color:var(--ink2);font-size:12px;line-height:1.45}
+.drop .li{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--rule)}
+.drop .li span{flex:1}
+.drop .li button{font:500 10.5px var(--mono);color:var(--now)}
+.rbody{position:relative;display:grid;grid-template-columns:132px repeat(4,minmax(0,1fr))}
+.gutter{position:relative}
+.col{position:relative;border-left:1px solid var(--rule)}
+.col.target{background:var(--now-tint)}
+.day{position:absolute;left:0;right:0}
+.day.mon{border-top:1px solid var(--rule)}
+.day.we{background:var(--tint)}
+.day.today{background:var(--now-tint)}
+.dl{position:absolute;left:0;right:10px;font:500 12.5px var(--ui);color:var(--ink2);display:flex;flex-direction:column;transform:translateY(8px);font-variant-numeric:tabular-nums}
+.dl .wk{position:absolute;right:0;top:0;font:500 10.5px var(--mono);color:var(--ink3)}
+.dl .ev{font:500 11.5px var(--ui);color:var(--ink);display:flex;align-items:center;gap:5px;margin-top:3px;white-space:nowrap}
+.dl .ev::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ink)}
+.dl.mon{color:var(--ink);font-weight:600}
+.dl.we{font-size:10px;transform:translateY(1px);color:var(--ink3)}
+.dl.tod{color:var(--now);font-weight:600}
+.term .dl{transform:translateY(-1px)}
+
+/* a piece of work = a rail + a label written beside it */
+.rail{position:absolute;width:6px;border-radius:3px;background:var(--solid);cursor:grab;touch-action:none;transition:opacity .2s}
+.rail::before{content:"";position:absolute;left:-3px;top:-3px;width:12px;height:12px;border-radius:50%;background:inherit;box-shadow:0 0 0 2px var(--paper)}
+.rail::after{content:"";position:absolute;left:-6px;right:-6px;top:0;bottom:0}
+.rail.todo{background:var(--sheet);box-shadow:inset 0 0 0 2px var(--ink)}
+.rail.todo::before{background:var(--sheet);box-shadow:inset 0 0 0 2px var(--ink),0 0 0 2px var(--paper)}
+.rail.rev{background:var(--now)}
+.rail.done{background:var(--done-bg)}
+.rail .grip{position:absolute;left:-7px;right:-7px;bottom:-4px;height:10px;cursor:ns-resize;z-index:2}
+.rail i{position:absolute;left:-2px;width:10px;height:2px;background:var(--paper);border-radius:1px}
+.rail.todo i{background:var(--ink)}
+.rail i.ok{opacity:.35}
+.lead{position:absolute;inset:0;pointer-events:none;overflow:visible;width:100%;height:100%}
+.lead path{fill:none;stroke:var(--rule);stroke-width:1.5}
+.lead path.hot{stroke:var(--now);stroke-width:2}
+.lab{position:absolute;right:8px;z-index:5;background:var(--paper);padding:6px 10px 8px;border-radius:10px;cursor:grab;touch-action:none;transition:background .15s,opacity .2s;user-select:none}
+.lab:hover{box-shadow:0 0 0 1px var(--rule),0 4px 12px rgba(0,0,0,.05)}
+.lab .lt{font-weight:600;font-size:15.5px;line-height:1.3;color:var(--ink)}
+.lab .ld{margin-top:4px;font:600 13px var(--ui);color:var(--ink);font-variant-numeric:tabular-nums}
+.lab .ld b{font-weight:600;white-space:nowrap}
+.lab .ld span{font-weight:400;color:var(--ink2);white-space:nowrap}
+.term .lab .ld{display:none}
+.band{position:absolute;left:0;right:0;background:var(--now-tint);box-shadow:inset 3px 0 0 var(--now);pointer-events:none;transition:top .12s,height .12s}
+.spanl{position:absolute;left:132px;right:0;height:0;border-top:1.5px dashed var(--now);z-index:3;pointer-events:none;transition:top .12s}
+.spanl span{position:absolute;left:4px;top:-9px;font:600 10.5px var(--ui);color:#fff;background:var(--now);padding:1px 6px;border-radius:5px;white-space:nowrap}
+.dl.in{color:var(--now)}
+.dl.in.edge{font-weight:700}
+.lab .lm{display:flex;align-items:center;gap:7px;margin-top:3px;font:400 13px var(--ui);color:var(--ink2);flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.pill{font:600 11.5px var(--ui);padding:1px 7px;border-radius:5px;background:var(--rule2);color:var(--ink2)}
+.pill.prog{background:var(--solid);color:var(--on-solid)}
+.pill.rev{background:var(--now);color:#fff}
+.pill.done{background:var(--done-bg);color:var(--ink)}
+.pill.wait{background:var(--ms-tint);color:var(--ms)}
+.pb{height:3px;border-radius:2px;background:var(--rule);margin-top:6px;overflow:hidden;max-width:160px}
+.pb i{display:block;height:100%;background:var(--ink)}
+.lab.done .lt{color:var(--done-ink);text-decoration:line-through;text-decoration-thickness:1.5px}
+.term .lab .lm,.term .lab .pb{display:none}
+.term .lab .lt{font-size:14px}
+.term .lab{padding:2px 8px}
+.dim{opacity:.18}
+.lab.drag,.rail.drag{z-index:25;cursor:grabbing}
+.lab.drag{background:var(--sheet);box-shadow:var(--shadow),0 0 0 2px var(--now)}
+.lab.new{animation:pop .5s cubic-bezier(.2,1.3,.4,1)}
+@keyframes pop{from{transform:translateX(-12px);opacity:0}}
+
+/* opened piece of work: steps inline */
+.lab.open{z-index:20;background:var(--sheet);box-shadow:var(--shadow),0 0 0 2px var(--now);cursor:default;width:340px;padding:14px 16px 16px}
+.lab.open .lt{font-size:20px;font-weight:700;outline:0}
+.lab.open.flip{right:8px}
+.steps{margin:12px 0 4px;border-top:1px solid var(--rule)}
+.step{display:grid;grid-template-columns:20px 1fr auto 22px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule2);font-size:14px}
+.step .cb{width:18px;height:18px;border-radius:5px;box-shadow:inset 0 0 0 1.5px var(--ink);display:grid;place-items:center;font-size:11px;color:var(--on-solid)}
+.step.ok .cb{background:var(--solid)}
+.step.ok span{color:var(--ink3);text-decoration:line-through}
+.step small{font:400 12px var(--ui);color:var(--ink2)}
+.addstep{width:100%;border:0;outline:0;background:none;padding:8px 0;font-size:13.5px;border-bottom:1px dashed var(--rule)}
+.addstep::placeholder{color:var(--ink3)}
+.rows{margin-top:10px}
+.rw{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;padding:6px 0;font-size:12.5px}
+.rw > span{font:400 12px var(--ui);color:var(--ink3)}
+.stg{display:flex;gap:3px}
+.stg button{flex:1;padding:5px 0;border-radius:7px;box-shadow:inset 0 0 0 1px var(--rule);font-size:11px;font-weight:600}
+.stg button.on{background:var(--solid);color:var(--on-solid);box-shadow:none}
+.stp{display:flex;align-items:center;gap:6px;font:500 11.5px var(--mono)}
+.stp button{width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--rule)}
+.stp output{flex:1;text-align:center}
+.ppl{display:flex;gap:6px}
+.ppl button{border-radius:50%;padding:2px;box-shadow:0 0 0 2px transparent}
+.ppl button.on{box-shadow:0 0 0 2px var(--now)}
+.bad{color:var(--ms)}
+.doclink{margin-top:10px;width:100%;height:34px;border-radius:10px;background:var(--paper);box-shadow:inset 0 0 0 1px var(--rule);font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.doclink:hover{box-shadow:inset 0 0 0 1.5px var(--ink)}
+
+.ghost{position:absolute;left:8px;right:8px;border-radius:10px;border:1.5px dashed var(--now);background:var(--now-tint);color:var(--now);font:500 11px var(--mono);display:flex;align-items:center;padding:0 10px;pointer-events:none;opacity:0;transition:opacity .12s;height:28px}
+.col:hover .ghost.show{opacity:1}
+.evl{position:absolute;left:92px;right:0;height:0;border-top:1.5px dotted var(--ink3);z-index:1;pointer-events:none}
+.evl span{position:absolute;right:0;top:-10px;background:var(--paper);font:500 11px var(--mono);color:var(--ink2);padding:0 0 0 8px}
+.term .evl span{display:none}
+.msl{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--ms);z-index:6;pointer-events:none}
+.msl span{position:absolute;left:0;top:-30px;font-weight:700;font-size:15px;color:#fff;background:var(--ms);padding:3px 10px;border-radius:0 0 8px 0;top:0}
+.msl span small{font:500 11px var(--mono);margin-left:8px;opacity:.85}
+.term .msl span{font-size:12px}
+.nowl{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--now);z-index:4;pointer-events:none}
+.nowl span{position:absolute;left:0;top:-11px;background:var(--now);color:#fff;font:500 11px var(--mono);padding:2px 8px;border-radius:10px}
+svg.deps{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:visible}
+svg.deps path{fill:none;stroke:var(--now);stroke-width:2}
+svg.deps path.in{stroke:var(--ms);stroke-dasharray:5 4}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--solid);color:var(--on-solid);font:500 11px var(--mono);padding:5px 9px;border-radius:8px;opacity:0;transition:opacity .1s;white-space:nowrap}
+.tip.on{opacity:1}
+.create{position:absolute;left:8px;right:8px;z-index:22;background:var(--sheet);border-radius:14px;box-shadow:var(--shadow),0 0 0 2px var(--now);padding:12px 14px;min-width:260px}
+.create input{width:100%;border:0;outline:0;background:none;font:800 16px var(--ui)}
+.create .pv{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.create .pv span{font:500 10.5px var(--mono);background:var(--now-tint);color:var(--now);padding:2px 7px;border-radius:6px}
+.create .hint{font:400 10.5px var(--mono);color:var(--ink3);margin-top:8px;line-height:1.5}
+
+/* ---------- TODAY ---------- */
+.tgrid{display:grid;grid-template-columns:minmax(300px,1.2fr) 1fr 1fr;gap:28px;align-items:start}
+.colh{font:600 11px var(--ui);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.colh em{font:400 10.5px var(--mono);letter-spacing:0;text-transform:none;font-style:normal}
+.hours{position:relative;border-top:2px solid var(--ink);background:var(--sheet);border-radius:0 0 16px 16px;box-shadow:0 0 0 1px var(--rule)}
+.hr{position:absolute;left:0;right:0;border-top:1px solid var(--rule2);font:400 10.5px var(--mono);color:var(--ink3);padding:3px 0 0 10px}
+.blk{position:absolute;left:62px;right:10px;border-radius:10px;padding:6px 10px;font-weight:700;font-size:12.5px;overflow:hidden;line-height:1.25}
+.blk small{display:block;font:400 10.5px var(--mono);opacity:.75;margin-top:2px}
+.blk.ev{background:var(--paper);box-shadow:inset 3px 0 0 var(--ink2)}
+.blk.focus{background:var(--solid);color:var(--on-solid)}
+.blk.new{animation:pop .45s cubic-bezier(.2,1.3,.4,1)}
+.blk .x{position:absolute;right:6px;top:4px;opacity:0;font-size:11px}
+.blk:hover .x{opacity:.6}
+.hnow{position:absolute;left:52px;right:0;border-top:2px solid var(--now);z-index:3}
+.hnow::before{content:"";position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--now)}
+.dropg{position:absolute;left:62px;right:10px;border-radius:10px;border:1.5px dashed var(--now);background:var(--now-tint);color:var(--now);font:500 11px var(--mono);display:none;align-items:center;padding:0 10px;pointer-events:none;z-index:4}
+.card{background:var(--sheet);border-radius:14px;box-shadow:0 0 0 1px var(--rule);padding:11px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start;transition:opacity .3s,transform .3s}
+.card.drag{cursor:grab}
+.card .cb{width:18px;height:18px;border-radius:5px;box-shadow:inset 0 0 0 1.5px var(--ink);flex:none;margin-top:1px;display:grid;place-items:center;font-size:11px;color:var(--on-solid)}
+.card.ok .cb{background:var(--solid)}
+.card.ok h4{text-decoration:line-through;color:var(--ink3)}
+.card .dot{width:10px;height:10px;border-radius:50%;margin-top:4px;flex:none;background:var(--ms)}
+.card .dot.rev{background:var(--now)}
+.card h4{margin:0;font-size:14.5px;letter-spacing:-.01em}
+.card p{margin:2px 0 0;font-size:12.5px;color:var(--ink2)}
+.card small{font:400 10.5px var(--mono);color:var(--ink3)}
+.card .acts{display:flex;gap:6px;margin-top:8px}
+.card .acts button{height:26px;padding:0 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--rule);font-size:12px;font-weight:600}
+.card .acts button:first-child{background:var(--solid);color:var(--on-solid);box-shadow:none}
+.card.gone{opacity:0;transform:translateX(20px)}
+.card > div{flex:1;min-width:0}
+.digest{background:var(--solid);color:var(--on-solid);border-radius:16px;padding:16px;margin-top:18px}
+.digest .big{font-family:var(--display);font-size:40px;font-weight:900;letter-spacing:-.05em;line-height:1}
+.digest p{margin:6px 0 12px;font-size:12.5px;opacity:.8}
+.digest .wk{display:flex;align-items:flex-end;gap:5px;height:44px}
+.digest .wk i{flex:1;background:currentColor;opacity:.3;border-radius:2px}
+.digest .wk i:last-child{opacity:1;background:var(--now)}
+
+/* ---------- PAGES ---------- */
+.pgrid{display:grid;grid-template-columns:260px minmax(0,1fr) 230px;gap:32px;align-items:start}
+.find{width:100%;height:38px;border-radius:12px;border:0;box-shadow:0 0 0 1px var(--rule);background:var(--sheet);padding:0 12px;outline:0;margin-bottom:12px}
+.find:focus{box-shadow:0 0 0 2px var(--now)}
+.shelf button{display:block;width:100%;text-align:left;padding:12px;border-radius:12px;margin-bottom:2px}
+.shelf button:hover{background:var(--sheet)}
+.shelf button.on{background:var(--sheet);box-shadow:0 0 0 1px var(--rule)}
+.shelf b{display:block;font-size:14.5px;letter-spacing:-.01em}
+.shelf span{display:block;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf small{font:400 10px var(--mono);color:var(--ink3)}
+.reader{background:var(--sheet);border-radius:18px;box-shadow:0 0 0 1px var(--rule);padding:40px 48px 48px;min-height:480px}
+.reader .meta{font:400 11px var(--mono);color:var(--ink3);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.reader .meta .live{color:var(--now)}
+.reader h2{margin:0 0 20px;font-family:var(--display);font-size:40px;font-weight:900;letter-spacing:-.045em;line-height:1;outline:0;text-wrap:balance}
+.reader .txt{outline:0;font-size:16px;line-height:1.65;max-width:62ch}
+.reader .txt p{margin:0 0 14px}
+.reader .txt h3{font-size:19px;letter-spacing:-.02em;margin:26px 0 8px}
+.reader .txt .men{background:var(--now-tint);color:var(--now);border-radius:5px;padding:0 4px;font-weight:600}
+.mini{position:relative;border-left:2px solid var(--ink);margin:0 0 24px 6px;padding:2px 0 2px 16px}
+.mini a{display:block;color:inherit;padding:8px 0;cursor:pointer;position:relative}
+.mini a::before{content:"";position:absolute;left:-23px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 2px var(--ink)}
+.mini a.prog::before{background:var(--solid)}.mini a.rev::before{background:var(--now);box-shadow:none}.mini a.done::before{background:var(--done-bg);box-shadow:none}
+.mini a b{display:block;font-size:13.5px}
+.mini a small{font:400 10.5px var(--mono);color:var(--ink3)}
+.mini a:hover b{color:var(--now)}
+.mini .ms{font:800 12px var(--ui);color:var(--ms);padding:6px 0}
+
+.note{position:fixed;left:16px;bottom:16px;width:340px;max-height:60vh;overflow:auto;background:var(--solid);color:var(--on-solid);border-radius:16px;padding:16px 18px;font-size:12.5px;line-height:1.55;z-index:40}
+.note b{font-size:14px}
+.note ul{margin:8px 0 0;padding-left:16px;opacity:.85}
+.note li{margin-bottom:3px}
+.note .hide{position:absolute;right:12px;top:10px;opacity:.6;font-size:12px}
+.note.min{width:auto}.note.min ul,.note.min .hide{display:none}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);opacity:0;background:var(--solid);color:var(--on-solid);padding:10px 16px;border-radius:12px;font-weight:600;font-size:13px;transition:.25s;z-index:60;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:1000px){.tgrid{grid-template-columns:1fr 1fr}.tgrid > :first-child{grid-column:1/-1}.pgrid{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .view{padding-right:58px;padding-left:12px}
+  #riverWrap{overflow-x:auto}
+  #river{min-width:760px}
+  .tgrid{grid-template-columns:1fr}
+  .reader{padding:24px 20px}
+  .note{display:none}
+  .tabs button{padding:14px 8px;font-size:12px}.tabs .kk{display:none}
+  .lab.open{width:min(300px,78vw)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="brand">Foundry</div>
+<nav class="tabs" aria-label="Places">
+  <button data-v="today"><span class="kk">1</span>Today<b id="needBadge">3</b></button>
+  <button data-v="plan" class="on"><span class="kk">2</span>Plan</button>
+  <button data-v="pages"><span class="kk">3</span>Pages</button>
+</nav>
+
+<!-- ================= TODAY ================= -->
+<section class="view" data-view="today">
+  <header class="head">
+    <h1><span>Friday 25 September · week 39</span>Today</h1>
+    <p class="sum" id="todaySum"></p>
+  </header>
+  <div class="tgrid">
+    <div><div class="colh">Your day <em>drag a step here to block time</em></div><div class="hours" id="hours"></div></div>
+    <div><div class="colh">Your steps <em>the small tasks live here</em></div><div id="upnext"></div></div>
+    <div><div class="colh">Needs you <em id="needCount"></em></div><div id="needs"></div>
+      <div class="digest"><div class="colh" style="color:inherit;opacity:.6">Week 39 so far</div><div class="big">14 steps</div><p>2 pieces of work finished. 1,820 words across 4 pages. Sofie finished the most.</p>
+      <div class="wk"><i style="height:35%"></i><i style="height:50%"></i><i style="height:42%"></i><i style="height:64%"></i><i style="height:58%"></i><i style="height:80%"></i><i style="height:72%"></i><i style="height:60%"></i></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLAN ================= -->
+<section class="view on" data-view="plan">
+  <header class="head">
+    <h1><span>Relaunch · Autumn term</span>Plan</h1>
+    <p class="sum" id="planSum"></p>
+    <div class="sp"></div>
+    <div class="ctrls">
+      <div class="seg" role="group" aria-label="Columns"><button data-g="g" class="on">Streams</button><button data-g="p">People</button><button data-g="st">Stage</button></div>
+      <div class="seg" role="group" aria-label="Zoom"><button data-z="week" class="on">Weeks</button><button data-z="term">Term</button></div>
+      <button class="mine" id="mine"><span class="sw"></span>Mine</button>
+      <button class="newbtn" id="newBtn">+ Work <kbd>N</kbd></button>
+    </div>
+  </header>
+  <div id="riverWrap"><div id="river">
+    <div class="cols" id="cols"></div>
+    <div class="rbody" id="rbody"></div>
+  </div></div>
+</section>
+
+<!-- ================= PAGES ================= -->
+<section class="view" data-view="pages">
+  <header class="head">
+    <h1><span>6 pages · 1 canvas</span>Pages</h1>
+    <p class="sum">Each page shows the work it produced in the margin.</p>
+  </header>
+  <div class="pgrid">
+    <div><input class="find" id="find" placeholder="Find or create a page…"><div class="shelf" id="shelf"></div></div>
+    <article class="reader" id="reader"></article>
+    <aside id="margin"></aside>
+  </div>
+</section>
+
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+<div class="note" id="note"><button class="hide" id="noteHide">hide</button>
+  <b>River · round 5</b>
+  <ul>
+    <li><b>Dates you can see.</b> Every title says its dates, for example “Fri 25 Sep – Wed 7 Oct · 9 workdays”. Hover or select a piece of work and its days light up in the date column, with dashed start and end lines across the plan. The highlight follows you while you drag.</li>
+    <li><b>White and calm.</b> One light theme with neutral ink. Day lines are gone, only week lines and weekend bands are left, and meetings sit in the date column so no line runs through titles.</li>
+    <li><b>Text first.</b> A plainer typeface for titles and details, bigger meta text, and titles sit on white above every line.</li>
+    <li><b>Readable.</b> Each piece of work is a thin line for its duration, with the title written horizontally beside it at full width. Titles are never squeezed or cut off.</li>
+    <li><b>Less on the plan.</b> The plan shows only pieces of work (parent tasks). Their small tasks are steps inside them. Click a title to see and tick off the steps.</li>
+    <li>Tasks without a parent stay off the plan. See them under “small tasks” in each column header and pin one if it deserves a place.</li>
+    <li>You work through steps in <b>Today</b>. Ticking one fills its parent's progress bar.</li>
+    <li>Drag a title or line to reschedule, and drag the bottom of the line to change its length.</li>
+  </ul></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DAY=86400000, d=s=>Math.round(Date.parse("2026-"+s+"T00:00:00Z")/DAY), wd=n=>(((n+3)%7)+7)%7;
+const TODAY=d("09-25"), FROM=d("09-14"), TO=d("11-08");
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], WD=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const fmt=n=>{const x=new Date(n*DAY);return `${WD[wd(n)]} ${x.getUTCDate()} ${MON[x.getUTCMonth()]}`};
+const PPL={M:["You","#2c6e5a"],A:["Anna","#e0662c"],J:["Jonas","#2c6e9a"],S:["Sofie","#8a4bd1"]};
+const STAGES=[["todo","To do"],["prog","Doing"],["rev","Review"],["done","Done"]];
+const GROUPS={g:[["research","Research"],["design","Design"],["build","Build"],["report","Report"]],p:Object.entries(PPL).map(([k,v])=>[k,v[0]]),st:STAGES};
+const w=(id,t,s,e,st,p,g,dep,doc,sub)=>({id,t,s:d(s),e:d(e),st,p,g,dep,doc,sub:sub.map(([t,ok,day,pp])=>({t,ok:!!ok,day:d(day),p:pp||p}))});
+let WORK=[
+ w("r1","Interviews","09-14","09-26","prog","A","research",[],"interview",[["Recruit 6 people",1,"09-15"],["Interview 6 users",1,"09-22"],["Synthesize findings",0,"09-25","S"],["Share findings with team",0,"09-26","S"]]),
+ w("r2","User testing","09-29","10-23","todo","S","research",["r1","b3"],"interview",[["Consent forms",0,"10-01"],["Write test script",0,"10-02"],["Recruit testers",0,"10-09","A"],["Run user tests",0,"10-22","A"],["Summarize results",0,"10-23"]]),
+ w("d1","Explore the planner","09-15","09-30","prog","J","design",[],"principles",[["Moodboard & tone",1,"09-18"],["Crit with the team",0,"09-29"],["Wireframes",0,"09-30"]]),
+ w("d2","Visual system","10-01","10-08","todo","J","design",["d1"],"principles",[["Type & colour",0,"10-02"],["Components",0,"10-06"],["Dark mode",0,"10-08"]]),
+ w("d3","Prototype","10-05","10-09","todo","M","design",["d2","b2"],"principles",[["Click-through",0,"10-07"],["Polish",0,"10-08"],["Review deck",0,"10-09","S"]]),
+ w("b1","Data model","09-17","09-24","rev","M","build",[],"tech",[["Schema",1,"09-19"],["Migrations",1,"09-23"],["Review with Jonas",0,"09-25"]]),
+ w("b2","Timeline engine","09-25","10-07","prog","M","build",["b1"],"tech",[["Scheduling RPC",0,"09-29"],["Drag & resize",0,"10-01"],["Keyboard nudges",0,"10-02"],["Push dependents",0,"10-05"],["Tests",0,"10-07","A"]]),
+ w("b3","Sync & presence","10-06","10-16","todo","A","build",["b2"],"tech",[["Realtime channel",0,"10-09"],["Live cursors",0,"10-13"],["Follow mode",0,"10-16"]]),
+ w("b4","Bug bash","10-26","10-30","todo","M","build",["b3"],"tech",[["Triage",0,"10-26","A"],["Fix list",0,"10-30"]]),
+ w("p1","Report outline","09-24","09-28","prog","S","report",[],"report",[["Chapter list",1,"09-24"],["Supervisor feedback",0,"09-28"]]),
+ w("p2","Method chapter","10-12","10-20","todo","M","report",["p1"],"report",[["Draft",0,"10-16"],["Figures",0,"10-19"],["Edit",0,"10-20","S"]]),
+ w("p3","Results & discussion","10-26","11-03","todo","S","report",["r2","p2"],"report",[["Results",0,"10-29"],["Discussion",0,"11-02"],["Limitations",0,"11-03","M"]]),
+ w("p4","Final edit","11-02","11-05","todo","A","report",["p3"],"report",[["Proofread",0,"11-04"],["References",0,"11-04","M"],["Submit",0,"11-05"]]),
+];
+let LOOSE={research:["Book the test room","Buy gift cards"],design:["Export icons"],build:["Update README","Rotate API key"],report:["Ask about page limit","Check citation style"]};
+const MS=[["Prototype review","10-09"],["User test day","10-23"],["Hand-in","11-06"]];
+const EV=[["Supervisor 10:00","09-28",.3],["Sprint review 14:00","10-02",.6],["Supervisor 10:00","10-12",.3],["Sprint review 14:00","10-16",.6],["Rehearsal 13:00","11-04",.5],["Kick-off 09:00","09-14",.2]];
+const S={view:"plan",group:"g",zoom:"week",mine:false,sel:null,fresh:null,page:"tech",drop:null};
+const byId=id=>WORK.find(x=>x.id===id);
+const prog=x=>{const n=x.sub.length,k=x.sub.filter(s=>s.ok).length;return {n,k,pct:n?k/n*100:0}};
+const waiting=x=>x.st!=="done"&&x.dep.some(i=>{const b=byId(i);return b&&b.st!=="done"&&b.e>=x.s});
+const allSteps=()=>WORK.reduce((a,x)=>a+x.sub.length,0)+Object.values(LOOSE).flat().length;
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),2300)}
+
+/* ================= PLAN ================= */
+let Y={};
+const H=n=>S.zoom==="week"?(wd(n)>4?16:42):(wd(n)>4?6:15);
+function computeY(){Y={};let y=0;for(let n=FROM;n<=TO+2;n++){Y[n]=y;y+=H(n)}}
+function dayAt(y){let r=FROM;for(let n=FROM;n<=TO;n++)if(Y[n]<=y)r=n;return r}
+const yIn=e=>e.clientY-$("rbody").getBoundingClientRect().top;
+const RX=l=>12+l*16;
+
+function drawPlan(){
+  computeY();
+  const cols=GROUPS[S.group], term=S.zoom==="term";
+  $("river").classList.toggle("term",term);
+  $("cols").innerHTML=`<div></div>`+cols.map(([k,n])=>{const all=WORK.filter(x=>x[S.group]===k),dn=all.filter(x=>x.st==="done").length;const lc=S.group==="g"?(LOOSE[k]||[]).length:0;
+    return `<div><span class="nm">${S.group==="p"?`<span class="av" style="background:${PPL[k][1]}">${k}</span>`:""}${n}</span><small>${all.length} on plan${dn?" · "+dn+" done":""}</small>${lc?`<button class="loose" data-loose="${k}">+${lc} small task${lc>1?"s":""}</button>`:""}${S.drop===k?looseDrop(k):""}</div>`}).join("");
+  const total=Y[TO+1];let h=`<div class="gutter" style="height:${total}px"><div class="band" id="band" hidden></div>`;
+  for(let n=FROM;n<=TO;n++)if(wd(n)===0||wd(n)>4||n===TODAY)h+=`<div class="day ${wd(n)===0?'mon':''} ${wd(n)>4?'we':''} ${n===TODAY?'today':''}" style="top:${Y[n]}px;height:${H(n)}px"></div>`;
+  for(let n=FROM;n<=TO;n++){const x=new Date(n*DAY),we=wd(n)>4,mon=wd(n)===0;if(term&&!mon)continue;
+    const evs=term?[]:EV.filter(e=>d(e[1])===n);
+    h+=`<div class="dl ${mon?'mon':''} ${we?'we':''} ${n===TODAY?'tod':''}" data-n="${n}" style="top:${Y[n]}px"><span>${term?x.getUTCDate()+" "+MON[x.getUTCMonth()]:we?WD[wd(n)].slice(0,2)+" "+x.getUTCDate():(n===TODAY?"Today ":WD[wd(n)]+" ")+x.getUTCDate()+(x.getUTCDate()===1||mon?" "+MON[x.getUTCMonth()]:"")}</span>${mon?`<span class="wk">wk ${38+Math.floor((n-FROM)/7)}</span>`:""}${evs.map(e=>`<span class="ev">${e[0]}</span>`).join("")}</div>`}
+  h+=`</div>`;
+  cols.forEach(([k])=>{
+    const list=WORK.filter(x=>x[S.group]===k).sort((a,b)=>a.s-b.s);const ends=[];
+    list.forEach(x=>{let r=ends.findIndex(e=>e<x.s);if(r<0){r=ends.length;ends.push(0)}ends[r]=x.e+1;x.lane=r});
+    const LX=RX(Math.max(1,ends.length))+8;
+    h+=`<div class="col" data-k="${k}" data-lx="${LX}" style="height:${total}px">`;
+    for(let n=FROM;n<=TO;n++)if(wd(n)===0||wd(n)>4||n===TODAY)h+=`<div class="day ${wd(n)===0?'mon':''} ${wd(n)>4?'we':''} ${n===TODAY?'today':''}" style="top:${Y[n]}px;height:${H(n)}px"></div>`;
+    h+=`<div class="ghost"></div><svg class="lead"></svg>`;
+    list.forEach(x=>{const dim=S.mine&&x.p!=="M"&&!x.sub.some(s=>s.p==="M")?"dim":"";
+      h+=`<div class="rail ${x.st} ${dim}" data-id="${x.id}" style="left:${RX(x.lane)}px;top:${Y[x.s]+4}px;height:${Y[x.e+1]-Y[x.s]-8}px">${x.sub.filter(s=>Y[s.day]!=null).map(s=>`<i class="${s.ok?'ok':''}" style="top:${Y[s.day]+H(s.day)/2-Y[x.s]-5}px"></i>`).join("")}<span class="grip"></span></div>`;
+      h+=labHTML(x,LX,dim)});
+    h+=`</div>`});
+  MS.forEach(([n,s])=>{const dd=d(s)+1;h+=`<div class="msl" style="top:${Y[dd]}px"><span>◆ ${n}<small>${dd-1-TODAY} days</small></span></div>`});
+  h+=`<div class="nowl" style="top:${Y[TODAY]+H(TODAY)*.55}px"><span>now</span></div><svg class="deps" id="deps"></svg><div class="spanl" id="sl1" hidden><span></span></div><div class="spanl" id="sl2" hidden><span></span></div>`;
+  $("rbody").innerHTML=h;S.fresh=null;
+  layoutLabels();wirePlan();if(S.sel)drawDeps();showSpan(S.sel?byId(S.sel):null);
+  const open=WORK.filter(x=>x.st!=="done"),wt=WORK.filter(waiting);
+  $("planSum").innerHTML=`<b>${WORK.length} pieces of work</b> on the plan, holding ${allSteps()} small tasks. <b>${MS[0][0]}</b> is in ${d(MS[0][1])-TODAY} days.${wt.length?` <b>${wt.length}</b> waiting on others.`:""}`;
+}
+function labHTML(x,LX,dim){
+  const pr=prog(x), open=S.sel===x.id, idx=GROUPS[S.group].findIndex(g=>g[0]===x[S.group]);
+  const pill=waiting(x)?`<span class="pill wait">waiting</span>`:x.st!=="todo"?`<span class="pill ${x.st}">${STAGES.find(s=>s[0]===x.st)[1]}</span>`:"";
+  const who=S.group==="p"?"":`<span class="av" style="background:${PPL[x.p][1]}">${x.p}</span>`;
+  let h=`<div class="lab ${x.st} ${dim} ${open?'open':''} ${open&&idx>=2?'flip':''} ${S.fresh===x.id?'new':''}" data-id="${x.id}" data-s="${x.s}" style="${open&&idx>=2?'':'left:'+LX+'px;'}${open?'':''}">
+    <div class="lt" ${open?'contenteditable="true" spellcheck="false"':''}>${x.t}</div>
+    <div class="ld"><b>${fmt(x.s)} – ${fmt(x.e)}</b> <span>· ${workdays(x.s,x.e)} workdays</span></div>
+    <div class="lm">${pill}${who}<span>${pr.k}/${pr.n} steps</span></div>
+    <div class="pb"><i style="width:${pr.pct}%"></i></div>`;
+  if(open){const blockers=x.dep.map(byId),unblocks=WORK.filter(y=>y.dep.includes(x.id));
+    h+=`<div class="steps">${x.sub.map((s,i)=>`<div class="step ${s.ok?'ok':''}"><button class="cb" data-step="${i}" aria-label="Toggle">${s.ok?"✓":""}</button><span>${s.t}</span><small>${fmt(s.day).slice(4)}</small><span class="av" style="background:${PPL[s.p][1]}">${s.p}</span></div>`).join("")}
+      <input class="addstep" id="addstep" placeholder="+ Add a step, press Enter"></div>
+     <div class="rows">
+      <div class="rw"><span>stage</span><div class="stg">${STAGES.map(([k,n])=>`<button data-st="${k}" class="${x.st===k?'on':''}">${n}</button>`).join("")}</div></div>
+      <div class="rw"><span>starts</span><div class="stp"><button data-m="s-">−</button><output>${fmt(x.s)}</output><button data-m="s+">+</button></div></div>
+      <div class="rw"><span>ends</span><div class="stp"><button data-m="e-">−</button><output>${fmt(x.e)}</output><button data-m="e+">+</button></div></div>
+      <div class="rw"><span>lead</span><div class="ppl">${Object.entries(PPL).map(([k,v])=>`<button data-p="${k}" class="${x.p===k?'on':''}" title="${v[0]}"><span class="av" style="background:${v[1]}">${k}</span></button>`).join("")}</div></div>
+      <div class="rw"><span>waits on</span><div>${blockers.length?blockers.map(b=>`<span class="${b.st!=="done"&&b.e>=x.s?'bad':''}">${b.st==="done"?"✓":"●"} ${b.t}</span>`).join("<br>"):"nothing"}</div></div>
+      <div class="rw"><span>unblocks</span><div>${unblocks.length?unblocks.map(b=>b.t).join("<br>"):"—"}</div></div>
+     </div>
+     <button class="doclink" id="doclink"><span>¶ ${PAGES.find(p=>p.id===x.doc).title}</span><span>→</span></button>`}
+  return h+`</div>`;
+}
+/* labels sit at their start day; if two collide, the later one moves down and a leader line keeps it tied to its rail */
+function layoutLabels(){
+  document.querySelectorAll("#rbody .col").forEach(col=>{
+    const labs=[...col.querySelectorAll(".lab")].sort((a,b)=>a.dataset.s-b.dataset.s||(a.classList.contains("open")?-1:0));
+    let bottom=-1e9;const lx=+col.dataset.lx;let paths="";
+    labs.forEach(l=>{const s=+l.dataset.s;const top=Math.max(Y[s]-4,bottom+6);l.style.top=top+"px";bottom=top+l.offsetHeight;
+      const rail=col.querySelector(`.rail[data-id="${l.dataset.id}"]`);const rx=parseFloat(rail.style.left)+3,ry=Y[s]+4;
+      const ly=top+14, lxx=l.classList.contains("open")&&l.classList.contains("flip")?col.clientWidth-8-l.offsetWidth:lx;
+      if(Math.abs(ly-ry)>3||lxx-rx>16)paths+=`<path class="${S.sel===l.dataset.id?'hot':''}" d="M${rx+6} ${ry} L${rx+10} ${ry} Q ${lxx-10} ${ry} ${lxx-10} ${(ry+ly)/2} T ${lxx} ${ly}"/>`});
+    col.querySelector(".lead").innerHTML=paths;
+    const need=bottom+60;if(need>col.offsetHeight)col.style.height=need+"px";
+  });
+}
+function workdays(a,b){let n=0;for(let i=a;i<=b;i++)if(wd(i)<5)n++;return n}
+/* show exactly which days a piece of work covers: tinted band in the date column + dashed lines at start and end */
+function showSpan(x){
+  const band=$("band"),a=$("sl1"),b=$("sl2");if(!band)return;
+  document.querySelectorAll(".dl.in").forEach(e=>e.classList.remove("in","edge"));
+  if(!x){band.hidden=a.hidden=b.hidden=true;return}
+  band.hidden=a.hidden=b.hidden=false;
+  band.style.top=Y[x.s]+"px";band.style.height=Y[x.e+1]-Y[x.s]+"px";
+  a.style.top=Y[x.s]+"px";b.style.top=Y[x.e+1]+"px";
+  a.firstChild.textContent="starts "+fmt(x.s);b.firstChild.textContent="ends "+fmt(x.e);
+  document.querySelectorAll(".dl[data-n]").forEach(e=>{const n=+e.dataset.n;if(n>=x.s&&n<=x.e){e.classList.add("in");if(n===x.s||n===x.e)e.classList.add("edge")}});
+}
+function wirePlan(){
+  document.querySelectorAll("#rbody .rail, #rbody .lab").forEach(el=>{el.addEventListener("mouseenter",()=>{if(!dragging)showSpan(byId(el.dataset.id))});el.addEventListener("mouseleave",()=>{if(!dragging)showSpan(S.sel?byId(S.sel):null)})});
+  document.querySelectorAll("#rbody .rail, #rbody .lab").forEach(el=>el.addEventListener("pointerdown",grab));
+  document.querySelectorAll("#rbody .lab").forEach(l=>l.addEventListener("click",e=>e.stopPropagation()));
+  document.querySelectorAll("#rbody .col").forEach(c=>{const g=c.querySelector(".ghost");
+    c.addEventListener("mousemove",e=>{if(dragging||e.target.closest(".lab,.rail,.create")){g.classList.remove("show");return}g.classList.add("show");const n=dayAt(yIn(e));g.style.top=Y[n]+"px";g.textContent="+ work from "+fmt(n)});
+    c.addEventListener("mouseleave",()=>g.classList.remove("show"));
+    c.addEventListener("click",e=>{if(e.target.closest(".lab,.rail,.create")||justDragged)return;e.stopPropagation();create(c.dataset.k,dayAt(yIn(e)))})});
+  document.querySelectorAll("[data-loose]").forEach(b=>b.onclick=e=>{e.stopPropagation();S.drop=S.drop===b.dataset.loose?null:b.dataset.loose;drawPlan()});
+  document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=e=>{e.stopPropagation();const [k,i]=b.dataset.pin.split(":");const t=LOOSE[k].splice(+i,1)[0];
+    const x={id:"x"+Date.now(),t,s:TODAY+3,e:TODAY+4,st:"todo",p:"M",g:k,dep:[],doc:"tech",sub:[]};WORK.push(x);S.fresh=x.id;S.drop=null;drawPlan();toast("Pinned to the plan")});
+  const open=S.sel&&document.querySelector(`#rbody .lab.open`);if(!open)return;const x=byId(S.sel);
+  open.addEventListener("pointerdown",e=>{if(e.target.closest("button,input,[contenteditable]"))e.stopPropagation()},true);
+  open.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{const s=x.sub[+b.dataset.step];s.ok=!s.ok;if(x.sub.every(s=>s.ok)){x.st="done";toast(`All steps done. ${x.t} is finished ✓`)}else if(x.st==="todo")x.st="prog";drawPlan()});
+  open.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{x.st=b.dataset.st;drawPlan()});
+  open.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{x.p=b.dataset.p;drawPlan()});
+  open.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const m=b.dataset.m;if(m==="s-")x.s--;if(m==="s+"&&x.s<x.e)x.s++;if(m==="e-"&&x.e>x.s)x.e--;if(m==="e+"){x.e++;push(x)}drawPlan()});
+  const lt=open.querySelector(".lt");lt.addEventListener("blur",()=>{x.t=lt.textContent.trim()||x.t});lt.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();lt.blur()}});
+  const as=$("addstep");as.addEventListener("keydown",e=>{if(e.key==="Enter"&&as.value.trim()){x.sub.push({t:as.value.trim(),ok:false,day:Math.max(TODAY,x.s),p:"M"});drawPlan();$("addstep").focus()}});
+  $("doclink").onclick=()=>{S.page=x.doc;go("pages")};
+}
+function looseDrop(k){return `<div class="drop"><p>Small tasks in ${GROUPS.g.find(g=>g[0]===k)[1]} with no parent. They stay off the plan and show up in Today.</p>${LOOSE[k].map((t,i)=>`<div class="li"><span>${t}</span><button data-pin="${k}:${i}">pin to plan</button></div>`).join("")}</div>`}
+
+/* drag: vertical = dates, sideways = column, bottom of the rail = length */
+let dragging=false, justDragged=false;
+function grab(e){
+  if(e.button!==0)return;const el=e.currentTarget;if(el.classList.contains("open"))return;e.stopPropagation();
+  const x=byId(el.dataset.id), resize=e.target.classList.contains("grip");
+  const col=el.parentElement, rail=col.querySelector(`.rail[data-id="${x.id}"]`), lab=col.querySelector(`.lab[data-id="${x.id}"]`);
+  const startDay=dayAt(yIn(e)),s0=x.s,e0=x.e;let ns=s0,ne=e0,target=x[S.group],moved=false;
+  el.setPointerCapture(e.pointerId);const colEls=[...document.querySelectorAll("#rbody .col")];
+  const move=ev=>{
+    if(!moved&&Math.abs(ev.clientY-e.clientY)+Math.abs(ev.clientX-e.clientX)<5)return;
+    if(!moved){moved=true;dragging=true;rail.classList.add("drag");lab.classList.add("drag");$("deps").innerHTML="";col.querySelector(".lead").innerHTML=""}
+    if(ev.clientY>innerHeight-50)scrollBy(0,14);if(ev.clientY<60)scrollBy(0,-14);
+    const dd=dayAt(yIn(ev))-startDay;
+    if(resize)ne=Math.max(s0,Math.min(TO,e0+dd));else{const dur=e0-s0;ns=Math.max(FROM,Math.min(TO-dur,s0+dd));ne=ns+dur}
+    rail.style.top=Y[ns]+4+"px";rail.style.height=Y[ne+1]-Y[ns]-8+"px";lab.style.top=Y[ns]-4+"px";showSpan({s:ns,e:ne});
+    if(!resize){const c=colEls.find(c=>{const r=c.getBoundingClientRect();return ev.clientX>=r.left&&ev.clientX<r.right});
+      if(c){target=c.dataset.k;const dx=c.getBoundingClientRect().left-col.getBoundingClientRect().left;rail.style.transform=lab.style.transform=`translateX(${dx}px)`;colEls.forEach(y=>y.classList.toggle("target",y===c&&c!==col))}}
+    const tip=$("tip");tip.classList.add("on");tip.style.left=ev.clientX+16+"px";tip.style.top=ev.clientY+14+"px";
+    tip.textContent=`${fmt(ns)} → ${fmt(ne)} · ${ne-ns+1}d${!resize&&target!==x[S.group]?" · to "+GROUPS[S.group].find(g=>g[0]===target)[1]:""}`};
+  const up=()=>{el.removeEventListener("pointermove",move);el.removeEventListener("pointerup",up);el.removeEventListener("pointercancel",up);$("tip").classList.remove("on");dragging=false;
+    if(!moved){S.sel=S.sel===x.id?null:x.id;S.drop=null;drawPlan();return}
+    justDragged=true;setTimeout(()=>justDragged=false,60);
+    const changed=target!==x[S.group], shift=ns-s0;const span=ns-s0;x.s=ns;x.e=ne;x.sub.forEach(s=>s.day+=resize?0:span);if(changed)x[S.group]=target;
+    const pushed=shift>0?push(x):0;drawPlan();
+    toast(changed?`Moved to ${GROUPS[S.group].find(g=>g[0]===target)[1]}`:`${fmt(ns)} → ${fmt(ne)}${pushed?` · moved ${pushed} dependent piece${pushed>1?"s":""} later`:""}`)};
+  el.addEventListener("pointermove",move);el.addEventListener("pointerup",up);el.addEventListener("pointercancel",up);
+}
+function push(x,seen=new Set()){let n=0;WORK.filter(y=>y.dep.includes(x.id)&&!seen.has(y.id)).forEach(y=>{if(y.s<=x.e&&y.st!=="done"){const dur=y.e-y.s,sh=x.e+1-y.s;y.s+=sh;y.e=y.s+dur;y.sub.forEach(s=>s.day+=sh);n++;seen.add(y.id);n+=push(y,seen)}});return n}
+function drawDeps(){
+  const x=byId(S.sel),base=$("rbody").getBoundingClientRect();if(!x)return;
+  const box=id=>{const el=document.querySelector(`#rbody .rail[data-id="${id}"]`);if(!el)return null;const r=el.getBoundingClientRect();return {x:r.left-base.left+3,top:r.top-base.top,bot:r.bottom-base.top}};
+  const me=box(x.id);if(!me)return;let p="";
+  x.dep.forEach(i=>{const b=box(i);if(b)p+=`<path class="in" d="M${b.x} ${b.bot} C ${b.x} ${b.bot+40}, ${me.x} ${me.top-40}, ${me.x} ${me.top}"/>`});
+  WORK.filter(y=>y.dep.includes(x.id)).forEach(y=>{const b=box(y.id);if(b)p+=`<path d="M${me.x} ${me.bot} C ${me.x} ${me.bot+40}, ${b.x} ${b.top-40}, ${b.x} ${b.top}"/>`});
+  $("deps").innerHTML=p;
+}
+function create(k,n){
+  S.sel=null;S.drop=null;drawPlan();
+  const col=document.querySelector(`#rbody .col[data-k="${k}"]`);const c=document.createElement("div");c.className="create";c.style.top=Y[n]-4+"px";
+  c.innerHTML=`<input id="cin" placeholder="New piece of work from ${fmt(n)}" autocomplete="off"><div class="pv" id="cpv"></div><div class="hint">@anna leads · 5d length · steps after a colon:<br>Usability report: draft; review; send</div>`;
+  c.addEventListener("click",e=>e.stopPropagation());col.appendChild(c);const i=$("cin");i.focus();
+  const parse=()=>{const v=i.value;const [head,...rest]=v.split(":");const who=(head.match(/@(\w+)/)||[])[1];const len=+((head.match(/\b(\d+)d\b/)||[])[1]||5);
+    const code=who?Object.keys(PPL).find(q=>PPL[q][0].toLowerCase().startsWith(who.toLowerCase())):null;
+    const steps=rest.join(":").split(";").map(s=>s.trim()).filter(Boolean);
+    return {title:head.replace(/@\w+|\b\d+d\b/g,"").replace(/\s+/g," ").trim(),code,len,steps}};
+  i.oninput=()=>{const r=parse();$("cpv").innerHTML=`<span>${fmt(n)} → ${fmt(n+r.len-1)}</span>${r.code?`<span>${PPL[r.code][0]} leads</span>`:""}${r.steps.length?`<span>${r.steps.length} steps</span>`:""}`};i.oninput();
+  i.onkeydown=e=>{if(e.key==="Escape"){drawPlan();return}
+    if(e.key==="Enter"&&i.value.trim()){const r=parse();
+      const x={id:"n"+Date.now(),t:r.title||"Untitled",s:n,e:n+r.len-1,st:"todo",p:r.code||"M",g:"build",dep:[],doc:"tech",sub:r.steps.map((t,j)=>({t,ok:false,day:Math.min(n+r.len-1,n+j),p:r.code||"M"}))};
+      x[S.group]=k;WORK.push(x);S.fresh=x.id;drawPlan();toast(`Added with ${x.sub.length} step${x.sub.length===1?"":"s"}`)}};
+}
+document.addEventListener("click",()=>{if(S.view!=="plan")return;if(S.sel||S.drop||document.querySelector(".create")){S.sel=null;S.drop=null;drawPlan()}});
+document.querySelectorAll("[data-g]").forEach(b=>b.onclick=e=>{e.stopPropagation();S.group=b.dataset.g;document.querySelectorAll("[data-g]").forEach(y=>y.classList.toggle("on",y===b));drawPlan()});
+document.querySelectorAll("[data-z]").forEach(b=>b.onclick=e=>{e.stopPropagation();setZoom(b.dataset.z)});
+function setZoom(z){S.zoom=z;document.querySelectorAll("[data-z]").forEach(y=>y.classList.toggle("on",y.dataset.z===z));drawPlan()}
+$("mine").onclick=e=>{e.stopPropagation();S.mine=!S.mine;$("mine").classList.toggle("on",S.mine);drawPlan()};
+$("newBtn").onclick=e=>{e.stopPropagation();newWork()};
+function newWork(){const k=S.group==="p"?"M":S.group==="st"?"todo":"build";create(k,TODAY+1);document.querySelector(".create")?.scrollIntoView({block:"center",behavior:"smooth"})}
+
+/* ================= TODAY ================= */
+const H0=8,H1=18,HP=58;
+let BLOCKS=[{t:"Stand-up",a:9.5,b:9.83,k:"ev",m:"15 min"},{t:"Review Data model with Jonas",a:11,b:11.5,k:"ev",m:"Room 2.14"},{t:"Scheduling RPC",a:13,b:15,k:"focus",m:"Timeline engine"},{t:"Sprint planning",a:16,b:16.75,k:"ev",m:"whole team"}];
+let NEEDS=[
+ {id:1,dot:"",h:"Anna mentioned you",p:"“Can the drag writes be debounced?” in Tech notes: timeline",s:"12 min ago",a:["Reply","Open"]},
+ {id:2,dot:"rev",h:"Review Data model",p:"Jonas approved. Merging unblocks Timeline engine.",s:"1 h ago",a:["Approve","Open"]},
+ {id:3,dot:"",h:"User testing is waiting",p:"Interviews ends tomorrow, and Sofie still has 2 steps left.",s:"blocker",a:["Ask Sofie","Snooze"]},
+];
+const hh=h=>`${String(Math.floor(h)).padStart(2,"0")}:${String(Math.round(h%1*60)).padStart(2,"0")}`;
+function mySteps(){const out=[];WORK.forEach(x=>x.sub.forEach((s,i)=>{if(s.p==="M"&&(!s.ok||s.justDone)&&s.day<=TODAY+10)out.push({x,s,i})}));return out.sort((a,b)=>a.s.day-b.s.day)}
+function drawToday(){
+  const el=$("hours");let h="";el.style.height=(H1-H0)*HP+"px";
+  for(let q=H0;q<H1;q++)h+=`<div class="hr" style="top:${(q-H0)*HP}px">${hh(q)}</div>`;
+  BLOCKS.forEach((b,i)=>h+=`<div class="blk ${b.k} ${b.fresh?'new':''}" style="top:${(b.a-H0)*HP+2}px;height:${(b.b-b.a)*HP-4}px">${b.t}<small>${hh(b.a)}–${hh(b.b)} · ${b.m}</small>${b.k==="focus"?`<button class="x" data-rm="${i}" aria-label="Remove">✕</button>`:""}</div>`);
+  BLOCKS.forEach(b=>delete b.fresh);
+  h+=`<div class="hnow" style="top:${(14.33-H0)*HP}px"></div><div class="dropg" id="dropg"></div>`;el.innerHTML=h;
+  el.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{BLOCKS.splice(+b.dataset.rm,1);drawToday()});
+  $("upnext").innerHTML=mySteps().map(({x,s,i})=>`<div class="card drag ${s.ok?'ok':''}" draggable="true" data-w="${x.id}" data-i="${i}"><button class="cb" aria-label="Done">${s.ok?"✓":""}</button><div><h4>${s.t}</h4><p>in ${x.t}</p><small>${s.day<TODAY?"overdue · ":""}${s.day===TODAY?"today":fmt(s.day)}</small></div></div>`).join("");
+  $("upnext").querySelectorAll(".card").forEach(c=>{c.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",c.dataset.w+":"+c.dataset.i)});
+    c.querySelector(".cb").onclick=()=>{const x=byId(c.dataset.w),s=x.sub[+c.dataset.i];s.ok=!s.ok;s.justDone=s.ok;if(x.st==="todo")x.st="prog";drawToday();if(s.ok)toast(`Done. ${x.t} is now ${prog(x).k}/${prog(x).n}`)}});
+  $("needs").innerHTML=NEEDS.map(n=>`<div class="card" data-n="${n.id}"><span class="dot ${n.dot}"></span><div><h4>${n.h}</h4><p>${n.p}</p><small>${n.s}</small><div class="acts">${n.a.map(a=>`<button>${a}</button>`).join("")}</div></div></div>`).join("")||`<div class="card"><div><h4>All clear</h4><p>Nothing needs you right now.</p></div></div>`;
+  $("needs").querySelectorAll(".acts button").forEach(b=>b.onclick=()=>{const c=b.closest(".card"),id=+c.dataset.n;if(b.textContent==="Open"){S.page="tech";go("pages");return}
+    c.classList.add("gone");setTimeout(()=>{NEEDS=NEEDS.filter(n=>n.id!==id);drawToday();badge()},280);
+    toast({Reply:"Reply sent",Approve:"Approved. Timeline engine is unblocked.","Ask Sofie":"Asked Sofie in the thread",Snooze:"Snoozed until Monday"}[b.textContent])});
+  $("needCount").textContent=NEEDS.length?NEEDS.length+" open":"";
+  $("todaySum").innerHTML=`${NEEDS.length?`<b>${NEEDS.length} thing${NEEDS.length>1?"s":""}</b> need you. `:""}<b>${mySteps().filter(q=>!q.s.ok).length} steps</b> are yours over the next two weeks. Your afternoon is blocked for Scheduling RPC.`;
+}
+function badge(){$("needBadge").textContent=NEEDS.length||""}
+(function(){const el=$("hours");const at=e=>{const r=el.getBoundingClientRect();return Math.max(H0,Math.min(H1-1,H0+Math.round((e.clientY-r.top)/HP*2)/2))};
+  el.addEventListener("dragover",e=>{e.preventDefault();const a=at(e),g=$("dropg");g.style.display="flex";g.style.top=(a-H0)*HP+2+"px";g.style.height=HP*1.5-4+"px";g.textContent=`${hh(a)}–${hh(a+1.5)}`});
+  el.addEventListener("dragleave",e=>{if(!el.contains(e.relatedTarget))$("dropg").style.display="none"});
+  el.addEventListener("drop",e=>{e.preventDefault();const [wid,i]=e.dataTransfer.getData("text/plain").split(":");const x=byId(wid);if(!x)return;const s=x.sub[+i],a=at(e);
+    BLOCKS.push({t:s.t,a,b:Math.min(H1,a+1.5),k:"focus",m:x.t,fresh:true});drawToday();toast(`Blocked ${hh(a)}–${hh(a+1.5)} for ${s.t}`)});})();
+
+/* ================= PAGES ================= */
+const PAGES=[
+ {id:"tech",title:"Tech notes: timeline",who:"You",when:"40 min ago",live:"Anna is reading",lead:"Dates change through one scheduling call, so dependent work shifts together.",
+  body:`<p>Dates change through one scheduling call, so dependent work shifts together. The client never writes a date directly. It asks the server to move a piece of work, and the server answers with everything that moved.</p><h3>Dragging</h3><p>Nothing is written while you drag. On release we send one call. Keyboard nudges are debounced by 300 ms so they collapse into one change.</p><p><span class="men">@Anna</span> the sync layer only needs the “moved” event.</p>`},
+ {id:"interview",title:"Interview notes",who:"Sofie",when:"2 h ago",lead:"People plan in week-sized chunks and re-plan every Monday.",
+  body:`<p>People plan in week-sized chunks and re-plan every Monday. Nobody we spoke to reads a Gantt past the next milestone.</p><h3>Three patterns</h3><p>1. The plan is checked on Monday and forgotten by Wednesday.<br>2. Two of six keep a paper list next to the tool.<br>3. “Where was that document?” came up in every interview.</p>`},
+ {id:"principles",title:"Design principles",who:"Jonas",when:"yesterday",lead:"Every screen answers “what now?” before “what else?”.",
+  body:`<p>Every screen answers “what now?” before “what else?”.</p><p>The plan shows pieces of work, not every to-do. Small tasks live inside them.</p><p>Creating something never needs a form.</p>`},
+ {id:"report",title:"Report draft",who:"Sofie",when:"3 h ago",lead:"Teams on short projects spend more time maintaining the plan than using it.",
+  body:`<p>Teams working on short projects spend more time maintaining the plan than using it. This report tests a planner built around a single time axis.</p><h3>1 · Introduction</h3><p>Most project tools separate the board, the calendar and the timeline. People switch between them to answer one question: what should I do next?</p>`},
+ {id:"flows",title:"Planner flows",who:"Jonas",when:"yesterday",canvas:true,lead:"Canvas · 14 shapes",
+  body:`<svg viewBox="0 0 560 300" style="width:100%;height:auto;border-radius:12px;background:var(--paper)"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="30" y="40" width="130" height="64" rx="12"/><rect x="215" y="118" width="130" height="64" rx="12"/><rect x="400" y="196" width="130" height="64" rx="12" fill="#6b4dff" stroke="#6b4dff"/><path d="M160 72 C 200 72, 180 150, 215 150 M345 150 C 385 150, 365 228, 400 228"/></g><g font-family="Epilogue" font-weight="700" font-size="15" fill="currentColor"><text x="70" y="78">Today</text><text x="262" y="156">Plan</text><text x="440" y="234" fill="#fff">Pages</text></g></svg>`},
+];
+function drawPages(){
+  const q=$("find").value.toLowerCase();
+  $("shelf").innerHTML=PAGES.filter(p=>!q||p.title.toLowerCase().includes(q)).map(p=>`<button data-pg="${p.id}" class="${S.page===p.id?'on':''}"><b>${p.title}</b><span>${p.lead}</span><small>${p.who} · ${p.when}</small></button>`).join("")+(q?`<button data-new="1"><b>+ Create “${$("find").value}”</b><span>press Enter</span></button>`:"");
+  $("shelf").querySelectorAll("[data-pg]").forEach(b=>b.onclick=()=>{S.page=b.dataset.pg;drawPages()});
+  $("shelf").querySelector("[data-new]")?.addEventListener("click",newPage);
+  const p=PAGES.find(x=>x.id===S.page)||PAGES[0];const linked=WORK.filter(x=>x.doc===p.id).sort((a,b)=>a.s-b.s);
+  $("reader").innerHTML=`<div class="meta"><span>${p.who} · edited ${p.when}</span>${p.live?`<span class="live">● ${p.live}</span>`:""}<span>${linked.length} pieces of work</span></div><h2 contenteditable="true" spellcheck="false">${p.title}</h2><div class="txt" ${p.canvas?"":'contenteditable="true"'} spellcheck="false">${p.body}</div>`;
+  let m=`<div class="colh">In the plan <em>${linked.length}</em></div><div class="mini">`,mi=0;
+  linked.forEach(x=>{while(mi<MS.length&&d(MS[mi][1])<x.s){m+=`<div class="ms">◆ ${MS[mi][0]}</div>`;mi++}const pr=prog(x);
+    m+=`<a class="${x.st}" data-t="${x.id}"><b>${x.t}</b><small>${fmt(x.s).slice(4)} → ${fmt(x.e).slice(4)} · ${pr.k}/${pr.n} steps</small></a>`});
+  $("margin").innerHTML=m+(linked.length?"":`<a><b>Nothing planned from this page yet</b></a>`)+`</div>`;
+  $("margin").querySelectorAll("[data-t]").forEach(a=>a.onclick=()=>{S.sel=a.dataset.t;S.group="g";document.querySelectorAll("[data-g]").forEach(y=>y.classList.toggle("on",y.dataset.g==="g"));go("plan",true);
+    requestAnimationFrame(()=>document.querySelector("#rbody .lab.open")?.scrollIntoView({block:"center",behavior:"smooth"}))});
+}
+function newPage(){const v=$("find").value.trim()||"Untitled";const id="pg"+Date.now();PAGES.unshift({id,title:v,who:"You",when:"just now",lead:"Empty page",body:"<p>Start writing…</p>"});S.page=id;$("find").value="";drawPages();toast("Page created")}
+$("find").addEventListener("input",drawPages);
+$("find").addEventListener("keydown",e=>{if(e.key==="Enter"){const q=$("find").value.toLowerCase();const hit=q&&PAGES.find(p=>p.title.toLowerCase().includes(q));if(hit){S.page=hit.id;$("find").value="";drawPages()}else newPage()}});
+
+/* ================= places ================= */
+function go(v,keepSel){S.view=v;if(!keepSel)S.sel=null;document.querySelectorAll(".view").forEach(y=>y.classList.toggle("on",y.dataset.view===v));document.querySelectorAll("[data-v]").forEach(y=>y.classList.toggle("on",y.dataset.v===v));
+  if(v==="plan")drawPlan();if(v==="today")drawToday();if(v==="pages")drawPages();if(!keepSel)scrollTo({top:0})}
+document.querySelectorAll("[data-v]").forEach(b=>b.onclick=e=>{e.stopPropagation();go(b.dataset.v)});
+document.addEventListener("keydown",e=>{
+  const typing=e.target.isContentEditable||/INPUT|TEXTAREA/.test(e.target.tagName);
+  if(e.key==="Escape"){if(typing)e.target.blur();if(S.view==="plan"){S.sel=null;S.drop=null;drawPlan()}return}
+  if(typing||e.metaKey||e.ctrlKey)return;
+  if(e.key==="1")go("today");if(e.key==="2")go("plan");if(e.key==="3")go("pages");
+  if(S.view!=="plan")return;
+  if(e.key==="n"){e.preventDefault();newWork()}
+  if(e.key==="z")setZoom(S.zoom==="week"?"term":"week");
+  if(e.key==="t")scrollTo({top:$("rbody").offsetTop+Y[TODAY]-240,behavior:"smooth"});
+  if(!S.sel)return;const x=byId(S.sel);
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();const dir=e.key==="ArrowDown"?1:-1;if(e.shiftKey)x.e=Math.max(x.s,x.e+dir);else{x.s+=dir;x.e+=dir;x.sub.forEach(s=>s.day+=dir)}if(dir>0)push(x);drawPlan()}
+});
+$("noteHide").onclick=e=>{e.stopPropagation();$("note").classList.toggle("min")};
+addEventListener("resize",()=>{if(S.view==="plan")drawPlan()});
+badge();
+document.fonts?.ready?.then(()=>{if(S.view==="plan")drawPlan()});
+drawPlan();
+</script>

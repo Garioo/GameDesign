@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProfileInfo } from "@/lib/docsRepo";
 import type { CommentRow } from "@/lib/commentsRepo";
 import {
@@ -173,6 +173,7 @@ export default function Comments({
   canComment = true,
   canResolve = true,
   composerFallback,
+  aligned = false,
 }: {
   comments: CommentRow[];
   people: ProfileInfo[];
@@ -195,6 +196,8 @@ export default function Comments({
   canResolve?: boolean;
   /** Shown instead of the comment box when commenting isn't possible. */
   composerFallback?: ReactNode;
+  /** New design: each thread sits beside the paragraph it's about, scrolling with the page. */
+  aligned?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -372,10 +375,62 @@ export default function Comments({
 
   // What the page points at to focus a thread: its text mark, or (block comments) the comment itself.
   const threadKey = (c: CommentRow) => c.anchor ?? (c.block_id ? c.id : null);
+  // Aligned mode: the text a thread is about ("m:" a highlighted mark, "b:" a whole block).
+  const alignKey = (c: CommentRow) => (c.anchor ? `m:${c.anchor}` : c.block_id ? `b:${c.block_id}` : null);
+
+  // Aligned mode: line each anchored thread up with its text; later ones move down when two collide.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!aligned || !list) return;
+    const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
+    const target = (el: HTMLElement) => {
+      const key = el.dataset.align!;
+      const hit = key.startsWith("m:")
+        ? document.querySelector(`.blocks [data-comment="${CSS.escape(key.slice(2))}"], .blocks [data-suggestion="${CSS.escape(key.slice(2))}"]`)
+        : document.querySelector(`.blocks .blk[data-block-id="${CSS.escape(key.slice(2))}"]`);
+      if (hit || !el.dataset.quote) return hit;
+      // The highlight isn't on the page (edited away, or not drawn): fall back to the block holding the quoted text.
+      const q = norm(el.dataset.quote);
+      return [...document.querySelectorAll<HTMLElement>(".blocks .blk")].find((b) => norm(b.textContent ?? "").includes(q)) ?? null;
+    };
+    const place = () => {
+      const threads = [...list.querySelectorAll<HTMLElement>("[data-align]")];
+      // Narrow screens show the comments as a drawer: a plain list there.
+      if (window.matchMedia("(max-width: 1180px)").matches) {
+        threads.forEach((el) => { el.style.position = ""; el.style.top = ""; el.style.left = ""; el.style.right = ""; });
+        list.style.minHeight = "";
+        return;
+      }
+      const listTop = list.getBoundingClientRect().top;
+      const end = list.querySelector<HTMLElement>("[data-static-end]");
+      let bottom = end ? end.offsetTop : 0;
+      threads
+        .map((el) => { const t = target(el); return { el, y: t ? t.getBoundingClientRect().top - listTop : Number.POSITIVE_INFINITY }; })
+        .sort((a, b) => a.y - b.y)
+        .forEach(({ el, y }) => {
+          const top = Math.max(Number.isFinite(y) ? y : bottom, bottom);
+          el.style.position = "absolute";
+          el.style.left = "0";
+          el.style.right = "0";
+          el.style.top = `${top}px`;
+          bottom = top + el.offsetHeight + 10;
+        });
+      list.style.minHeight = `${bottom}px`;
+    };
+    place();
+    const ro = new ResizeObserver(() => place());
+    const blocks = document.querySelector(".blocks");
+    if (blocks) ro.observe(blocks);
+    list.querySelectorAll("[data-align]").forEach((el) => ro.observe(el));
+    window.addEventListener("resize", place);
+    return () => { ro.disconnect(); window.removeEventListener("resize", place); };
+  });
   const renderThread = (c: CommentRow, resolved: boolean) => (
     <div
       key={threadKey(c) && focusAnchor?.anchor === threadKey(c) ? `${c.id}:${focusAnchor.at}` : c.id}
       data-anchor={threadKey(c) ?? undefined}
+      data-align={aligned && !resolved ? alignKey(c) ?? undefined : undefined}
+      data-quote={aligned && !resolved && c.quote ? c.quote : undefined}
       className={[
         styles.thread,
         resolved ? styles.resolved : "",
@@ -411,11 +466,27 @@ export default function Comments({
         <span className={styles.count}>{comments.length}</span>
       </div>
 
-      <div className={styles.list} ref={listRef}>
+      {aligned && canComment && (
+        <div className={styles.composer}>
+          <MentionTextarea
+            className={styles.textarea}
+            rows={2}
+            placeholder="Comment on the whole page…"
+            people={people}
+            value={draft}
+            onChange={setDraft}
+            onSubmit={submitRoot}
+          />
+          <button className={styles.send} onClick={submitRoot} disabled={!draft.trim()}>
+            Comment
+          </button>
+        </div>
+      )}
+      <div className={styles.list} ref={listRef} style={aligned ? { position: "relative" } : undefined}>
         {openRoots.length === 0 && resolvedRoots.length === 0 && (
-          <div className={styles.empty}>No comments yet.</div>
+          <div className={styles.empty}>{aligned ? "Select text on the page to comment on it." : "No comments yet."}</div>
         )}
-        {openRoots.map((c) => renderThread(c, false))}
+        {(aligned ? openRoots.filter((c) => !alignKey(c)) : openRoots).map((c) => renderThread(c, false))}
 
         {resolvedRoots.length > 0 && (
           <>
@@ -428,9 +499,11 @@ export default function Comments({
             {showResolved && resolvedRoots.map((c) => renderThread(c, true))}
           </>
         )}
+        {aligned && <div data-static-end />}
+        {aligned && openRoots.filter((c) => alignKey(c)).map((c) => renderThread(c, false))}
       </div>
 
-      {!canComment ? composerFallback ?? null : (
+      {aligned ? null : !canComment ? composerFallback ?? null : (
       <div className={styles.composer}>
         <MentionTextarea
           className={styles.textarea}

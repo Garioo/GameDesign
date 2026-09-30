@@ -1,0 +1,601 @@
+<title>Foundry River 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800;900&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f5f6f8; --sheet:#ffffff; --ink:#0d2a22; --ink2:#4e615b; --ink3:#95a39e; --rule:#e2e6e9; --rule2:#eef0f2;
+  --now:#6b4dff; --now-tint:#ece8ff; --ms:#ff5a3c; --ms-tint:#ffe7e2;
+  --solid:#0d2a22; --on-solid:#ffffff; --done-bg:#cfe5dc; --focus-bg:#dff1e9;
+  --shadow:0 20px 50px rgba(13,42,34,.16);
+  --ui:"Epilogue","Helvetica Neue",Arial,sans-serif; --mono:"Spline Sans Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0c1512; --sheet:#13201b; --ink:#e4efe9; --ink2:#a3b6ae; --ink3:#62776f; --rule:#22322c; --rule2:#18251f;
+  --now:#9b8aff; --now-tint:#231d45; --ms:#ff6b50; --ms-tint:#3a1d17;
+  --solid:#e4efe9; --on-solid:#0c1512; --done-bg:#1f3a30; --focus-bg:#173229; --shadow:0 20px 50px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0c1512; --sheet:#13201b; --ink:#e4efe9; --ink2:#a3b6ae; --ink3:#62776f; --rule:#22322c; --rule2:#18251f;
+  --now:#9b8aff; --now-tint:#231d45; --ms:#ff6b50; --ms-tint:#3a1d17;
+  --solid:#e4efe9; --on-solid:#0c1512; --done-bg:#1f3a30; --focus-bg:#173229; --shadow:0 20px 50px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 var(--ui)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--now);outline-offset:2px}
+.k{font:500 10px var(--mono);border:1px solid var(--rule);border-radius:4px;padding:1px 5px;color:var(--ink2);background:var(--sheet)}
+
+/* ---------- edge chrome: brand, tabs, presence ---------- */
+.brand{position:fixed;right:14px;top:16px;font-weight:900;letter-spacing:-.05em;font-size:16px;z-index:30;writing-mode:vertical-rl}
+.tabs{position:fixed;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:30}
+.tabs button{writing-mode:vertical-rl;transform:rotate(180deg);padding:18px 12px;border-radius:0 14px 14px 0;background:var(--sheet);font-weight:800;font-size:14px;color:var(--ink2);box-shadow:0 0 0 1px var(--rule);transition:padding .2s,background .2s,color .2s;display:flex;align-items:center;gap:8px}
+.tabs button:hover{padding-left:18px;color:var(--ink)}
+.tabs button.on{background:var(--solid);color:var(--on-solid);padding-left:22px}
+.tabs button b{font:500 10px var(--mono);background:var(--ms);color:#fff;border-radius:8px;padding:4px 2px;transform:rotate(180deg);writing-mode:horizontal-tb;min-width:16px;text-align:center}
+.tabs button b:empty{display:none}
+.tabs button .kk{font:500 9px var(--mono);opacity:.5}
+.here{position:fixed;right:64px;top:18px;display:flex;gap:6px;z-index:30}
+.here button{display:flex;align-items:center;gap:7px;height:30px;padding:0 10px 0 4px;border-radius:15px;background:var(--sheet);box-shadow:0 0 0 1px var(--rule);font-size:12px;font-weight:600}
+.here button small{font:400 10px var(--mono);color:var(--ink3)}
+.av{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font:700 10px var(--ui);color:#fff;flex:none}
+
+/* ---------- views ---------- */
+.view{display:none;max-width:1200px;margin:0 auto;padding-inline:24px;padding-right:96px;padding-block:28px 160px}
+.view.on{display:block;animation:rise .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+.head{display:flex;align-items:flex-end;gap:20px 28px;flex-wrap:wrap;margin-bottom:22px;padding-top:28px}
+.head h1{margin:0;font-size:clamp(44px,6vw,80px);font-weight:900;letter-spacing:-.055em;line-height:.88}
+.head h1 span{display:block;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
+.head .sum{font-size:15px;color:var(--ink2);max-width:430px;margin:0;padding-bottom:4px}
+.head .sum b{color:var(--ink)}
+.head .sp{flex:1}
+.ctrls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-bottom:4px}
+.seg{display:inline-flex;background:var(--sheet);box-shadow:0 0 0 1px var(--rule);border-radius:10px;padding:3px}
+.seg button{padding:6px 11px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.seg button.on{background:var(--solid);color:var(--on-solid)}
+.seg .lbl{font:500 10px var(--mono);color:var(--ink3);padding:0 6px 0 8px;align-self:center;text-transform:uppercase;letter-spacing:.06em}
+.mine{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--rule);position:relative;transition:.2s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--sheet);transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.mine.on .sw{background:var(--solid)}.mine.on .sw::after{left:17px}
+.newbtn{height:32px;padding:0 12px;border-radius:10px;background:var(--now);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+.newbtn .k{background:transparent;border-color:rgba(255,255,255,.4);color:#fff}
+
+/* ---------- PLAN: the river ---------- */
+.cols{position:sticky;top:0;z-index:12;display:grid;grid-template-columns:118px repeat(4,1fr);background:var(--paper);border-bottom:2px solid var(--ink)}
+.cols > div{padding:14px 12px 10px;font-weight:800;font-size:17px;letter-spacing:-.03em;display:flex;flex-direction:column}
+.cols > div .nm{display:flex;align-items:center;gap:8px}
+.cols small{font:400 11px var(--mono);letter-spacing:0;color:var(--ink3);margin-top:2px}
+.cols .bar{height:3px;background:var(--rule);margin-top:8px;border-radius:2px;overflow:hidden}
+.cols .bar i{display:block;height:100%;background:var(--ink);transition:width .4s}
+.rbody{position:relative;display:grid;grid-template-columns:118px repeat(4,1fr)}
+.gutter{position:relative}
+.col{position:relative;border-left:1px solid var(--rule)}
+.col.target{background:var(--now-tint)}
+.day{position:absolute;left:0;right:0;border-top:1px solid var(--rule2)}
+.day.mon{border-top:1px solid var(--ink3)}
+.day.we{background:repeating-linear-gradient(90deg,transparent 0 6px,var(--rule2) 6px 7px)}
+.day.today{background:var(--now-tint)}
+.dl{position:absolute;left:0;right:10px;font:400 11px var(--mono);color:var(--ink3);display:flex;justify-content:space-between;transform:translateY(5px)}
+.dl.mon{color:var(--ink);font-weight:500}
+.dl.we{font-size:9px;transform:none}
+.dl.tod{color:var(--now);font-weight:500}
+.term .dl{transform:translateY(-1px)}
+.dg{position:absolute;left:0;right:10px;font:400 10.5px/1.45 var(--mono);color:var(--ink2);background:var(--sheet);border-radius:8px;padding:7px 8px;box-shadow:0 0 0 1px var(--rule)}
+.dg b{display:block;font:700 11px var(--ui);color:var(--ink);margin-bottom:2px}
+
+.cap{position:absolute;border-radius:14px;padding:8px 10px;font-weight:700;font-size:13px;line-height:1.2;cursor:grab;overflow:hidden;transition:box-shadow .15s,opacity .25s,top .3s,height .3s;display:flex;flex-direction:column;gap:4px;touch-action:none;user-select:none}
+.term .cap{padding:3px 8px;font-size:11.5px;border-radius:8px}
+.term .cap small,.term .cap .who{display:none}
+.cap small{font:400 10.5px var(--mono);opacity:.75}
+.cap.todo{background:var(--sheet);box-shadow:inset 0 0 0 1.5px var(--ink);color:var(--ink)}
+.cap.prog{background:var(--solid);color:var(--on-solid)}
+.cap.rev{background:var(--now);color:#fff}
+.cap.done{background:var(--done-bg);color:var(--ink2)}
+.cap.done .tt{text-decoration:line-through;text-decoration-color:currentColor}
+.cap.wait::before{content:"waiting";position:absolute;right:8px;top:8px;font:500 9px var(--mono);color:var(--ms);background:var(--ms-tint);padding:1px 5px;border-radius:6px}
+.term .cap.wait::before{display:none}
+.cap .who{position:absolute;right:6px;bottom:6px;width:20px;height:20px;border-radius:50%;font:700 10px var(--ui);display:grid;place-items:center;color:#fff}
+.cap .tag{font:500 10px var(--mono);opacity:.7;text-transform:uppercase;letter-spacing:.04em}
+.cap .grip{position:absolute;left:0;right:0;bottom:0;height:9px;cursor:ns-resize}
+.cap .grip::after{content:"";position:absolute;left:50%;bottom:3px;width:22px;height:3px;margin-left:-11px;border-radius:2px;background:currentColor;opacity:0;transition:opacity .15s}
+.cap:hover .grip::after{opacity:.35}
+.cap.dim{opacity:.16}
+.cap.sel{box-shadow:0 0 0 3px var(--now);z-index:6}
+.cap.todo.sel{box-shadow:inset 0 0 0 1.5px var(--ink),0 0 0 3px var(--now)}
+.cap.drag{z-index:20;cursor:grabbing;transition:none;box-shadow:0 16px 36px rgba(13,42,34,.28),0 0 0 3px var(--now)}
+.cap.new{animation:grow .5s cubic-bezier(.2,1.3,.4,1)}
+@keyframes grow{from{transform:scaleY(.2);transform-origin:top;opacity:0}}
+.ghost{position:absolute;left:4px;right:4px;border-radius:12px;border:1.5px dashed var(--now);background:var(--now-tint);color:var(--now);font:500 11px var(--mono);display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .12s}
+.col:hover .ghost.show{opacity:1}
+.evl{position:absolute;left:118px;right:0;height:0;border-top:1.5px dotted var(--ink2);z-index:3;pointer-events:none}
+.evl span{position:absolute;right:0;top:-10px;background:var(--paper);font:500 11px var(--mono);color:var(--ink2);padding:0 0 0 8px}
+.term .evl span{display:none}
+.msl{position:absolute;left:0;right:0;height:0;border-top:3px solid var(--ms);z-index:4;pointer-events:none}
+.msl span{position:absolute;left:0;top:-30px;font-weight:900;font-size:20px;letter-spacing:-.04em;color:var(--ms);background:var(--paper);padding-right:10px}
+.msl span small{font:500 11px var(--mono);letter-spacing:0;margin-left:8px}
+.term .msl span{font-size:14px;top:-22px}
+.nowl{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--now);z-index:7;pointer-events:none}
+.nowl span{position:absolute;left:0;top:-11px;background:var(--now);color:#fff;font:500 11px var(--mono);padding:2px 8px;border-radius:10px}
+svg.deps{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;overflow:visible}
+svg.deps path{fill:none;stroke:var(--now);stroke-width:2}
+svg.deps path.in{stroke:var(--ms);stroke-dasharray:5 4}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--solid);color:var(--on-solid);font:500 11px var(--mono);padding:5px 9px;border-radius:8px;opacity:0;transition:opacity .1s;white-space:nowrap}
+.tip.on{opacity:1}
+
+/* inline card for a selected task */
+.pop{position:absolute;z-index:14;width:300px;background:var(--sheet);border-radius:16px;box-shadow:var(--shadow),0 0 0 1px var(--rule);padding:16px;font-size:13px;cursor:default}
+.pop h3{margin:0 0 10px;font-size:19px;font-weight:800;letter-spacing:-.03em;line-height:1.1;outline:0}
+.pop .st{display:flex;gap:4px;margin-bottom:12px}
+.pop .st button{flex:1;padding:6px 0;border-radius:8px;box-shadow:inset 0 0 0 1px var(--rule);font-size:11.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:1px}
+.pop .st button i{font:400 9px var(--mono);font-style:normal;opacity:.5}
+.pop .st button.on{background:var(--solid);color:var(--on-solid);box-shadow:none}
+.pop .rw{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--rule)}
+.pop .rw > span{font:400 11px var(--mono);color:var(--ink3)}
+.step{display:flex;align-items:center;gap:6px;font:500 12px var(--mono)}
+.step button{width:24px;height:24px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--rule);font-size:14px;line-height:1}
+.step button:hover{background:var(--paper)}
+.step output{flex:1;text-align:center}
+.ppl{display:flex;gap:6px}
+.ppl button{border-radius:50%;padding:2px;box-shadow:0 0 0 2px transparent}
+.ppl button.on{box-shadow:0 0 0 2px var(--now)}
+.pop .rel{font-size:12.5px;line-height:1.5}
+.pop .rel .bad{color:var(--ms)}
+.pop .link{margin-top:10px;width:100%;height:34px;border-radius:10px;background:var(--paper);box-shadow:inset 0 0 0 1px var(--rule);font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.pop .link:hover{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.pop .keys{margin-top:10px;font:400 10px var(--mono);color:var(--ink3);display:flex;gap:10px;flex-wrap:wrap}
+.pop.create input{width:100%;border:0;border-bottom:2px solid var(--now);font:700 17px var(--ui);padding:4px 0;outline:0;background:none}
+.pop.create .hint{font:400 11px var(--mono);color:var(--ink3);margin-top:8px}
+.pop.create .parse{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pop.create .parse span{font:500 10.5px var(--mono);background:var(--now-tint);color:var(--now);padding:2px 7px;border-radius:6px}
+
+/* ---------- TODAY: the river zoomed to hours ---------- */
+.tgrid{display:grid;grid-template-columns:minmax(300px,1.25fr) 1fr 1fr;gap:28px;align-items:start}
+.colh{font:600 11px var(--ui);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline}
+.colh em{font:400 10.5px var(--mono);letter-spacing:0;text-transform:none;font-style:normal}
+.hours{position:relative;border-top:2px solid var(--ink);background:var(--sheet);border-radius:0 0 16px 16px;box-shadow:0 0 0 1px var(--rule)}
+.hr{position:absolute;left:0;right:0;border-top:1px solid var(--rule2);font:400 10.5px var(--mono);color:var(--ink3);padding:3px 0 0 10px}
+.blk{position:absolute;left:62px;right:10px;border-radius:10px;padding:6px 10px;font-weight:700;font-size:12.5px;overflow:hidden;line-height:1.25}
+.blk small{display:block;font:400 10.5px var(--mono);opacity:.75;margin-top:2px}
+.blk.ev{background:var(--paper);box-shadow:inset 3px 0 0 var(--ink2)}
+.blk.focus{background:var(--solid);color:var(--on-solid)}
+.blk.new{animation:grow .45s cubic-bezier(.2,1.3,.4,1)}
+.blk .x{position:absolute;right:6px;top:4px;opacity:0;font-size:11px}
+.blk:hover .x{opacity:.6}
+.hnow{position:absolute;left:52px;right:0;border-top:2px solid var(--now);z-index:3}
+.hnow::before{content:"";position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--now)}
+.dropg{position:absolute;left:62px;right:10px;border-radius:10px;border:1.5px dashed var(--now);background:var(--now-tint);color:var(--now);font:500 11px var(--mono);display:none;align-items:center;padding:0 10px;pointer-events:none;z-index:4}
+.card{background:var(--sheet);border-radius:14px;box-shadow:0 0 0 1px var(--rule);padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start;transition:opacity .3s,transform .3s}
+.card.drag{cursor:grab}
+.card.drag:active{cursor:grabbing}
+.card .dot{width:10px;height:10px;border-radius:50%;margin-top:4px;flex:none;box-shadow:inset 0 0 0 2px var(--ink)}
+.card .dot.prog{background:var(--solid);box-shadow:none}
+.card .dot.rev{background:var(--now);box-shadow:none}
+.card .dot.ms{background:var(--ms);box-shadow:none}
+.card h4{margin:0;font-size:14.5px;letter-spacing:-.01em}
+.card p{margin:2px 0 0;font-size:12.5px;color:var(--ink2)}
+.card small{font:400 10.5px var(--mono);color:var(--ink3)}
+.card .acts{display:flex;gap:6px;margin-top:8px}
+.card .acts button{height:26px;padding:0 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--rule);font-size:12px;font-weight:600}
+.card .acts button:first-child{background:var(--solid);color:var(--on-solid);box-shadow:none}
+.card.gone{opacity:0;transform:translateX(20px)}
+.card > div{flex:1;min-width:0}
+.digest{background:var(--solid);color:var(--on-solid);border-radius:16px;padding:16px;margin-top:18px}
+.digest .big{font-size:40px;font-weight:900;letter-spacing:-.05em;line-height:1}
+.digest p{margin:6px 0 12px;font-size:12.5px;opacity:.8}
+.digest .wk{display:flex;align-items:flex-end;gap:5px;height:44px}
+.digest .wk i{flex:1;background:currentColor;opacity:.3;border-radius:2px}
+.digest .wk i:last-child{opacity:1;background:var(--now)}
+
+/* ---------- PAGES ---------- */
+.pgrid{display:grid;grid-template-columns:260px minmax(0,1fr) 230px;gap:32px;align-items:start}
+.find{width:100%;height:38px;border-radius:12px;border:0;box-shadow:0 0 0 1px var(--rule);background:var(--sheet);padding:0 12px;outline:0;margin-bottom:12px}
+.find:focus{box-shadow:0 0 0 2px var(--now)}
+.shelf button{display:block;width:100%;text-align:left;padding:12px 12px;border-radius:12px;margin-bottom:2px}
+.shelf button:hover{background:var(--sheet)}
+.shelf button.on{background:var(--sheet);box-shadow:0 0 0 1px var(--rule)}
+.shelf b{display:block;font-size:14.5px;letter-spacing:-.01em}
+.shelf span{display:block;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf small{font:400 10px var(--mono);color:var(--ink3)}
+.shelf .kind{font:500 9px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--now);margin-left:6px}
+.reader{background:var(--sheet);border-radius:18px;box-shadow:0 0 0 1px var(--rule);padding:40px 48px 48px;min-height:520px}
+.reader .meta{font:400 11px var(--mono);color:var(--ink3);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.reader .meta .live{color:var(--now)}
+.reader h2{margin:0 0 20px;font-size:40px;font-weight:900;letter-spacing:-.045em;line-height:1;outline:0;text-wrap:balance}
+.reader .txt{outline:0;font-size:16px;line-height:1.65;max-width:62ch}
+.reader .txt p{margin:0 0 14px}
+.reader .txt h3{font-size:19px;letter-spacing:-.02em;margin:26px 0 8px}
+.reader .txt .men{background:var(--now-tint);color:var(--now);border-radius:5px;padding:0 4px;font-weight:600}
+.reader .txt .cm{background:var(--ms-tint);border-bottom:2px solid var(--ms)}
+.reader svg{width:100%;height:auto;border-radius:12px;background:var(--paper)}
+.margin .colh{margin-top:0}
+.mini{position:relative;border-left:2px solid var(--ink);margin:0 0 24px 6px;padding:2px 0 2px 16px}
+.mini a{display:block;text-decoration:none;color:inherit;padding:8px 0;cursor:pointer;position:relative}
+.mini a::before{content:"";position:absolute;left:-23px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 2px var(--ink)}
+.mini a.prog::before{background:var(--solid)}.mini a.rev::before{background:var(--now);box-shadow:none}.mini a.done::before{background:var(--done-bg);box-shadow:none}
+.mini a b{display:block;font-size:13.5px}
+.mini a small{font:400 10.5px var(--mono);color:var(--ink3)}
+.mini a:hover b{color:var(--now)}
+.mini .ms{font:800 12px var(--ui);color:var(--ms);padding:6px 0}
+.thread{font-size:12.5px;color:var(--ink2);padding:10px 0;border-top:1px solid var(--rule)}
+.thread b{color:var(--ink)}
+.thread small{display:block;font:400 10px var(--mono);color:var(--ink3);margin-top:2px}
+
+/* ---------- note + toast ---------- */
+.note{position:fixed;left:16px;bottom:16px;width:330px;background:var(--solid);color:var(--on-solid);border-radius:16px;padding:16px 18px;font-size:12.5px;line-height:1.55;z-index:40}
+.note b{font-size:14px}
+.note ul{margin:8px 0 0;padding-left:16px;opacity:.85}
+.note li{margin-bottom:3px}
+.note .hide{position:absolute;right:12px;top:10px;opacity:.6;font-size:12px}
+.note.min{width:auto}.note.min ul,.note.min .hide{display:none}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);opacity:0;background:var(--solid);color:var(--on-solid);padding:10px 16px;border-radius:12px;font-weight:600;font-size:13px;transition:.25s;z-index:60;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:1000px){
+  .tgrid{grid-template-columns:1fr 1fr}.tgrid > :first-child{grid-column:1/-1}
+  .pgrid{grid-template-columns:1fr}.margin{order:3}
+  .here{display:none}
+}
+@media (max-width:760px){
+  .view{padding-right:58px;padding-left:12px}
+  .cols,.rbody{grid-template-columns:48px repeat(4,1fr)}
+  .evl{left:48px}
+  .cols > div{font-size:12px;padding:10px 4px}.cols small,.cols .bar{display:none}
+  .cap{font-size:11px;padding:6px;border-radius:10px}.cap small,.cap .who,.cap .tag,.cap.wait::before{display:none}
+  .dg{display:none}.dl span:last-child{display:none}
+  .tgrid{grid-template-columns:1fr}
+  .reader{padding:24px 20px}
+  .note{display:none}
+  .tabs button{padding:14px 8px;font-size:12px}.tabs button .kk{display:none}
+  .pop{width:min(280px,calc(100vw - 90px))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="brand">Foundry</div>
+<nav class="tabs" aria-label="Places">
+  <button data-v="today"><span class="kk">1</span>Today<b id="needBadge">3</b></button>
+  <button data-v="plan" class="on"><span class="kk">2</span>Plan</button>
+  <button data-v="pages"><span class="kk">3</span>Pages</button>
+</nav>
+<div class="here" aria-label="Online now">
+  <button data-follow="A"><span class="av" style="background:#e0662c">A</span>Anna<small>Plan</small></button>
+  <button data-follow="J"><span class="av" style="background:#2c6e9a">J</span>Jonas<small>Design principles</small></button>
+</div>
+
+<!-- ================= TODAY ================= -->
+<section class="view" data-view="today" id="vToday">
+  <header class="head">
+    <h1><span>Friday 25 September · week 39</span>Today</h1>
+    <p class="sum" id="todaySum"></p>
+  </header>
+  <div class="tgrid">
+    <div>
+      <div class="colh">Your day <em>drag tasks here to block time</em></div>
+      <div class="hours" id="hours"></div>
+    </div>
+    <div>
+      <div class="colh">Up next <em>yours, by due date</em></div>
+      <div id="upnext"></div>
+    </div>
+    <div>
+      <div class="colh">Needs you <em id="needCount"></em></div>
+      <div id="needs"></div>
+      <div class="digest">
+        <div class="colh" style="color:inherit;opacity:.6">Week 39 so far</div>
+        <div class="big">6 done</div>
+        <p>1,820 words written across 4 pages. Sofie finished the most. You're on a 4-week streak.</p>
+        <div class="wk"><i style="height:35%"></i><i style="height:50%"></i><i style="height:42%"></i><i style="height:64%"></i><i style="height:58%"></i><i style="height:80%"></i><i style="height:72%"></i><i style="height:60%"></i></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLAN ================= -->
+<section class="view on" data-view="plan" id="vPlan">
+  <header class="head">
+    <h1><span>Relaunch · Autumn term</span>Plan</h1>
+    <p class="sum" id="planSum"></p>
+    <div class="sp"></div>
+    <div class="ctrls">
+      <div class="seg" role="group" aria-label="Columns"><span class="lbl">cols</span><button data-g="g" class="on">Streams</button><button data-g="p">People</button><button data-g="st">Stage</button></div>
+      <div class="seg" role="group" aria-label="Zoom"><button data-z="week" class="on">Weeks</button><button data-z="term">Term</button></div>
+      <button class="mine" id="mine"><span class="sw"></span>Mine</button>
+      <button class="newbtn" id="newBtn">+ Task <span class="k">N</span></button>
+    </div>
+  </header>
+  <div id="river">
+    <div class="cols" id="cols"></div>
+    <div class="rbody" id="rbody"></div>
+  </div>
+</section>
+
+<!-- ================= PAGES ================= -->
+<section class="view" data-view="pages" id="vPages">
+  <header class="head">
+    <h1><span>6 pages · 1 canvas</span>Pages</h1>
+    <p class="sum">Every page shows the tasks it produced in the margin, so writing and planning stay connected.</p>
+  </header>
+  <div class="pgrid">
+    <div><input class="find" id="find" placeholder="Find or create a page…"><div class="shelf" id="shelf"></div></div>
+    <article class="reader" id="reader"></article>
+    <aside class="margin" id="margin"></aside>
+  </div>
+</section>
+
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+<div class="note" id="note"><button class="hide" id="noteHide">hide</button>
+  <b>River · round 2</b>
+  <ul>
+    <li><b>Today</b> is the river zoomed to hours. Drag a task from “Up next” into your day to block time. Mentions and reviews have one-click actions.</li>
+    <li><b>Plan</b>: drag a task up or down to move it and pull its bottom edge to change length. Drag it sideways to hand it to another stream, person or stage.</li>
+    <li>Columns can be Streams, People or Stage. Stage is the old Board, now laid out over time.</li>
+    <li>Select a task to see its dependency lines. Keys: <b>↑↓</b> move, <b>⇧↑↓</b> length, <b>X</b> done, <b>N</b> new, <b>Z</b> zoom, <b>1 2 3</b> places.</li>
+    <li><b>Pages</b>: the margin is a small river of that page's tasks. Click one to jump to it in the plan.</li>
+  </ul></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DAY=86400000, d=s=>Math.round(Date.parse("2026-"+s+"T00:00:00Z")/DAY), wd=n=>(((n+3)%7)+7)%7;
+const TODAY=d("09-25"), FROM=d("09-14"), TO=d("11-08");
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], WD=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const fmt=n=>{const x=new Date(n*DAY);return `${WD[wd(n)]} ${x.getUTCDate()} ${MON[x.getUTCMonth()]}`};
+const PPL={M:["You","#2c6e5a"],A:["Anna","#e0662c"],J:["Jonas","#2c6e9a"],S:["Sofie","#8a4bd1"]};
+const STAGES=[["todo","To do"],["prog","Doing"],["rev","Review"],["done","Done"]];
+const GROUPS={g:[["research","Research"],["design","Design"],["build","Build"],["report","Report"]],p:Object.entries(PPL).map(([k,v])=>[k,v[0]]),st:STAGES};
+const STREAM_DOC={research:"interview",design:"principles",build:"tech",report:"report"};
+let TASKS=[
+ ["Interview 6 users","09-14","09-22","done","A","research",[]],["Synthesize findings","09-21","09-26","prog","S","research",[0]],["User test script","09-29","10-02","todo","S","research",[1]],["Recruit testers","09-30","10-09","todo","A","research",[]],["Run user tests","10-19","10-23","todo","A","research",[2,3,10]],
+ ["Moodboard & tone","09-15","09-19","done","J","design",[]],["Wireframes: planner","09-22","09-30","prog","J","design",[5]],["Visual system","10-01","10-08","todo","J","design",[6]],["Prototype polish","10-05","10-09","todo","M","design",[7,10]],
+ ["Data model","09-17","09-24","rev","M","build",[]],["Timeline engine","09-25","10-07","prog","M","build",[9]],["Sync & presence","10-06","10-16","todo","A","build",[10]],["Bug bash","10-26","10-30","todo","M","build",[11]],
+ ["Report outline","09-24","09-28","prog","S","report",[]],["Method chapter","10-12","10-20","todo","M","report",[13]],["Results & discussion","10-26","11-03","todo","S","report",[4,14]],["Final edit","11-02","11-05","todo","A","report",[15]],
+].map(([t,s,e,st,p,g,dep],id)=>({id,t,s:d(s),e:d(e),st,p,g,dep,doc:STREAM_DOC[g]}));
+const MS=[["Prototype review","10-09"],["User test day","10-23"],["Hand-in","11-06"]];
+const EV=[["Supervisor 10:00","09-28",.3],["Sprint review 14:00","10-02",.6],["Supervisor 10:00","10-12",.3],["Sprint review 14:00","10-16",.6],["Rehearsal 13:00","11-04",.5],["Kick-off 09:00","09-14",.2]];
+const DIG={[d("09-14")]:["Week 38","11 done · 3 pages new · Anna led"],[d("09-21")]:["Week 39 so far","6 done · 1,820 words · Sofie led"]};
+const S={view:"plan",group:"g",zoom:"week",mine:false,sel:null,fresh:null,page:"tech"};
+const byId=id=>TASKS.find(t=>t.id===id);
+const waiting=t=>t.st!=="done"&&t.dep.some(i=>{const b=byId(i);return b.st!=="done"&&b.e>=t.s});
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),2300)}
+
+/* ================= PLAN ================= */
+let Y={};
+const H=n=>S.zoom==="week"?(wd(n)>4?14:34):(wd(n)>4?5:13);
+function computeY(){Y={};let y=0;for(let n=FROM;n<=TO+2;n++){Y[n]=y;y+=H(n)}}
+function dayAt(y){let r=FROM;for(let n=FROM;n<=TO;n++)if(Y[n]<=y)r=n;return r}
+const key=t=>t[S.group];
+
+function drawPlan(){
+  computeY();
+  const cols=GROUPS[S.group], term=S.zoom==="term";
+  $("river").classList.toggle("term",term);
+  $("cols").innerHTML=`<div></div>`+cols.map(([k,n])=>{const all=TASKS.filter(t=>t[S.group]===k),dn=all.filter(t=>t.st==="done").length;
+    return `<div><span class="nm">${S.group==="p"?`<span class="av" style="background:${PPL[k][1]}">${k}</span>`:""}${n}</span><small>${S.group==="st"?all.length+" tasks":(all.length-dn)+" open · "+dn+" done"}</small>${S.group!=="st"?`<div class="bar"><i style="width:${all.length?dn/all.length*100:0}%"></i></div>`:""}</div>`}).join("");
+  const total=Y[TO+1];let h=`<div class="gutter" style="height:${total}px">`;
+  for(let n=FROM;n<=TO;n++){const x=new Date(n*DAY),we=wd(n)>4,mon=wd(n)===0;
+    if(term&&!mon)continue;
+    h+=`<div class="dl ${mon?'mon':''} ${we?'we':''} ${n===TODAY?'tod':''}" style="top:${Y[n]}px"><span>${term?x.getUTCDate()+" "+MON[x.getUTCMonth()]:we?WD[wd(n)].slice(0,2):WD[wd(n)]+" "+x.getUTCDate()}</span><span>${mon?"wk "+(38+Math.floor((n-FROM)/7)):x.getUTCDate()===1?MON[x.getUTCMonth()]:""}</span></div>`;
+    if(DIG[n]&&!term)h+=`<div class="dg" style="top:${Y[n]+30}px"><b>${DIG[n][0]}</b>${DIG[n][1]}</div>`}
+  h+=`</div>`;
+  cols.forEach(([k])=>{h+=`<div class="col" data-k="${k}" style="height:${total}px">`;
+    for(let n=FROM;n<=TO;n++)h+=`<div class="day ${wd(n)===0?'mon':''} ${wd(n)>4?'we':''} ${n===TODAY?'today':''}" style="top:${Y[n]}px;height:${H(n)}px"></div>`;
+    h+=`<div class="ghost"></div>`;
+    const list=TASKS.filter(t=>t[S.group]===k).sort((a,b)=>a.s-b.s||a.id-b.id);const ends=[];
+    list.forEach(t=>{let r=ends.findIndex(e=>e<t.s);if(r<0){r=ends.length;ends.push(0)}ends[r]=t.e+1;t.lane=r});
+    const nL=Math.max(1,ends.length);
+    list.forEach(t=>{const top=Y[t.s]+2,ht=Y[t.e+1]-Y[t.s]-4;
+      const badge=S.group==="p"?`<span class="tag">${t.g}</span>`:`<span class="who" style="background:${PPL[t.p][1]}">${t.p}</span>`;
+      h+=`<div class="cap ${t.st} ${waiting(t)?'wait':''} ${S.mine&&t.p!=="M"?'dim':''} ${S.sel===t.id?'sel':''} ${S.fresh===t.id?'new':''}" data-id="${t.id}" tabindex="0" style="top:${top}px;height:${ht}px;left:calc(${t.lane/nL*100}% + 4px);width:calc(${100/nL}% - 8px)"><span class="tt">${t.t}</span><small>${t.e-t.s+1}d · ${fmt(t.e)}</small>${badge}<span class="grip"></span></div>`});
+    h+=`</div>`});
+  EV.forEach(([n,s,f])=>{const dd=d(s);h+=`<div class="evl" style="top:${Y[dd]+H(dd)*f}px"><span>${n}</span></div>`});
+  MS.forEach(([n,s])=>{const dd=d(s)+1;h+=`<div class="msl" style="top:${Y[dd]}px"><span>◆ ${n}<small>${dd-1-TODAY} days</small></span></div>`});
+  h+=`<div class="nowl" style="top:${Y[TODAY]+H(TODAY)*.55}px"><span>now · 14:20</span></div><svg class="deps" id="deps"></svg>`;
+  $("rbody").innerHTML=h;S.fresh=null;
+  wirePlan();
+  if(S.sel!==null){drawDeps();showPop()}
+  const mine=TASKS.filter(t=>t.p==="M"&&t.st!=="done");const w=TASKS.filter(waiting);
+  $("planSum").innerHTML=`Time flows down. <b>${MS[0][0]}</b> is in <b>${d(MS[0][1])-TODAY} days</b>. ${w.length?`<b>${w.length} task${w.length>1?"s":""}</b> waiting on others.`:"Nothing is blocked."} You have ${mine.length} open.`;
+}
+
+function wirePlan(){
+  document.querySelectorAll("#rbody .cap").forEach(c=>{c.addEventListener("pointerdown",capDown);c.addEventListener("click",e=>e.stopPropagation())});
+  document.querySelectorAll("#rbody .col").forEach(c=>{const g=c.querySelector(".ghost");
+    c.addEventListener("mousemove",e=>{if(dragging||e.target.closest(".cap,.pop")){g.classList.remove("show");return}g.classList.add("show");const n=dayAt(yIn(e));g.style.top=Y[n]+2+"px";g.style.height=Y[n+2]-Y[n]-4+"px";g.textContent="+ "+fmt(n)});
+    c.addEventListener("mouseleave",()=>g.classList.remove("show"));
+    c.addEventListener("click",e=>{if(e.target.closest(".cap,.pop")||justDragged)return;e.stopPropagation();create(c.dataset.k,dayAt(yIn(e)))})});
+}
+const yIn=e=>e.clientY-$("rbody").getBoundingClientRect().top;
+
+/* drag: vertical = dates, sideways = column, bottom grip = length */
+let dragging=false, justDragged=false;
+function capDown(e){
+  if(e.button!==0)return;e.stopPropagation();
+  const cap=e.currentTarget, t=byId(+cap.dataset.id), resize=e.target.classList.contains("grip");
+  const home=cap.parentElement, startDay=dayAt(yIn(e)), s0=t.s, e0=t.e;let ns=s0,ne=e0,target=key(t),moved=false;
+  cap.setPointerCapture(e.pointerId);
+  const colEls=[...document.querySelectorAll("#rbody .col")];
+  const move=ev=>{
+    if(!moved&&Math.abs(ev.clientY-e.clientY)+Math.abs(ev.clientX-e.clientX)<5)return;
+    if(!moved){moved=true;dragging=true;cap.classList.add("drag");document.querySelector(".pop")?.remove();$("deps").innerHTML=""}
+    if(ev.clientY>innerHeight-50)scrollBy(0,14);if(ev.clientY<60)scrollBy(0,-14);
+    const dd=dayAt(yIn(ev))-startDay;
+    if(resize){ne=Math.max(s0,Math.min(TO,e0+dd))}else{const dur=e0-s0;ns=Math.max(FROM,Math.min(TO-dur,s0+dd));ne=ns+dur}
+    cap.style.top=Y[ns]+2+"px";cap.style.height=Y[ne+1]-Y[ns]-4+"px";
+    if(!resize){const c=colEls.find(c=>{const r=c.getBoundingClientRect();return ev.clientX>=r.left&&ev.clientX<r.right});
+      if(c){target=c.dataset.k;cap.style.transform=`translateX(${c.getBoundingClientRect().left-home.getBoundingClientRect().left}px)`;colEls.forEach(x=>x.classList.toggle("target",x===c&&c!==home))}}
+    const tip=$("tip");tip.classList.add("on");tip.style.left=ev.clientX+16+"px";tip.style.top=ev.clientY+14+"px";
+    const lbl=GROUPS[S.group].find(g=>g[0]===target)[1];
+    tip.textContent=`${fmt(ns)} → ${fmt(ne)} · ${ne-ns+1}d${!resize&&target!==key(t)?" · to "+lbl:""}`;
+  };
+  const up=()=>{cap.removeEventListener("pointermove",move);cap.removeEventListener("pointerup",up);cap.removeEventListener("pointercancel",up);$("tip").classList.remove("on");dragging=false;
+    if(!moved){S.sel=S.sel===t.id?null:t.id;drawPlan();return}
+    justDragged=true;setTimeout(()=>justDragged=false,50);
+    const changed=target!==key(t);const shift=ns-s0;
+    t.s=ns;t.e=ne;if(changed)t[S.group]=target;
+    const pushed=shift>0?pushDependents(t):0;
+    S.sel=t.id;drawPlan();
+    toast(changed?`Moved to ${GROUPS[S.group].find(g=>g[0]===target)[1]}`:`${fmt(ns)} → ${fmt(ne)}${pushed?` · pushed ${pushed} dependent task${pushed>1?"s":""}`:""}`)};
+  cap.addEventListener("pointermove",move);cap.addEventListener("pointerup",up);cap.addEventListener("pointercancel",up);
+}
+/* dependents that would start before their blocker ends get pushed along */
+function pushDependents(t,seen=new Set()){let n=0;TASKS.filter(x=>x.dep.includes(t.id)&&!seen.has(x.id)).forEach(x=>{if(x.s<=t.e&&x.st!=="done"){const dur=x.e-x.s;x.s=t.e+1;x.e=x.s+dur;n++;seen.add(x.id);n+=pushDependents(x,seen)}});return n}
+
+function drawDeps(){
+  const t=byId(S.sel), svg=$("deps"), base=$("rbody").getBoundingClientRect();if(!t)return;
+  const box=id=>{const el=document.querySelector(`#rbody .cap[data-id="${id}"]`);if(!el)return null;const r=el.getBoundingClientRect();return {x:r.left-base.left+r.width/2,top:r.top-base.top,bot:r.bottom-base.top}};
+  const me=box(t.id);if(!me)return;let p="";
+  t.dep.forEach(i=>{const b=box(i);if(b)p+=`<path class="in" d="M${b.x} ${b.bot} C ${b.x} ${b.bot+40}, ${me.x} ${me.top-40}, ${me.x} ${me.top}"/>`});
+  TASKS.filter(x=>x.dep.includes(t.id)).forEach(x=>{const b=box(x.id);if(b)p+=`<path d="M${me.x} ${me.bot} C ${me.x} ${me.bot+40}, ${b.x} ${b.top-40}, ${b.x} ${b.top}"/>`});
+  svg.innerHTML=p;
+}
+function showPop(){
+  const t=byId(S.sel);const cap=document.querySelector(`#rbody .cap[data-id="${t.id}"]`);if(!cap)return;
+  const col=cap.parentElement, idx=[...col.parentElement.querySelectorAll(".col")].indexOf(col);
+  const p=document.createElement("div");p.className="pop";p.style.top=Math.max(0,Y[t.s]-6)+"px";
+  if(idx>=2)p.style.right="calc(100% + 10px)";else p.style.left="calc(100% + 10px)";
+  const blockers=t.dep.map(byId), unblocks=TASKS.filter(x=>x.dep.includes(t.id));
+  const nextMs=MS.find(m=>d(m[1])>=t.e);
+  p.innerHTML=`<h3 contenteditable="true" spellcheck="false">${t.t}</h3>
+   <div class="st">${STAGES.map(([k,n],i)=>`<button data-s="${k}" class="${t.st===k?'on':''}">${n}<i>${["","","",""][i]}${i===3?"X":""}</i></button>`).join("")}</div>
+   <div class="rw"><span>starts</span><div class="step"><button data-m="s-">−</button><output>${fmt(t.s)}</output><button data-m="s+">+</button></div></div>
+   <div class="rw"><span>ends</span><div class="step"><button data-m="e-">−</button><output>${fmt(t.e)}</output><button data-m="e+">+</button></div></div>
+   <div class="rw"><span>who</span><div class="ppl">${Object.entries(PPL).map(([k,v])=>`<button data-p="${k}" class="${t.p===k?'on':''}" title="${v[0]}"><span class="av" style="background:${v[1]}">${k}</span></button>`).join("")}</div></div>
+   <div class="rw"><span>waits on</span><div class="rel">${blockers.length?blockers.map(b=>`<span class="${b.st!=="done"&&b.e>=t.s?'bad':''}">${b.st==="done"?"✓":"●"} ${b.t}</span>`).join("<br>"):"nothing"}</div></div>
+   <div class="rw"><span>unblocks</span><div class="rel">${unblocks.length?unblocks.map(b=>b.t).join("<br>"):nextMs?"◆ "+nextMs[0]:"—"}</div></div>
+   <button class="link" id="openDoc"><span>¶ ${PAGES.find(x=>x.id===t.doc).title}</span><span>→</span></button>
+   <div class="keys"><span>↑↓ move</span><span>⇧↑↓ length</span><span>X done</span><span>Esc close</span></div>`;
+  p.addEventListener("click",e=>e.stopPropagation());p.addEventListener("pointerdown",e=>e.stopPropagation());
+  col.appendChild(p);
+  const h3=p.querySelector("h3");h3.addEventListener("blur",()=>{t.t=h3.textContent.trim()||t.t;const c=document.querySelector(`#rbody .cap[data-id="${t.id}"] .tt`);if(c)c.textContent=t.t});
+  h3.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();h3.blur()}});
+  p.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{t.st=b.dataset.s;drawPlan()});
+  p.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{t.p=b.dataset.p;drawPlan()});
+  p.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const m=b.dataset.m;if(m==="s-")t.s--;if(m==="s+"&&t.s<t.e)t.s++;if(m==="e-"&&t.e>t.s)t.e--;if(m==="e+"){t.e++;pushDependents(t)}drawPlan()});
+  $("openDoc").onclick=()=>{S.page=t.doc;go("pages")};
+}
+function create(k,n){
+  S.sel=null;drawPlan();
+  const col=document.querySelector(`#rbody .col[data-k="${k}"]`);const idx=[...document.querySelectorAll("#rbody .col")].indexOf(col);
+  const p=document.createElement("div");p.className="pop create";p.style.top=Y[n]+"px";if(idx>=2)p.style.right="4px";else p.style.left="4px";
+  p.innerHTML=`<input id="cin" placeholder="New task from ${fmt(n)}" autocomplete="off"><div class="parse" id="cparse"></div><div class="hint">Enter adds · @anna assigns · 5d sets length</div>`;
+  p.addEventListener("click",e=>e.stopPropagation());col.appendChild(p);
+  const i=$("cin");i.focus();
+  const parse=()=>{const v=i.value;const who=(v.match(/@(\w+)/)||[])[1];const len=+((v.match(/\b(\d+)d\b/)||[])[1]||2);
+    const code=who?Object.keys(PPL).find(c=>PPL[c][0].toLowerCase().startsWith(who.toLowerCase())):null;
+    return {title:v.replace(/@\w+|\b\d+d\b/g,"").replace(/\s+/g," ").trim(),code,len}};
+  i.oninput=()=>{const r=parse();$("cparse").innerHTML=`<span>${fmt(n)} → ${fmt(n+r.len-1)}</span>${r.code?`<span>${PPL[r.code][0]}</span>`:""}`};i.oninput();
+  i.onkeydown=e=>{if(e.key==="Escape"){drawPlan();return}
+    if(e.key==="Enter"&&i.value.trim()){const r=parse();
+      const t={id:Date.now(),t:r.title||"Untitled",s:n,e:n+r.len-1,st:"todo",p:r.code||"M",g:"build",dep:[],doc:"tech"};t[S.group]=k;if(S.group==="g")t.doc=STREAM_DOC[k];
+      TASKS.push(t);S.fresh=t.id;toast("Task added. Keep typing to add another.");create(k,n+r.len)}};
+}
+document.addEventListener("click",()=>{if(S.view!=="plan")return;if(S.sel!==null||document.querySelector(".pop")){S.sel=null;drawPlan()}});
+document.querySelectorAll("[data-g]").forEach(b=>b.onclick=e=>{e.stopPropagation();S.group=b.dataset.g;document.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b));drawPlan()});
+document.querySelectorAll("[data-z]").forEach(b=>b.onclick=e=>{e.stopPropagation();setZoom(b.dataset.z)});
+function setZoom(z){S.zoom=z;document.querySelectorAll("[data-z]").forEach(x=>x.classList.toggle("on",x.dataset.z===z));drawPlan()}
+$("mine").onclick=e=>{e.stopPropagation();S.mine=!S.mine;$("mine").classList.toggle("on",S.mine);drawPlan()};
+$("newBtn").onclick=e=>{e.stopPropagation();newTask()};
+function newTask(){const k=S.group==="p"?"M":S.group==="st"?"todo":"build";create(k,TODAY+1);document.querySelector(".pop.create")?.scrollIntoView({block:"center",behavior:"smooth"})}
+
+/* ================= TODAY ================= */
+const H0=8,H1=18,HP=58;
+let BLOCKS=[{t:"Stand-up",a:9.5,b:9.83,k:"ev",m:"Meet · 15 min"},{t:"Review Data model with Jonas",a:11,b:11.5,k:"ev",m:"Room 2.14"},{t:"Timeline engine",a:13,b:15,k:"focus",m:"focus block · yours"},{t:"Sprint planning",a:16,b:16.75,k:"ev",m:"whole team"}];
+let NEEDS=[
+ {id:1,dot:"ms",h:"Anna mentioned you",p:"“Can the drag writes be debounced?” in Tech notes: timeline",s:"12 min ago",a:["Reply","Open"]},
+ {id:2,dot:"rev",h:"Review Data model",p:"Jonas approved. Merging unblocks Timeline engine.",s:"1 h ago",a:["Approve","Open"]},
+ {id:3,dot:"ms",h:"User test script is waiting",p:"Synthesize findings ends tomorrow. Sofie may need help.",s:"blocker",a:["Ask Sofie","Snooze"]},
+];
+const hh=h=>`${String(Math.floor(h)).padStart(2,"0")}:${String(Math.round(h%1*60)).padStart(2,"0")}`;
+function drawToday(){
+  const el=$("hours");let h="";el.style.height=(H1-H0)*HP+"px";
+  for(let x=H0;x<H1;x++)h+=`<div class="hr" style="top:${(x-H0)*HP}px">${hh(x)}</div>`;
+  BLOCKS.forEach((b,i)=>h+=`<div class="blk ${b.k} ${b.fresh?'new':''}" style="top:${(b.a-H0)*HP+2}px;height:${(b.b-b.a)*HP-4}px">${b.t}<small>${hh(b.a)}–${hh(b.b)} · ${b.m}</small>${b.k==="focus"?`<button class="x" data-rm="${i}" aria-label="Remove">✕</button>`:""}</div>`);
+  BLOCKS.forEach(b=>delete b.fresh);
+  h+=`<div class="hnow" style="top:${(14.33-H0)*HP}px"></div><div class="dropg" id="dropg"></div>`;
+  el.innerHTML=h;
+  el.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{BLOCKS.splice(+b.dataset.rm,1);drawToday()});
+  const mine=TASKS.filter(t=>t.p==="M"&&t.st!=="done").sort((a,b)=>a.e-b.e);
+  $("upnext").innerHTML=mine.map(t=>`<div class="card drag" draggable="true" data-id="${t.id}"><span class="dot ${t.st}"></span><div><h4>${t.t}</h4><p>${waiting(t)?"Waiting on "+t.dep.map(byId).filter(b=>b.st!=="done").map(b=>b.t).join(", "):t.st==="prog"?"In progress":"Starts "+fmt(t.s)}</p><small>due ${fmt(t.e)} · ${t.e-TODAY}d</small></div></div>`).join("");
+  $("upnext").querySelectorAll(".card").forEach(c=>c.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",c.dataset.id);e.dataTransfer.effectAllowed="copy"}));
+  $("needs").innerHTML=NEEDS.map(n=>`<div class="card" data-n="${n.id}"><span class="dot ${n.dot}"></span><div><h4>${n.h}</h4><p>${n.p}</p><small>${n.s}</small><div class="acts">${n.a.map(a=>`<button>${a}</button>`).join("")}</div></div></div>`).join("")||`<div class="card"><div><h4>All clear</h4><p>Nothing needs you right now.</p></div></div>`;
+  $("needs").querySelectorAll(".acts button").forEach(b=>b.onclick=()=>{const c=b.closest(".card"),id=+c.dataset.n;
+    if(b.textContent==="Open"){S.page="tech";go("pages");return}
+    c.classList.add("gone");setTimeout(()=>{NEEDS=NEEDS.filter(n=>n.id!==id);drawToday();badge()},280);
+    toast({Reply:"Reply sent",Approve:"Approved. Timeline engine is unblocked.","Ask Sofie":"Asked Sofie in the task thread",Snooze:"Snoozed until Monday"}[b.textContent])});
+  $("needCount").textContent=NEEDS.length?NEEDS.length+" open":"";
+  const focus=BLOCKS.filter(b=>b.k==="focus").reduce((s,b)=>s+b.b-b.a,0);
+  $("todaySum").innerHTML=`${NEEDS.length?`<b>${NEEDS.length} thing${NEEDS.length>1?"s":""}</b> need you.`:"Nothing needs you."} Four meetings, and <b>${focus} h</b> blocked for focus work. Supervisor meeting on Monday.`;
+}
+function badge(){$("needBadge").textContent=NEEDS.length||""}
+(function wireDrop(){const el=$("hours");
+  const at=e=>{const r=el.getBoundingClientRect();return Math.max(H0,Math.min(H1-1,H0+Math.round((e.clientY-r.top)/HP*2)/2))};
+  el.addEventListener("dragover",e=>{e.preventDefault();const a=at(e),g=$("dropg");g.style.display="flex";g.style.top=(a-H0)*HP+2+"px";g.style.height=HP*1.5-4+"px";g.textContent=`${hh(a)}–${hh(a+1.5)}`});
+  el.addEventListener("dragleave",e=>{if(!el.contains(e.relatedTarget))$("dropg").style.display="none"});
+  el.addEventListener("drop",e=>{e.preventDefault();const t=byId(+e.dataTransfer.getData("text/plain"));if(!t)return;const a=at(e);
+    BLOCKS.push({t:t.t,a,b:Math.min(H1,a+1.5),k:"focus",m:"focus block · yours",fresh:true});drawToday();toast(`Blocked ${hh(a)}–${hh(a+1.5)} for ${t.t}`)});
+})();
+
+/* ================= PAGES ================= */
+const PAGES=[
+ {id:"tech",title:"Tech notes: timeline",who:"You",when:"40 min ago",live:"Anna is reading",lead:"Dates change through one scheduling call, so dependents shift together.",
+  body:`<p>Dates change through one scheduling call, so dependent tasks shift together. The client never writes a date directly. It asks the server to move a task, and the server answers with every task that moved as a result.</p><h3>Dragging</h3><p>While you drag, nothing is written. On release we send one call. <span class="cm">Writes are debounced by 300 ms</span> so keyboard nudges (↑↓) collapse into one change.</p><p><span class="men">@Anna</span> the sync layer only needs to listen for the “moved” event, not every field.</p><h3>Open questions</h3><p>Should a push past a milestone ask first, or just warn? My vote is warn, and let the milestone line turn red.</p>`},
+ {id:"interview",title:"Interview notes",who:"Sofie",when:"2 h ago",lead:"People plan in week-sized chunks and re-plan every Monday.",
+  body:`<p>People plan in week-sized chunks and re-plan every Monday. Nobody we spoke to reads a Gantt past the next milestone.</p><h3>Three patterns</h3><p>1. The plan is checked on Monday and forgotten by Wednesday.<br>2. Two of six keep a paper list next to the tool.<br>3. “Where was that document?” came up in every interview.</p>`},
+ {id:"principles",title:"Design principles",who:"Jonas",when:"yesterday",lead:"Every screen answers “what now?” before “what else?”.",
+  body:`<p>Every screen answers “what now?” before “what else?”.</p><p>Creating something never needs a form. If it takes more than one line to start, it's too slow.</p><p>Time is the backbone. Tasks, meetings and milestones share one axis.</p>`},
+ {id:"report",title:"Report draft",who:"Sofie",when:"3 h ago",lead:"Teams on short projects spend more time maintaining the plan than using it.",
+  body:`<p>Teams working on short projects spend more time maintaining the plan than using it. This report looks at why, and tests a planner built around a single time axis.</p><h3>1 · Introduction</h3><p>Most project tools separate the board, the calendar and the timeline. <span class="cm">Our interviews suggest</span> that people switch between them to answer one question: what should I do next?</p>`},
+ {id:"plan-r",title:"Research plan",who:"Anna",when:"last week",lead:"Who we talk to, what we ask, and when we stop.",body:`<p>Who we talk to, what we ask, and when we've heard enough. Six interviews, one user test day, one survey if time allows.</p>`},
+ {id:"flows",title:"Planner flows",who:"Jonas",when:"yesterday",canvas:true,lead:"Canvas · 14 shapes",
+  body:`<svg viewBox="0 0 560 300"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="30" y="40" width="130" height="64" rx="12"/><rect x="215" y="118" width="130" height="64" rx="12"/><rect x="400" y="196" width="130" height="64" rx="12" fill="#6b4dff" stroke="#6b4dff"/><path d="M160 72 C 200 72, 180 150, 215 150 M345 150 C 385 150, 365 228, 400 228"/></g><g font-family="Epilogue" font-weight="700" font-size="15" fill="currentColor"><text x="70" y="78">Today</text><text x="262" y="156">Plan</text><text x="440" y="234" fill="#fff">Pages</text></g></svg><p style="margin-top:14px">Sketch of how the three places hand off to each other.</p>`},
+];
+function drawPages(){
+  const q=$("find").value.toLowerCase();
+  $("shelf").innerHTML=PAGES.filter(p=>!q||p.title.toLowerCase().includes(q)||p.lead.toLowerCase().includes(q)).map(p=>`<button data-pg="${p.id}" class="${S.page===p.id?'on':''}"><b>${p.title}${p.canvas?'<em class="kind">canvas</em>':''}</b><span>${p.lead}</span><small>${p.who} · ${p.when}</small></button>`).join("")
+    +(q&&!PAGES.some(p=>p.title.toLowerCase()===q)?`<button data-new="1"><b>+ Create “${$("find").value}”</b><span>New page, press Enter</span></button>`:"");
+  $("shelf").querySelectorAll("[data-pg]").forEach(b=>b.onclick=()=>{S.page=b.dataset.pg;drawPages()});
+  $("shelf").querySelector("[data-new]")?.addEventListener("click",newPage);
+  const p=PAGES.find(x=>x.id===S.page)||PAGES[0];
+  $("reader").innerHTML=`<div class="meta"><span>${p.who} · edited ${p.when}</span>${p.live?`<span class="live">● ${p.live}</span>`:""}<span>${TASKS.filter(t=>t.doc===p.id).length} tasks</span></div><h2 contenteditable="true" spellcheck="false">${p.title}</h2><div class="txt" ${p.canvas?"":'contenteditable="true"'} spellcheck="false">${p.body}</div>`;
+  const linked=TASKS.filter(t=>t.doc===p.id).sort((a,b)=>a.s-b.s);
+  let m=`<div class="colh">In the plan <em>${linked.length} tasks</em></div><div class="mini">`;let msI=0;
+  linked.forEach(t=>{while(msI<MS.length&&d(MS[msI][1])<t.s){m+=`<div class="ms">◆ ${MS[msI][0]}</div>`;msI++}
+    m+=`<a class="${t.st}" data-t="${t.id}"><b>${t.t}</b><small>${fmt(t.s)} → ${fmt(t.e)} · ${PPL[t.p][0]}</small></a>`});
+  m+=linked.length?"":`<a data-add="1"><b>+ Plan a task from this page</b><small>select text and press T</small></a>`;
+  m+=`</div><div class="colh">Thread <em>2 open</em></div>
+   <div class="thread"><b>Anna</b> Can the drag writes be debounced?<small>on “debounced by 300 ms” · 12 min</small></div>
+   <div class="thread"><b>Jonas</b> Warn, and turn the milestone red. Agree.<small>on “Open questions” · 1 h</small></div>`;
+  $("margin").innerHTML=m;
+  $("margin").querySelectorAll("[data-t]").forEach(a=>a.onclick=()=>{S.sel=+a.dataset.t;S.group="g";document.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x.dataset.g==="g"));go("plan");
+    requestAnimationFrame(()=>document.querySelector(`#rbody .cap[data-id="${S.sel}"]`)?.scrollIntoView({block:"center",behavior:"smooth"}))});
+}
+function newPage(){const v=$("find").value.trim()||"Untitled";const id="n"+Date.now();PAGES.unshift({id,title:v,who:"You",when:"just now",lead:"Empty page",body:"<p>Start writing…</p>"});S.page=id;$("find").value="";drawPages();toast("Page created")}
+$("find").addEventListener("input",drawPages);
+$("find").addEventListener("keydown",e=>{if(e.key==="Enter"){const q=$("find").value.toLowerCase();const hit=PAGES.find(p=>p.title.toLowerCase().includes(q));if(hit&&q){S.page=hit.id;$("find").value="";drawPages()}else newPage()}});
+
+/* ================= places ================= */
+function go(v){S.view=v;document.querySelectorAll(".view").forEach(x=>x.classList.toggle("on",x.dataset.view===v));document.querySelectorAll("[data-v]").forEach(x=>x.classList.toggle("on",x.dataset.v===v));
+  if(v==="plan")drawPlan();if(v==="today")drawToday();if(v==="pages")drawPages();scrollTo({top:0})}
+document.querySelectorAll("[data-v]").forEach(b=>b.onclick=e=>{e.stopPropagation();go(b.dataset.v)});
+document.querySelectorAll("[data-follow]").forEach(b=>b.onclick=e=>{e.stopPropagation();const k=b.dataset.follow;if(k==="A"){go("plan");toast("Following Anna. You see what she sees until you move.")}else{S.page="principles";go("pages");toast("Following Jonas into Design principles")}});
+
+document.addEventListener("keydown",e=>{
+  const typing=e.target.isContentEditable||/INPUT|TEXTAREA/.test(e.target.tagName);
+  if(e.key==="Escape"){if(typing)e.target.blur();if(S.view==="plan"){S.sel=null;drawPlan()}return}
+  if(typing||e.metaKey||e.ctrlKey)return;
+  if(e.key==="1")go("today");if(e.key==="2")go("plan");if(e.key==="3")go("pages");
+  if(S.view!=="plan")return;
+  if(e.key==="n"){e.preventDefault();newTask()}
+  if(e.key==="z")setZoom(S.zoom==="week"?"term":"week");
+  if(e.key==="t")scrollTo({top:$("rbody").offsetTop+Y[TODAY]-240,behavior:"smooth"});
+  if(e.key==="g"){const o=["g","p","st"];S.group=o[(o.indexOf(S.group)+1)%3];document.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x.dataset.g===S.group));drawPlan()}
+  if(S.sel===null)return;const t=byId(S.sel);
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();const dir=e.key==="ArrowDown"?1:-1;
+    if(e.shiftKey){t.e=Math.max(t.s,t.e+dir)}else{t.s+=dir;t.e+=dir}if(dir>0)pushDependents(t);drawPlan()}
+  if(e.key==="x"){t.st=t.st==="done"?"todo":"done";drawPlan();toast(t.st==="done"?"Done ✓":"Reopened")}
+});
+$("noteHide").onclick=e=>{e.stopPropagation();$("note").classList.toggle("min")};
+addEventListener("resize",()=>{if(S.view==="plan"&&S.sel!==null)drawDeps()});
+badge();drawPlan();
+</script>
