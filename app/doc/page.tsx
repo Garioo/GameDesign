@@ -564,7 +564,7 @@ function DocPageInner() {
               status: row.status ?? "todo",
               owner: "—",
               ownerName: "Unassigned",
-              ownerColor: "#a59a8c",
+              ownerColor: "var(--ink-faint)",
               subtitle: row.summary ?? "",
               tags: row.tags ?? [],
               links: [],

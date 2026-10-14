@@ -36,7 +36,7 @@
   place-items: center;
   border-radius: 9px;
   background: var(--grad-ember, var(--ember));
-  color: #fff4e8;
+  color: #fff;
   font-weight: 800;
   font-size: 14px;
 }

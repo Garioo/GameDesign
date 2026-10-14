@@ -13,7 +13,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import styles from "./VersionHistory.module.css";
 
 const PAGE_SIZE = 300;
-const UNKNOWN: EditAuthor = { id: "", name: "A former member", initials: "?", color: "#a59a8c" };
+const UNKNOWN: EditAuthor = { id: "", name: "A former member", initials: "?", color: "var(--ink-faint)" };
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);

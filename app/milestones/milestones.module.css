@@ -474,7 +474,7 @@
     animation-delay: calc(var(--i, 0) * 50ms);
   }
   .stop {
-    animation: msPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: msPop 0.5s var(--ease-rise) both;
   }
 }
 @keyframes msRise {

@@ -34,14 +34,15 @@
   --bg:        #f6f1e9;
   --surface:   #fffdfa;
   --ink:       #2a241e;
-  --ink-soft:  #6f655a;
-  --ink-faint: #a59a8c;
+  --ink-soft:  #5c5349;   /* 6.7:1 on --bg */
+  --ink-faint: #756a5d;   /* 4.7:1 on --bg — lightest text-safe ink */
   --line:      #e8dfd1;
   --line-soft: #efe8db;
+  --line-strong: #d8cbb8; /* hover / emphasized borders */
 
   /* ---- Colors · ember accent ---- */
-  --ember:      #cf6a2c;
-  --ember-deep: #b9551f;
+  --ember:      #bb5b24;   /* white text on it: 4.5:1 */
+  --ember-deep: #a8521f;   /* text color on light surfaces: ≥4.7:1 */
   --ember-tint: #fbede0;
   --ember-tint2:#f8e2cf;
 
@@ -54,12 +55,26 @@
   --comment-mark-line: #e2c25a;
   --suggestion-mark:   #fbe6dc;
 
+  /* ---- Colors · tones (callouts, calendar categories) ----
+     bg = fill, bd = border, ac = accent/icon, ink = text on bg (≥7:1) */
+  --tone-ember-bg: #fbede0; --tone-ember-bd: #f3d7c0; --tone-ember-ac: var(--ember); --tone-ember-ink: #6a4a32;
+  --tone-honey-bg: #fbf3d8; --tone-honey-bd: #efe1ac; --tone-honey-ac: #cf9b1e;      --tone-honey-ink: #6a5410;
+  --tone-sage-bg:  #e9f1e4; --tone-sage-bd:  #cfe0c6; --tone-sage-ac:  #5a9d6e;      --tone-sage-ink:  #355440;
+  --tone-sky-bg:   #e7eff7; --tone-sky-bd:   #caddec; --tone-sky-ac:   #3f80c4;      --tone-sky-ink:   #2e4a66;
+  --tone-rose-bg:  #fbe8e9; --tone-rose-bd:  #f1cdcf; --tone-rose-ac:  #d65a64;      --tone-rose-ink:  #6a3338;
+  --tone-plum-bg:  #efe7f4; --tone-plum-bd:  #dccbe6; --tone-plum-ac:  #8a5bb0;      --tone-plum-ink:  #49325f;
+  --tone-slate-bg: #eceef0; --tone-slate-bd: #d7dbde; --tone-slate-ac: #6b7785;      --tone-slate-ink: #39424b;
+
   /* legacy aliases still used by the landing screen */
   --accent: var(--ember);
   --muted:  var(--ink-soft);
 
   /* ---- Gradients ---- */
-  --grad-ember: linear-gradient(150deg, #e98a45, #c0531c);
+  --grad-ember: linear-gradient(150deg, #bb5b24, #9a4719);
+  /* warm page wash layered over --bg on full-screen shells */
+  --wash:
+    radial-gradient(1200px 600px at 78% -10%, #fbe9d6 0%, rgba(251,233,214,0) 55%),
+    radial-gradient(900px 500px at 0% 100%, #f3ece0 0%, rgba(243,236,224,0) 60%);
 
   /* ---- Border radii ---- */
   --r-xs:  5px;
@@ -173,7 +188,7 @@ body::-webkit-scrollbar-thumb {
 .rail::-webkit-scrollbar-thumb:hover,
 .main::-webkit-scrollbar-thumb:hover,
 body::-webkit-scrollbar-thumb:hover {
-  background: #d8cbb8;
+  background: var(--ink-faint);
   background-clip: padding-box;
 }
 .sidebar::-webkit-scrollbar-track,
@@ -211,7 +226,7 @@ body::-webkit-scrollbar-track { background: transparent; }
 }
 .screen h1 { font-size: 2rem; font-weight: 600; }
 .screen p { color: var(--ink-soft); }
-.screen a { color: var(--ember); font-weight: 500; }
+.screen a { color: var(--ember-deep); font-weight: 500; }
 
 /* inline-editable text node — shared by several doc fields */
 .editable {

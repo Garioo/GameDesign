@@ -44,7 +44,7 @@
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.14em;
-  color: var(--ember);
+  color: var(--ember-deep);
   margin-bottom: 18px;
 }
 
@@ -297,7 +297,7 @@
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 600;
-  color: #fff4e8;
+  color: #fff;
   background: var(--ember);
   border: none;
   border-radius: var(--r-lg);

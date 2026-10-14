@@ -11,8 +11,7 @@
   min-height: 100vh;
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
-    radial-gradient(1200px 600px at 78% -10%, #fbe9d6 0%, rgba(251,233,214,0) 55%),
-    radial-gradient(900px 500px at 0% 100%, #f3ece0 0%, rgba(243,236,224,0) 60%),
+    var(--wash),
     var(--bg);
   background-blend-mode: soft-light, normal, normal, normal;
 }
@@ -58,7 +57,7 @@
 
 .doc-crumb {
   font-size: 11.5px; font-weight: 600; letter-spacing: 0.09em;
-  text-transform: uppercase; color: var(--ember);
+  text-transform: uppercase; color: var(--ember-deep);
   margin-bottom: 18px;
 }
 .dot { color: var(--ink-faint); margin: 0 4px; }
@@ -118,7 +117,7 @@
   background: none; border: 1px dashed var(--line); border-radius: 7px;
   padding: 3px 9px; cursor: pointer; transition: border-color var(--t-fast), color var(--t-fast);
 }
-.tag-add:hover { border-color: var(--ember); color: var(--ember); }
+.tag-add:hover { border-color: var(--ember); color: var(--ember-deep); }
 .tag-input {
   font: inherit; font-size: 13px; color: var(--ink);
   background: var(--surface); border: 1px solid var(--ember-tint2);
@@ -182,7 +181,7 @@
   font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer;
 }
 .link-menu button:hover { background: var(--ember-tint); }
-.link-menu .link-icon { color: var(--ember); flex-shrink: 0; }
+.link-menu .link-icon { color: var(--ember-deep); flex-shrink: 0; }
 .link-menu-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-menu-group { font-size: 11px; color: var(--ink-faint); flex-shrink: 0; }
 .link-menu-empty { padding: var(--sp-3); font-size: 13px; color: var(--ink-faint); }
@@ -226,13 +225,13 @@
 }
 .ref-card:active { transform: translateY(-1px); }
 .ref-title { display: flex; align-items: center; gap: var(--sp-2); font-weight: 600; font-size: 13.5px; margin-bottom: 6px; color: var(--ink); }
-.ref-icon { width: 15px; height: 15px; color: var(--ember); flex-shrink: 0; }
+.ref-icon { width: 15px; height: 15px; color: var(--ember-deep); flex-shrink: 0; }
 .ref-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ref-kind {
   margin-left: auto; flex-shrink: 0;
   padding: 1px 7px 2px; border-radius: 999px;
   background: var(--line-soft); color: var(--ink-faint);
-  font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
 }
 .ref-text {
   font-size: 12.5px; line-height: 1.5; color: var(--ink-soft);

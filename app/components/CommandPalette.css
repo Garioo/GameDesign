@@ -54,7 +54,7 @@
   display: inline-grid; place-items: center;
   width: 18px; height: 18px; border-radius: 50%;
   background: var(--ember); color: #fff; font-size: 11px;
-  animation: statusPop .4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: statusPop .4s var(--ease-rise) both;
 }
 .palette-spinner {
   width: 14px; height: 14px; border-radius: 50%;

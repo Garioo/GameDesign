@@ -283,7 +283,7 @@ export default function MyWorkPage() {
                   {unread.slice(0, 8).map((n) => (
                     <li key={n.id}>
                       <button type="button" className={styles.notif} onClick={() => openNotification(n)}>
-                        <span className={styles.avatar} style={{ background: n.actor_color ?? "#a59a8c" }}>{n.actor_initials ?? "?"}</span>
+                        <span className={styles.avatar} style={{ background: n.actor_color ?? "var(--ink-faint)" }}>{n.actor_initials ?? "?"}</span>
                         <span className={styles.notifBody}>
                           <span><strong>{n.actor_name ?? "Someone"}</strong> {notificationVerb(n)}</span>
                           <span className={styles.snippet}>{n.snippet}</span>

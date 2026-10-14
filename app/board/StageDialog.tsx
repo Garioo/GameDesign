@@ -11,6 +11,7 @@ import {
 } from "@/lib/stagesRepo";
 import { PlanningIcon } from "./PlanningIcons";
 
+const DONE_NAME = /^\s*(done|finished|complete|completed|closed|shipped)\s*$/i;
 const BASIC_STAGES = [
   { name: "To do", color: "#a59a8c", completed: false },
   { name: "In progress", color: "#cf6a2c", completed: false },
@@ -343,7 +344,10 @@ export default function StageDialog({
                       placeholder="Stage name"
                       value={stage.name}
                       onChange={(e) =>
-                        update(stage.id, { name: e.target.value })
+                        // Naming a stage "Done" (or similar) marks it Completed, so its tasks count as done.
+                        update(stage.id, DONE_NAME.test(e.target.value)
+                          ? { name: e.target.value, completed: true }
+                          : { name: e.target.value })
                       }
                     />
                     <label className="stage-completion">
@@ -389,6 +393,12 @@ export default function StageDialog({
                   </div>
                 ))}
               </div>
+              {!stages.some((s) => s.completed) && (
+                <p className="stage-warning" role="status">
+                  No stage is marked Completed, so tasks on this board never count as done in My Work, Home or
+                  Milestones. Tick Completed on the stage where finished tasks go.
+                </p>
+              )}
               <button
                 type="button"
                 className="stage-add"

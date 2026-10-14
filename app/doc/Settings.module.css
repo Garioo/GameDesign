@@ -131,7 +131,7 @@
   color: var(--ink-faint);
 }
 .input:hover {
-  border-color: #d8cbb8;
+  border-color: var(--line-strong);
 }
 .input:focus {
   outline: none;
@@ -362,8 +362,8 @@
   transition: background var(--t-fast), border-color var(--t-fast);
 }
 .signOut:hover {
-  background: #fffaf3;
-  border-color: #d8cbb8;
+  background: var(--surface);
+  border-color: var(--line-strong);
 }
 
 /* leave-workspace row */

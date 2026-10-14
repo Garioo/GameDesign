@@ -102,7 +102,7 @@ export default function NotificationBell({ workspaceId }: { workspaceId: string 
             {notifications.map((n) => (
               <div key={n.id} className="notif-row">
               <button type="button" className={"notif-item" + (n.read_at ? "" : " is-unread")} onClick={() => openNotification(n)}>
-                <span className="notif-avatar" style={{ background: n.actor_color ?? "#a59a8c" }}>
+                <span className="notif-avatar" style={{ background: n.actor_color ?? "var(--ink-faint)" }}>
                   {n.actor_initials ?? "?"}
                 </span>
                 <span className="notif-body">

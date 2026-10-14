@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteCalendarEvent, listAgendaChecks, restoreCalendarEvent, saveAgenda, saveCalendarEvent, saveOccurrenceAgenda, setAgendaCheck, skipOccurrence, unskipOccurrence, type AgendaItem, type CalendarEvent, type CalendarEventDraft } from "@/lib/calendarEventsRepo";
+import { deleteCalendarEvent, listAgendaChecks, restoreCalendarEvent, saveAgenda, saveCalendarEvent, saveOccurrenceAgenda, setAgendaCheck, skipOccurrence, unskipOccurrence, type AgendaItem, type CalendarEvent, type CalendarEventDraft, EVENT_KINDS, eventKind } from "@/lib/calendarEventsRepo";
 import { addDays, type Repeat } from "@/lib/calendarRecurrence";
 import { EVERY_LABEL } from "@/lib/planning";
 import { listMembers, type ProfileInfo } from "@/lib/docsRepo";
@@ -42,7 +42,7 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   // What the form started from, to tell whether anything was changed.
-  const [initial, setInitial] = useState<CalendarEventDraft>(() => event ?? { title: "", date, end_date: null, start_time: null, end_time: null, location: "", notes: "", attendees: [], guests: [], repeat: null, repeat_until: null, skipped_dates: [], repeat_weekends: true, agenda: [] });
+  const [initial, setInitial] = useState<CalendarEventDraft>(() => event ?? { title: "", date, end_date: null, start_time: null, end_time: null, location: "", notes: "", attendees: [], guests: [], repeat: null, repeat_until: null, skipped_dates: [], repeat_weekends: true, agenda: [], kind: "other" });
   const [draft, setDraft] = useState<CalendarEventDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -194,7 +194,7 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
     }}
     onClick={backdrop.onClick}>
     {event && shown && !editing ? <div>
-      <div className={styles.dialogHeading}><div><h2 id="event-dialog-title">{event.title}</h2><p>{eventWhen(shown)}</p></div><button type="button" aria-label="Close event" disabled={busy} onClick={onClose}><Icon name="close" /></button></div>
+      <div className={styles.dialogHeading}><div><span className={`${styles.kindTag} ${styles[`kind_${eventKind(event)}`]}`}>{EVENT_KINDS.find(k => k.id === eventKind(event))?.label}</span><h2 id="event-dialog-title">{event.title}</h2><p>{eventWhen(shown)}</p></div><button type="button" aria-label="Close event" disabled={busy} onClick={onClose}><Icon name="close" /></button></div>
       <dl className={styles.eventFacts}>
         {event.repeat && <div><dt>Repeats</dt><dd className={styles.repeatFact}><PlanningIcon name="repeat" />{repeatLabel(event.repeat, event.repeat_until, event.repeat_weekends)}</dd></div>}
         {event.location && <div><dt>Location</dt><dd>{/^https?:\/\//i.test(event.location) ? <a href={event.location} target="_blank" rel="noreferrer">{event.location}</a> : event.location}</dd></div>}
@@ -282,6 +282,12 @@ export default function EventDialog({ event, occurrence, editingRef, date, proje
       <div className={styles.dialogHeading}><div><h2 id="event-dialog-title">{event ? (repeats ? "Edit series" : "Edit event") : "New event"}</h2><p>{source ? `From the subscribed calendar “${source}”. Change it in Moodle.` : repeats ? "Changes apply to every occurrence. The dates below are the first one’s." : "Everyone in the workspace can see this event."}</p></div><button type="button" aria-label="Close event" disabled={busy} onClick={close}><Icon name="close" /></button></div>
       <fieldset disabled={!canEdit || busy}>
         <label>Event title<input autoFocus required maxLength={160} value={draft.title} onChange={e => update("title", e.target.value)} placeholder="e.g. Team meeting" /></label>
+        <fieldset className={styles.kindPicker}>
+          <legend>Category</legend>
+          <div>{EVENT_KINDS.map(k => <label key={k.id} className={`${styles.kindChip} ${styles[`kind_${k.id}`]}`}>
+            <input type="radio" name="event-kind" value={k.id} checked={eventKind(draft) === k.id} onChange={() => update("kind", k.id)} />{k.label}
+          </label>)}</div>
+        </fieldset>
         <div className={styles.timeFields}>
           <label>{draft.repeat ? "First date" : "Start date"}<input type="date" required value={draft.date} onChange={e => setDraft(old => ({ ...old, date: e.target.value, end_date: old.end_date && old.end_date < e.target.value ? e.target.value : old.end_date, repeat_until: old.repeat_until && old.repeat_until < e.target.value ? e.target.value : old.repeat_until }))} /></label>
           <label>End date<input type="date" required min={draft.date} value={draft.end_date || draft.date} onChange={e => update("end_date", e.target.value || null)} /></label>

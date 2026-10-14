@@ -37,8 +37,8 @@
   font: inherit;
   font-size: 13px;
   color: inherit;
-  border: 1px solid var(--line, #ddd5ca);
-  background: var(--surface, #fffaf3);
+  border: 1px solid var(--line);
+  background: var(--surface);
   border-radius: 6px;
   padding: 8px 12px;
 }
@@ -46,7 +46,7 @@
   cursor: pointer;
 }
 .phase-main button:hover:not(:disabled) {
-  border-color: var(--ember, #b95b34);
+  border-color: var(--ember);
 }
 .phase-main button:disabled {
   cursor: default;
@@ -58,7 +58,7 @@
   outline-offset: 3px;
 }
 .phase-main .planning-primary {
-  background: var(--ember, #bc5b32);
+  background: var(--ember);
   border-color: var(--ember);
   color: white;
   font-weight: 600;
@@ -99,9 +99,9 @@
   flex: 1;
   min-height: 240px;
   overflow: auto;
-  border: 1px solid var(--line, #ddd5ca);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface, #fffaf3);
+  background: var(--surface);
   position: relative;
 }
 .phase-grid {
@@ -113,8 +113,8 @@
   position: sticky;
   top: 0;
   z-index: 8;
-  background: var(--surface, #fffaf3);
-  border-bottom: 1px solid var(--line, #ddd5ca);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
 .phase-label-header {
   position: sticky;
@@ -122,12 +122,12 @@
   width: var(--phase-label-width, 320px);
   flex-shrink: 0;
   z-index: 2;
-  background: var(--surface, #fffaf3);
+  background: var(--surface);
   padding: 14px 20px;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   color: var(--ink-soft);
-  border-right: 1px solid var(--line, #ddd5ca);
+  border-right: 1px solid var(--line);
 }
 .phase-ruler {
   position: relative;
@@ -142,7 +142,7 @@
 .phase-month-label {
   top: 3px;
   padding-left: 7px;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 12px;
   font-weight: 600;
 }
@@ -150,7 +150,7 @@
   top: 17px;
   height: 16px;
   padding-left: 7px;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 16px;
   font-weight: 600;
   color: var(--ink);
@@ -168,7 +168,7 @@
   font-variant-numeric: tabular-nums;
 }
 .phase-day-label small {
-  font-size: 9px;
+  font-size: 11px;
   margin-right: 2px;
   opacity: 0.7;
 }
@@ -180,7 +180,7 @@
   border-left-color: var(--phase-week-line);
 }
 .phase-day-label.phase-today-label {
-  color: var(--ember);
+  color: var(--ember-deep);
   font-weight: 700;
 }
 .phase-rows {
@@ -189,7 +189,7 @@
 .phase-row {
   height: 76px;
   display: flex;
-  border-bottom: 1px solid var(--line, #e8e0d5);
+  border-bottom: 1px solid var(--line);
 }
 .phase-label {
   width: var(--phase-label-width, 320px);
@@ -197,8 +197,8 @@
   position: sticky;
   left: 0;
   z-index: 5;
-  background: var(--surface, #fffaf3);
-  border-right: 1px solid var(--line, #ddd5ca);
+  background: var(--surface);
+  border-right: 1px solid var(--line);
   padding: 12px 14px;
 }
 .phase-title-line {
@@ -248,7 +248,7 @@
   align-items: center;
   gap: 7px;
   margin: 9px 0 0 26px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-soft);
   white-space: nowrap;
 }
@@ -257,11 +257,11 @@
   height: 4px;
   appearance: none;
   border: 0;
-  background: var(--line, #e8e0d5);
+  background: var(--line);
   border-radius: 2px;
 }
 .phase-progress-line progress::-webkit-progress-bar {
-  background: var(--line, #e8e0d5);
+  background: var(--line);
   border-radius: 2px;
 }
 .phase-progress-line progress::-webkit-progress-value {
@@ -277,11 +277,11 @@
 }
 .phase-progress-line small {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
 }
 .phase-grid {
-  --phase-weekend-shade: color-mix(in srgb, var(--ink, #2a241e) 6%, transparent);
-  --phase-week-line: color-mix(in srgb, var(--ink, #2a241e) 22%, transparent);
+  --phase-weekend-shade: color-mix(in srgb, var(--ink) 6%, transparent);
+  --phase-week-line: color-mix(in srgb, var(--ink) 22%, transparent);
 }
 /* Day lines, a stronger line at each Monday, and shaded Saturday/Sunday columns. The weekly
    layers repeat every 7 days, shifted so each period starts on a Monday. */
@@ -295,7 +295,7 @@
       transparent calc(var(--phase-day) * 5),
       var(--phase-weekend-shade) calc(var(--phase-day) * 5)
     ),
-    linear-gradient(to right, var(--line, #e8e0d5) 1px, transparent 1px);
+    linear-gradient(to right, var(--line) 1px, transparent 1px);
   background-size:
     calc(var(--phase-day) * 7) 100%,
     calc(var(--phase-day) * 7) 100%,
@@ -312,7 +312,7 @@
   background: color-mix(
     in srgb,
     var(--phase-color) 17%,
-    var(--surface, #fffaf3)
+    var(--surface)
   );
   border: 1px solid color-mix(in srgb, var(--phase-color) 45%, transparent);
   border-radius: 5px;
@@ -338,7 +338,7 @@
   inset: -1px auto -1px -1px;
   border-radius: 4px 0 0 4px;
   pointer-events: none;
-  background: color-mix(in srgb, var(--surface, #fffaf3) 45%, transparent);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
   -webkit-backdrop-filter: grayscale(0.85);
   backdrop-filter: grayscale(0.85);
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
@@ -432,8 +432,8 @@
   position: absolute;
   top: 0;
   left: 4px;
-  color: var(--ember);
-  font-size: 9px;
+  color: var(--ember-deep);
+  font-size: 11px;
 }
 /* Milestones: a dashed line down the chart at the due date, labelled at the top. */
 .phase-milestone {
@@ -462,7 +462,7 @@
   border: 1px solid var(--ember-tint2);
   box-shadow: 0 1px 4px rgba(42, 36, 30, 0.12);
   color: var(--ember-deep);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -490,7 +490,7 @@
   top: 0;
   pointer-events: none;
   z-index: 3;
-  color: var(--ink-faint, #938777);
+  color: var(--ink-faint);
   opacity: 0.8;
   overflow: visible;
 }
@@ -505,7 +505,7 @@
 .phase-links {
   padding: 18px;
   background: var(--surface);
-  border: 1px solid var(--line, #ddd5ca);
+  border: 1px solid var(--line);
   border-radius: 8px;
   max-height: 300px;
   overflow: auto;
@@ -526,7 +526,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 10px;
+  font-size: 11px;
 }
 .phase-links input {
   width: 84px;
@@ -536,7 +536,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 0;
-  border-top: 1px solid var(--line, #ddd5ca);
+  border-top: 1px solid var(--line);
   font-size: 12px;
 }
 .phase-link-item > span {
@@ -550,7 +550,7 @@
 .phase-link-item em {
   display: block;
   font-style: normal;
-  color: #a65324;
+  color: var(--ember-deep);
   margin-top: 4px;
 }
 .phase-error,
@@ -648,7 +648,7 @@
   position: absolute;
   bottom: 3px;
   left: 40px;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }

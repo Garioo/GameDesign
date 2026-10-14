@@ -8,7 +8,7 @@
 .document-link a { flex: 1; min-width: 0; color: var(--ink); text-decoration: none; }
 .document-link a:hover { color: var(--ember-deep); }
 .document-link span, .document-link small { display: block; overflow-wrap: anywhere; }
-.document-link small { font-size: 10px; color: var(--ink-soft); margin-top: 4px; }
+.document-link small { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
 .document-link-fields { display: grid; gap: 6px; }
 .document-link-fields input { min-width: 0; width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--surface); }
 .document-links .document-link-error { color: var(--danger); }

@@ -13,8 +13,7 @@
   overflow-x: clip;
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
-    radial-gradient(1100px 560px at 82% -8%, #fbe9d6 0%, rgba(251, 233, 214, 0) 55%),
-    radial-gradient(900px 520px at -6% 104%, #f3ece0 0%, rgba(243, 236, 224, 0) 60%),
+    var(--wash),
     var(--bg);
   background-blend-mode: soft-light, normal, normal, normal;
 }
@@ -46,7 +45,7 @@
 .logoIcon {
   width: 16px;
   height: 16px;
-  color: #fff4e8;
+  color: #fff;
 }
 .brandName {
   font-weight: 700;
@@ -67,7 +66,7 @@
 }
 .signIn:hover {
   background: #fff;
-  border-color: #ddd0bd;
+  border-color: var(--line-strong);
   transform: translateY(-1px);
   box-shadow: 0 3px 10px rgba(42, 36, 30, 0.08);
 }
@@ -89,7 +88,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ember);
+  color: var(--ember-deep);
   margin-bottom: 18px;
   animation: riseIn 0.55s var(--ease-rise) both;
 }
@@ -103,7 +102,7 @@
   animation: riseIn 0.55s var(--ease-rise) 0.06s both;
 }
 .titleAccent {
-  color: var(--ember);
+  color: var(--ember-deep);
   font-style: italic;
 }
 .lede {
@@ -130,7 +129,7 @@
   font-weight: 700;
   padding: 12px 22px;
   border-radius: var(--r-lg);
-  color: #fff4e8;
+  color: #fff;
   background: var(--grad-ember);
   text-decoration: none;
   box-shadow: 0 3px 12px rgba(191, 99, 43, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
@@ -177,11 +176,11 @@
   transform: rotate(-1.6deg);
 }
 .docCrumb {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ember);
+  color: var(--ember-deep);
 }
 .docHead {
   display: flex;
@@ -242,7 +241,7 @@
   place-items: center;
   border-color: var(--ember);
   background: var(--ember);
-  color: #fff4e8;
+  color: #fff;
 }
 .checkboxDone svg {
   width: 9px;
@@ -312,7 +311,7 @@
   transform: rotate(2.4deg);
 }
 .canvasLabel {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;

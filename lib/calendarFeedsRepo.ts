@@ -61,6 +61,7 @@ export async function loadFeedEvents(feed: CalendarFeed): Promise<FeedEvent[]> {
     skipped_dates: [],
     repeat_weekends: true,
     agenda: [],
+    kind: "course" as const,
     attendees: [],
     guests: [],
   }));

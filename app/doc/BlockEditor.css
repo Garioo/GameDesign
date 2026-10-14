@@ -74,7 +74,7 @@
 }
 .blk-thread-badge:hover { transform: translateY(-1px); }
 @media (prefers-reduced-motion: no-preference) {
-  .blk-thread-badge { animation: threadBadgeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .blk-thread-badge { animation: threadBadgeIn 0.4s var(--ease-rise) both; }
 }
 @keyframes threadBadgeIn {
   from { transform: scale(0.4); opacity: 0; }
@@ -233,13 +233,13 @@
 .callout-box .blk-text { font-size: 16px; line-height: 1.6; color: var(--t-ink, #6a4a32); }
 
 /* tone palette — shared by callout boxes and the swatch picker */
-.tone-ember, .tone-dot-ember { --t-bg:#fbede0; --t-bd:#f3d7c0; --t-ac:#cf6a2c; --t-ink:#6a4a32; }
-.tone-honey, .tone-dot-honey { --t-bg:#fbf3d8; --t-bd:#efe1ac; --t-ac:#cf9b1e; --t-ink:#6a5410; }
-.tone-sage,  .tone-dot-sage  { --t-bg:#e9f1e4; --t-bd:#cfe0c6; --t-ac:#5a9d6e; --t-ink:#355440; }
-.tone-sky,   .tone-dot-sky   { --t-bg:#e7eff7; --t-bd:#caddec; --t-ac:#3f80c4; --t-ink:#2e4a66; }
-.tone-rose,  .tone-dot-rose  { --t-bg:#fbe8e9; --t-bd:#f1cdcf; --t-ac:#d65a64; --t-ink:#6a3338; }
-.tone-plum,  .tone-dot-plum  { --t-bg:#efe7f4; --t-bd:#dccbe6; --t-ac:#8a5bb0; --t-ink:#49325f; }
-.tone-slate, .tone-dot-slate { --t-bg:#eceef0; --t-bd:#d7dbde; --t-ac:#6b7785; --t-ink:#39424b; }
+.tone-ember, .tone-dot-ember { --t-bg:var(--tone-ember-bg); --t-bd:var(--tone-ember-bd); --t-ac:var(--tone-ember-ac); --t-ink:var(--tone-ember-ink); }
+.tone-honey, .tone-dot-honey { --t-bg:var(--tone-honey-bg); --t-bd:var(--tone-honey-bd); --t-ac:var(--tone-honey-ac); --t-ink:var(--tone-honey-ink); }
+.tone-sage,  .tone-dot-sage  { --t-bg:var(--tone-sage-bg); --t-bd:var(--tone-sage-bd); --t-ac:var(--tone-sage-ac); --t-ink:var(--tone-sage-ink); }
+.tone-sky,   .tone-dot-sky   { --t-bg:var(--tone-sky-bg); --t-bd:var(--tone-sky-bd); --t-ac:var(--tone-sky-ac); --t-ink:var(--tone-sky-ink); }
+.tone-rose,  .tone-dot-rose  { --t-bg:var(--tone-rose-bg); --t-bd:var(--tone-rose-bd); --t-ac:var(--tone-rose-ac); --t-ink:var(--tone-rose-ink); }
+.tone-plum,  .tone-dot-plum  { --t-bg:var(--tone-plum-bg); --t-bd:var(--tone-plum-bd); --t-ac:var(--tone-plum-ac); --t-ink:var(--tone-plum-ink); }
+.tone-slate, .tone-dot-slate { --t-bg:var(--tone-slate-bg); --t-bd:var(--tone-slate-bd); --t-ac:var(--tone-slate-ac); --t-ink:var(--tone-slate-ink); }
 
 /* swatch picker that floats in the callout's top-right corner */
 .tone-pick { position: absolute; top: 9px; right: 9px; z-index: 6; line-height: 0; }
@@ -288,7 +288,7 @@
   color: var(--ember-deep); font: inherit; font-weight: 600;
   text-decoration: underline; text-underline-offset: 2px;
 }
-.img-pick:hover { color: var(--ember); }
+.img-pick:hover { color: var(--ember-deep); }
 .img-url-input {
   width: 100%; padding: 9px 12px;
   border: 1px solid var(--line); border-radius: var(--r-md);
@@ -738,7 +738,7 @@
   fill: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
-.curve-axis-label { font-size: 10px; font-weight: 600; fill: var(--ink-faint); }
+.curve-axis-label { font-size: 11px; font-weight: 600; fill: var(--ink-faint); }
 .curve-line {
   fill: none;
   stroke-width: 1.8;

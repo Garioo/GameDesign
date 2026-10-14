@@ -18,7 +18,7 @@ import SettingsButton from "@/app/components/SettingsButton";
 import styles from "./digest.module.css";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const UNKNOWN: ProfileInfo = { id: "", name: "A former member", initials: "?", color: "#a59a8c" };
+const UNKNOWN: ProfileInfo = { id: "", name: "A former member", initials: "?", color: "var(--ink-faint)" };
 
 /** All activity rows in [from, to), newest first, paged through the feed. */
 async function activityBetween(workspaceId: string, from: Date, to: Date): Promise<DigestActivity[]> {

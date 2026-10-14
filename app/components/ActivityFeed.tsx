@@ -101,7 +101,7 @@ export default function ActivityFeed({
           <ul className={styles.list}>
             {day.rows.map((it) => (
               <li key={it.id} className={styles.item}>
-                <span className={styles.avatar} style={{ background: it.actor?.color ?? "#a59a8c" }} title={it.actor?.name}>
+                <span className={styles.avatar} style={{ background: it.actor?.color ?? "var(--ink-faint)" }} title={it.actor?.name}>
                   {it.actor?.initials ?? "?"}
                 </span>
                 <div className={styles.body}>

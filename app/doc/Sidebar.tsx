@@ -206,6 +206,17 @@ export default function Sidebar({
     ids.splice(to, 0, movedId);
     onMoveSection(ids);
   };
+  // Menu alternative to dragging a page (touch, keyboard): swap with a sibling.
+  const siblingsOf = (d: DesignDoc) => (d.parentId ? childrenOf(d.parentId) : topLevel(d.sectionId ?? ""));
+  const movePageBy = (d: DesignDoc, delta: -1 | 1) => {
+    const ids = siblingsOf(d).map((x) => x.id);
+    const from = ids.indexOf(d.id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    onMovePage(d.id, d.sectionId ?? null, d.parentId ?? null, ids);
+  };
+
   const performSectionDrop = (targetId: string) => {
     if (dragSection) moveSectionTo(dragSection, targetId);
   };
@@ -311,6 +322,20 @@ export default function Sidebar({
               <button onMouseDown={(e) => { e.preventDefault(); startRename("page", doc.id, doc.title); }}>
                 <Pencil /> Rename
               </button>
+              {(() => {
+                const sibs = siblingsOf(doc);
+                const i = sibs.findIndex((x) => x.id === doc.id);
+                return (
+                  <>
+                    <button disabled={i <= 0} onMouseDown={(e) => { e.preventDefault(); setMenu(null); movePageBy(doc, -1); }}>
+                      <Icon name="arrowUp" /> Move up
+                    </button>
+                    <button disabled={i === sibs.length - 1} onMouseDown={(e) => { e.preventDefault(); setMenu(null); movePageBy(doc, 1); }}>
+                      <Icon name="arrowDown" /> Move down
+                    </button>
+                  </>
+                );
+              })()}
               <button
                 className="danger"
                 onMouseDown={(e) => { e.preventDefault(); setMenu(null); onDeletePage(doc.id); }}

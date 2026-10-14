@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listCalendarEvents, type CalendarEvent } from "@/lib/calendarEventsRepo";
+import { EVENT_KINDS, eventKind, listCalendarEvents, type CalendarEvent } from "@/lib/calendarEventsRepo";
 import { listCalendarFeeds, loadFeedEvents, type CalendarFeed, type FeedEvent } from "@/lib/calendarFeedsRepo";
 import { calendarWeekLayout, eventCoversDate, eventEndDate, eventSpan } from "@/lib/calendarLayout";
 import { expandOccurrences, isOccurrence, type Occurrence } from "@/lib/calendarRecurrence";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import { dayNumber, isoWeek } from "@/lib/gantt";
 import EventDialog from "./EventDialog";
+import DayAgenda from "./DayAgenda";
+import { loadLinkTargets } from "@/lib/linkTargets";
+import type { MentionTarget } from "@/app/doc/mentions";
 import { plainLinkedText } from "@/lib/pageLinks";
 import CalendarFeedsDialog from "./CalendarFeedsDialog";
 import PlanningHeader from "../board/PlanningHeader";
@@ -147,7 +150,18 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
     try { setStandaloneEvents(await listCalendarEvents(project)); setEventsError(""); }
     catch (error) { setEventsError((error as Error).message); }
   });
-  const feedClass = (event: CalendarEvent | FeedEvent) => "feed" in event ? styles.feedEvent : "";
+  // Day view shows each event's agenda open; one subscription refreshes them all.
+  const [agendaRefresh, setAgendaRefresh] = useState(0);
+  useSidebarLiveUpdates(view === "day" ? project : null, ["calendar_event_notes", "calendar_agenda_checks"], async () => setAgendaRefresh(n => n + 1));
+  const [linkTargets, setLinkTargets] = useState<MentionTarget[]>([]);
+  useEffect(() => {
+    if (view !== "day" || !project) return;
+    let active = true;
+    loadLinkTargets(project).then(t => { if (active) setLinkTargets(t); }).catch(console.error);
+    return () => { active = false; };
+  }, [view, project]);
+  const savedEvent = (event: CalendarEvent) => setStandaloneEvents(current => [...current.filter(item => item.id !== event.id), event]);
+  const kindClass = (event: CalendarEvent | FeedEvent) => styles[`kind_${eventKind(event)}`];
   const failedFeeds = Object.keys(feedErrors).length;
   const eventRange = (event: CalendarEvent) => eventEndDate(event) !== event.date ? `${event.date} – ${eventEndDate(event)} · ` : "";
   const eventTime = (event: CalendarEvent) => event.start_time ? `${event.start_time.slice(0, 5)}${event.end_time ? `–${event.end_time.slice(0, 5)}` : ""}` : "All day";
@@ -213,7 +227,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
     },
   ]);
   function standaloneButton(event: Occurrence<CalendarEvent | FeedEvent>, compact = false) {
-    return <button key={event.id} className={`${compact ? `${styles.event} ${styles.standaloneEvent}` : styles.agendaTask} ${feedClass(event)}`} onClick={() => openEvent(event)} title={`${event.title} · ${eventRange(event)}${eventTime(event)}${event.repeat ? " · repeats" : ""}`}>
+    return <button key={event.id} className={`${compact ? `${styles.event} ${styles.standaloneEvent}` : styles.agendaTask} ${kindClass(event)}`} onClick={() => openEvent(event)} title={`${event.title} · ${eventRange(event)}${eventTime(event)}${event.repeat ? " · repeats" : ""}`}>
       <PlanningIcon name={event.repeat ? "repeat" : "calendar"} />
       {compact ? <span>{event.start_time ? `${event.start_time.slice(0, 5)} ` : ""}{event.title}</span> : <span><strong>{event.title}</strong><small>{eventRange(event)}{eventTime(event)}{event.location ? ` · ${event.location}` : ""}{"feed" in event ? ` · ${event.category || event.feed.label}` : ""}</small></span>}
     </button>;
@@ -233,10 +247,11 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
             <div className={styles.viewSwitch} role="group" aria-label="Calendar view">{(["month", "week", "day"] as const).map(mode => <button key={mode} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
             <button onClick={goToToday}>Today</button><button aria-label={`Previous ${view}`} onClick={() => shiftMonth(-1)}><PlanningIcon name="arrowLeft" /></button><button aria-label={`Next ${view}`} onClick={() => shiftMonth(1)}><PlanningIcon name="arrowRight" /></button></div>
         </div>
+        <ul className={styles.kindLegend} aria-label="Event categories">{EVENT_KINDS.map(k => <li key={k.id} className={styles[`kind_${k.id}`]}>{k.label}</li>)}</ul>
         {view === "day" ? <div className={styles.daySchedule}>
           <div className={styles.daySectionHead}><h3>Events</h3>{canEdit && <button className={styles.addEvent} onClick={() => setEditingEvent(null)}><PlanningIcon name="plus" /> Add event on this date</button>}</div>
           {milestonesOn(selected).map((m) => milestoneLink(m, false))}
-          {eventsOn(selected).map(event => <div key={event.id} className={styles.dayEventRow}><time>{eventCoversDate(event, selected) && event.date !== selected ? "Continues" : eventTime(event)}</time>{standaloneButton(event)}</div>)}
+          {eventsOn(selected).map(event => <div key={event.id} className={styles.dayEventRow}><time>{eventCoversDate(event, selected) && event.date !== selected ? "Continues" : eventTime(event)}</time><div>{standaloneButton(event)}{!("feed" in event.series) && <DayAgenda event={event.series} occurrence={event.occurrence} project={project} canEdit={canEdit} targets={linkTargets} refresh={agendaRefresh} onSaved={savedEvent} />}</div></div>)}
           {!eventsOn(selected).length && <p className={styles.empty}>No events on this date.</p>}
         </div> : <div className={`${styles.monthScroll} ${view === "week" ? styles.weekView : ""}`}>
           <div className={styles.weekdays}>{weekdays.map((day, i) => <span key={day} className={i >= 5 ? styles.weekendHead : undefined}>{day}</span>)}</div>
@@ -262,7 +277,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
                     const edges = `${continuesBefore ? styles.continuesBefore : ""} ${continuesAfter ? styles.continuesAfter : ""}`;
                     const place = { gridColumn: `${start + 1} / ${end + 2}`, gridRow: lane + 1 };
                     const { event } = span;
-                    return <button key={span.id} className={`${styles.spanEvent} ${edges} ${feedClass(event)}`} style={place}
+                    return <button key={span.id} className={`${styles.spanEvent} ${edges} ${kindClass(event)}`} style={place}
                       title={`${event.title} · ${eventRange(event)}${eventTime(event)}${event.repeat ? " · repeats" : ""}`} onClick={() => openEvent(event)}>
                       <PlanningIcon name={event.repeat ? "repeat" : "calendar"} /><span>{event.start_time ? `${event.start_time.slice(0, 5)} ` : ""}{event.title}</span>
                     </button>;

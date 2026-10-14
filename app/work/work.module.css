@@ -256,7 +256,7 @@
 .priority {
   font-weight: 600;
 }
-.p_high { background: #fbe9d6; color: #8f4017; }
+.p_high { background: var(--danger-tint); color: var(--danger); }
 .p_medium { background: #f7ecd2; color: #7a5614; }
 .p_low { background: #e6f1e8; color: #285c38; }
 .groupDot.p_high { background: #d9772f; }

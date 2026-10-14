@@ -216,6 +216,17 @@ export default function CanvasSidebar({
                 <button onMouseDown={(e) => { e.preventDefault(); startRename("canvas", c.id, c.name); }}>
                   <Pencil /> Rename
                 </button>
+                {/* menu alternative to "drag into folders" (touch, keyboard) */}
+                {[{ id: null, name: "No folder" }, ...[...folders].sort((x, y) => x.position - y.position)]
+                  .filter((f) => f.id !== (c.folderId ?? null))
+                  .map((f) => (
+                    <button
+                      key={f.id ?? "none"}
+                      onMouseDown={(e) => { e.preventDefault(); setMenu(null); onMoveToFolder(c.id, f.id); }}
+                    >
+                      <Folder /> Move to {f.name}
+                    </button>
+                  ))}
                 <button
                   className="danger"
                   onMouseDown={(e) => { e.preventDefault(); setConfirmId(c.id); }}

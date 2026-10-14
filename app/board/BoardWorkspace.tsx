@@ -60,14 +60,15 @@ import {
   type BoardColumn as ColData,
 } from "@/lib/boardRepo";
 
+const HIDDEN_STAGES_KEY = "gd-board-hidden-stages";
+
 /* Board layout inherits the shared typography and design tokens. */
 const css = `
   .board-app {
     min-height: 100vh;
     background:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
-      radial-gradient(1200px 600px at 78% -10%, #fbe9d6 0%, rgba(251,233,214,0) 55%),
-      radial-gradient(900px 500px at 0% 100%, #f3ece0 0%, rgba(243,236,224,0) 60%),
+      var(--wash),
       var(--bg);
     background-blend-mode: soft-light, normal, normal, normal;
     display: flex; flex-direction: column;
@@ -109,12 +110,12 @@ const css = `
     transition: background .12s, color .12s;
   }
   .sidebar-item:hover .sidebar-del { display: flex; }
-  .sidebar-del:hover { background: #fbe2dc; color: #b9421f; }
-  .col-del-btn:hover { background: #fbe2dc; color: #b9421f; }
+  .sidebar-del:hover { background: var(--danger-tint); color: var(--danger); }
+  .col-del-btn:hover { background: var(--danger-tint); color: var(--danger); }
   .modal-delete { display: inline-flex; align-items: center; gap: 6px; }
-  .modal-delete:hover { background: #fbe2dc; color: #b9421f; border-color: #f3cabe; }
+  .modal-delete:hover { background: var(--danger-tint); color: var(--danger); border-color: var(--danger-tint); }
   .sidebar-new { color: var(--ink-faint); }
-  .sidebar-new:hover { color: var(--ember); background: var(--ember-tint); }
+  .sidebar-new:hover { color: var(--ember-deep); background: var(--ember-tint); }
   .sidebar-new svg { width: 13px; height: 13px; }
 
   .cal-due-empty { font-size: 12px; color: var(--ink-faint); padding: 4px 0; }
@@ -134,7 +135,7 @@ const css = `
   .board-title-area { display: flex; flex-direction: column; gap: 2px; }
   .board-label {
     font-size: 11px; font-weight: 600; letter-spacing: 0.09em;
-    text-transform: uppercase; color: var(--ember);
+    text-transform: uppercase; color: var(--ember-deep);
   }
   .board-heading {
     font-family: Georgia, serif; font-weight: 500; font-size: 28px;
@@ -156,15 +157,15 @@ const css = `
     font-size: 12px; line-height: 1; color: var(--ink-faint); cursor: pointer;
   }
   .filter-chip:hover .chip-del { display: inline-flex; }
-  .chip-del:hover { background: #fbe2dc; color: #b9421f; }
+  .chip-del:hover { background: var(--danger-tint); color: var(--danger); }
   .filter-chip-add { color: var(--ink-faint); border-style: dashed; }
-  .filter-chip-add:hover { color: var(--ember); }
+  .filter-chip-add:hover { color: var(--ember-deep); }
   .filter-chip-icon { width: 13px; height: 13px; }
   .add-col-btn {
     display: flex; align-items: center; gap: 6px;
     font: inherit; font-size: 13px; font-weight: 600; color: #fff;
     padding: 7px 14px; border-radius: 9px; border: none; cursor: pointer;
-    background: linear-gradient(150deg, #e98a45, #c0531c);
+    background: var(--grad-ember);
     box-shadow: 0 2px 8px rgba(191,99,43,0.35);
     transition: filter .12s, transform .12s;
   }
@@ -260,7 +261,7 @@ const css = `
     padding: 2px 7px; border-radius: 6px;
     background: var(--line-soft); color: var(--ink-soft);
   }
-  .card-tag.kind-mechanic { background: #fbe9d6; color: #8f4017; }
+  .card-tag.kind-mechanic { background: var(--ember-tint); color: var(--ember-deep); }
   .card-tag.kind-vision { background: #e5edf8; color: #1c4a82; }
   .card-tag.kind-economy { background: #e6f1e8; color: #285c38; }
   .card-tag.kind-lore { background: #f2e5f8; color: #6b2888; }
@@ -283,7 +284,7 @@ const css = `
     font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
     background: var(--line-soft); color: var(--ink-faint);
   }
-  .card-priority.high { background: #fbe9d6; color: #8f4017; }
+  .card-priority.high { background: var(--danger-tint); color: var(--danger); }
   .card-priority.medium { background: #f7ecd2; color: #7a5614; }
   .card-priority.low { background: #e6f1e8; color: #285c38; }
 
@@ -295,7 +296,7 @@ const css = `
     background: none; border: 1px dashed var(--line);
     cursor: pointer; transition: border-color .12s, color .12s, background .12s;
   }
-  .add-card-btn:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-tint); }
+  .add-card-btn:hover { border-color: var(--ember); color: var(--ember-deep); background: var(--ember-tint); }
   .add-card-btn svg { width: 14px; height: 14px; }
 
   /* ── new card inline form ── */
@@ -314,7 +315,7 @@ const css = `
   .btn-save {
     font: inherit; font-size: 12.5px; font-weight: 600; color: #fff;
     padding: 5px 13px; border-radius: 7px; border: none; cursor: pointer;
-    background: linear-gradient(150deg, #e98a45, #c0531c);
+    background: var(--grad-ember);
     transition: filter .1s;
   }
   .btn-save:hover { filter: brightness(1.06); }
@@ -335,7 +336,7 @@ const css = `
     background: none; cursor: pointer;
     transition: border-color .12s, color .12s, background .12s;
   }
-  .add-col-ghost:hover { border-color: var(--ember); color: var(--ember); background: var(--ember-tint); }
+  .add-col-ghost:hover { border-color: var(--ember); color: var(--ember-deep); background: var(--ember-tint); }
   .add-col-ghost svg { width: 16px; height: 16px; }
 
   /* ── modal overlay ── */
@@ -351,7 +352,7 @@ const css = `
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 16px;
-    box-shadow: 0 24px 70px rgba(42,36,30,0.28), 0 4px 12px rgba(42,36,30,0.08);
+    box-shadow: var(--shadow-modal);
     padding: 26px 28px;
     animation: riseIn .18s ease both;
   }
@@ -384,7 +385,7 @@ const css = `
   .modal-input:focus, .modal-textarea:focus, .modal-select:focus { border-color: var(--ember-tint2); box-shadow: 0 0 0 2px var(--ember-tint2); }
   .canvas-link-picker { display: grid; gap: 8px; margin-top: 10px; }
   .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 22px; }
-  .modal-save { font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; padding: 8px 20px; border-radius: 9px; border: none; cursor: pointer; background: linear-gradient(150deg, #e98a45, #c0531c); box-shadow: 0 2px 8px rgba(191,99,43,0.35); transition: filter .1s; }
+  .modal-save { font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; padding: 8px 20px; border-radius: 9px; border: none; cursor: pointer; background: var(--grad-ember); box-shadow: 0 2px 8px rgba(191,99,43,0.35); transition: filter .1s; }
   .modal-save:hover { filter: brightness(1.06); }
   .modal-cancel { font: inherit; font-size: 13.5px; color: var(--ink-soft); padding: 8px 18px; border-radius: 9px; border: 1px solid var(--line); background: none; cursor: pointer; transition: background .1s; }
   .modal-cancel:hover { background: var(--line-soft); }
@@ -518,19 +519,21 @@ function Card({ card, people, subtasks, onDragStart, onDragEnd, dropState, onCli
 }
 
 /* ── Column component ────────────────────────────────────────────────────── */
-function Column({ col, people, subtaskStats, canEdit, onManageStages, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
+function Column({ col, people, subtaskStats, canEdit, onManageStages, onHide, onAddCard, onCardClick, dragState, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave }: {
   col: ColData;
   people: Person[];
   subtaskStats: Map<string, { done: number; total: number }>;
   canEdit:boolean;
   onManageStages:()=>void;
+  /** Hide this stage on the board, for this viewer only. */
+  onHide: () => void;
   onAddCard: (colId: string, title: string) => Promise<void>;
   onCardClick: (card: CardData) => void;
   dragState: DragInfo | null;
   onDragStart: (e: DragEvent<HTMLDivElement>, cardId: string) => void;
   onDragEnd: () => void;
-  onDragOver: (e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) => void;
-  onDrop: (e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) => void;
+  onDragOver: (e: DragEvent<HTMLDivElement>, colId: string) => void;
+  onDrop: (e: DragEvent<HTMLDivElement>, colId: string) => void;
   onDragLeave: () => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -557,8 +560,13 @@ function Column({ col, people, subtaskStats, canEdit, onManageStages, onAddCard,
   }
 
   return (
+    // The whole column (heading, cards and the empty space below) is a drop target.
     <div
       className="col"
+      onDragEnter={(e) => e.preventDefault()}
+      onDragOver={(e) => onDragOver(e, col.id)}
+      onDrop={(e) => onDrop(e, col.id)}
+      onDragLeave={onDragLeave}
     >
       <div
         className="col-head"
@@ -569,25 +577,19 @@ function Column({ col, people, subtaskStats, canEdit, onManageStages, onAddCard,
           <span className="col-name">{col.name}</span>
         </span>
         <span className="col-count">{col.cards.length}</span>
+        <button type="button" className="col-add-task col-hide" aria-label={`Hide ${col.name}`} title={`Hide ${col.name}`} onClick={onHide}><PlanningIcon name="eyeOff" /></button>
         {canEdit&&<details className="planning-menu stage-header-menu"><summary aria-label={`Actions for ${col.name}`}><PlanningIcon name="more"/></summary><div><button onClick={onManageStages}>Manage stages</button><button onClick={()=>setAdding(true)}>Add task</button></div></details>}
         {canEdit && <button className="col-add-task" aria-label={`Add task to ${col.name}`} onClick={() => setAdding(true)}><PlanningIcon name="plus" /></button>}
       </div>
 
       <div
-        className={`col-body${dragState?.overCol === col.id && !dragState?.overCard ? " drag-over" : ""}`}
-        onDragOver={(e) => onDragOver(e, col.id, null)}
-        onDrop={(e) => onDrop(e, col.id, null)}
-        onDragLeave={onDragLeave}
+        className={`col-body${dragState?.overCol === col.id ? " drag-over" : ""}`}
       >
         {col.cards.map((card) => {
           const dropState =
             dragState?.overCard === card.id ? dragState.position : null;
           return (
-            <div
-              key={card.id}
-              onDragOver={(e) => { e.stopPropagation(); onDragOver(e, col.id, card.id); }}
-              onDrop={(e) => { e.stopPropagation(); onDrop(e, col.id, card.id); }}
-            >
+            <div key={card.id} data-card-id={card.id}>
               <Card
                 card={card}
                 people={people}
@@ -1057,6 +1059,19 @@ export default function BoardWorkspace() {
   const [allBoards, setAllBoards] = useState(true);
   // Boards shown in the combined view; null = every board (new ones included).
   const [boardFilter, setBoardFilter] = useState<string[] | null>(null);
+  // Stages hidden on the board (e.g. Done), per viewer. Stage ids are unique, so one key covers every workspace.
+  const [hiddenStages, setHiddenStages] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(HIDDEN_STAGES_KEY) ?? "[]");
+      if (Array.isArray(saved)) setHiddenStages(saved.filter((id): id is string => typeof id === "string"));
+    } catch { /* optional preference */ }
+  }, []);
+  const setStageHidden = (id: string, hide: boolean) => setHiddenStages((prev) => {
+    const next = hide ? [...prev.filter((x) => x !== id), id] : prev.filter((x) => x !== id);
+    try { localStorage.setItem(HIDDEN_STAGES_KEY, JSON.stringify(next)); } catch { /* optional preference */ }
+    return next;
+  });
   const [phaseSnapshot,setPhaseSnapshot]=useState<PhaseSnapshot|null>(null);
   // Milestones, dependencies and repeating tasks (supabase/migrate-project-planning.sql).
   const [plan, setPlan] = useState<{ milestones: Milestone[]; dependencies: CardDependency[]; recurring: RecurringRule[]; missing: boolean }>({ milestones: [], dependencies: [], recurring: [], missing: false });
@@ -1364,6 +1379,7 @@ export default function BoardWorkspace() {
       ...c, cards: c.cards.map((k) => k.id === cardId ? { ...k, dragging: true } : k)
     })));
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", cardId); // Safari and Firefox won't start a drag without data
   }
   function handleDragEnd() {
     drag.current = { cardId: null, srcColId: null };
@@ -1372,20 +1388,21 @@ export default function BoardWorkspace() {
   }
   // Boards keep their own stages, so a card never crosses boards by drag.
   const crossesBoards = (colId: string) => !!drag.current.srcColId && boardOfColumn(drag.current.srcColId)?.id !== boardOfColumn(colId)?.id;
-  function handleDragOver(e: DragEvent<HTMLDivElement>, colId: string, cardId: string | null) {
+  function handleDragOver(e: DragEvent<HTMLDivElement>, colId: string) {
     if (!drag.current.cardId || crossesBoards(colId)) return; // a column (not a card) is being dragged, or another board
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const position = ((): "above" | "below" | null => {
-      if (!cardId) return null;
-      const el = e.currentTarget;
-      const rect = el.getBoundingClientRect();
-      return e.clientY < rect.top + rect.height / 2 ? "above" : "below";
-    })();
-    setDragState({ overCol: colId, overCard: cardId, position });
+    // Wherever the pointer is in the column, drop before the first card whose middle is below it
+    // (the dragged card itself doesn't count), else after the last card.
+    const others = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-card-id]")].filter((el) => el.dataset.cardId !== drag.current.cardId);
+    const before = others.find((el) => { const r = el.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+    const target = before ?? others[others.length - 1];
+    const next = { overCol: colId, overCard: target?.dataset.cardId ?? null, position: target ? (before ? "above" as const : "below" as const) : null };
+    setDragState((prev) => prev && prev.overCol === next.overCol && prev.overCard === next.overCard && prev.position === next.position ? prev : next);
   }
-  function handleDrop(e: DragEvent<HTMLDivElement>, colId: string, targetCardId: string | null) {
+  function handleDrop(e: DragEvent<HTMLDivElement>, colId: string) {
     e.preventDefault();
+    const targetCardId = dragState?.overCol === colId ? dragState.overCard : null;
     const { cardId } = drag.current;
     if (!cardId || crossesBoards(colId)) return;
 
@@ -1625,13 +1642,14 @@ export default function BoardWorkspace() {
                     </div>
                   </header>}
                   <div className="board-cols">
-                    {boardCols.map((col) => (
+                    {boardCols.filter((col) => !hiddenStages.includes(col.id)).map((col) => (
                       <Column
                         key={col.id}
                         col={col}
                         people={people}
                         canEdit={canEdit}
                         onManageStages={()=>handleManageStages(board)}
+                        onHide={() => setStageHidden(col.id, true)}
                         onAddCard={handleAddCard}
                         onCardClick={openCard}
                         subtaskStats={subtaskStats}
@@ -1643,6 +1661,13 @@ export default function BoardWorkspace() {
                         onDragLeave={handleDragLeave}
                       />
                     ))}
+                    {boardCols.some((col) => hiddenStages.includes(col.id)) && <div className="hidden-stages" aria-label="Hidden stages">
+                      {boardCols.filter((col) => hiddenStages.includes(col.id)).map((col) => (
+                        <button key={col.id} type="button" onClick={() => setStageHidden(col.id, false)} title={`Show the ${col.name} stage`} style={{ "--stage-color": col.color } as CSSProperties}>
+                          <span className="col-dot" />Show {col.name}<span className="col-count">{col.cards.length}</span>
+                        </button>
+                      ))}
+                    </div>}
                     {canEdit&&<button className="add-col-ghost" onClick={()=>handleManageStages(board)}>
                       <Plus style={{ width: 16, height: 16 }} />
                       <span>Add a stage</span>

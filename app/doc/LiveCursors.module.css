@@ -18,12 +18,14 @@
 
 .caret {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 2px;
   margin-left: -1px;
   background: var(--c);
   border-radius: 1px;
   animation: blink 1.06s steps(1, end) infinite;
-  transition: left 80ms linear, top 80ms linear;
+  transition: transform 80ms linear;
 }
 /* A caret that is moving stays solid, like a real one while typing. */
 .caret.moving {
@@ -45,7 +47,7 @@
   border-radius: 3px 3px 3px 0;
   background: var(--c);
   color: #fff;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 16px;
   white-space: nowrap;

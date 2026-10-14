@@ -1244,7 +1244,7 @@ export default function BlockEditor({
         if (ref) onNavigate?.(ref);
       }}
     >
-      {blocks.map((b) => (
+      {blocks.map((b, i) => (
         <BlockRow
           key={b.id}
           block={b}
@@ -1282,6 +1282,8 @@ export default function BlockEditor({
           onPlus={() => insertAfter(b.id)}
           onToggleMenu={() => setMenuFor((m) => (m === b.id ? null : b.id))}
           onDuplicate={() => duplicateBlock(b.id)}
+          onMoveUp={i > 0 ? () => { reorder(b.id, blocks[i - 1].id); setMenuFor(null); } : undefined}
+          onMoveDown={i < blocks.length - 1 ? () => { reorder(blocks[i + 1].id, b.id); setMenuFor(null); } : undefined}
           onDelete={() => deleteBlock(b.id)}
           threads={threadsByBlock.get(b.id) ?? []}
           onOpenThread={onAnnotationClick}
@@ -1364,6 +1366,8 @@ function BlockRow({
   onPlus,
   onToggleMenu,
   onDuplicate,
+  onMoveUp,
+  onMoveDown,
   onDelete,
   threads,
   onOpenThread,
@@ -1405,6 +1409,9 @@ function BlockRow({
   onPlus: () => void;
   onToggleMenu: () => void;
   onDuplicate: () => void;
+  /** Non-drag reordering (touch, keyboard); absent at the ends. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   onDelete: () => void;
   /** Anchors of open comment threads in this block. */
   threads: string[];
@@ -1658,6 +1665,16 @@ function BlockRow({
           <button onMouseDown={(e) => { e.preventDefault(); onDuplicate(); }}>
             <ICopy /> Duplicate
           </button>
+          {onMoveUp && (
+            <button onMouseDown={(e) => { e.preventDefault(); onMoveUp(); }}>
+              <Icon name="arrowUp" /> Move up
+            </button>
+          )}
+          {onMoveDown && (
+            <button onMouseDown={(e) => { e.preventDefault(); onMoveDown(); }}>
+              <Icon name="arrowDown" /> Move down
+            </button>
+          )}
           <button className="danger" onMouseDown={(e) => { e.preventDefault(); onDelete(); }}>
             <ITrash /> Delete
           </button>

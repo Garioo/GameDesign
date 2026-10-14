@@ -383,7 +383,7 @@ a.rowTitle:hover {
   color: var(--ink-faint);
 }
 .plus {
-  color: var(--online, #4caf7d);
+  color: var(--online);
   font-weight: 700;
 }
 .minus {
@@ -406,8 +406,8 @@ a.rowTitle:hover {
   line-height: 18px;
 }
 .stageDone {
-  background: color-mix(in srgb, var(--online, #4caf7d) 16%, transparent);
-  color: color-mix(in srgb, var(--online, #4caf7d) 70%, var(--ink));
+  background: color-mix(in srgb, var(--online) 16%, transparent);
+  color: color-mix(in srgb, var(--online) 70%, var(--ink));
 }
 .arrow {
   color: var(--ink-faint);
@@ -419,7 +419,7 @@ a.rowTitle:hover {
   height: 16px;
   margin-right: 6px;
   border-radius: 50%;
-  background: var(--online, #4caf7d);
+  background: var(--online);
   color: #fff;
   font-size: 10px;
   vertical-align: 1px;
@@ -479,7 +479,7 @@ a.rowTitle:hover {
     animation-delay: calc(var(--i, 0) * 45ms);
   }
   .bar {
-    animation: barGrow 0.7s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+    animation: barGrow 0.7s var(--ease-rise) both;
     animation-delay: calc(120ms + var(--i, 0) * 50ms);
   }
 }

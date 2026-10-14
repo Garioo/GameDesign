@@ -24,14 +24,14 @@
 .event:hover, .agendaTask:hover { border-color: var(--ember); background: var(--ember-tint); }
 .completed { color: var(--ink-faint); }
 .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.more { border: 0; background: none; font-size: 10px; color: var(--ember-deep); cursor: pointer; padding: 4px; }
+.more { border: 0; background: none; font-size: 11px; color: var(--ember-deep); cursor: pointer; padding: 4px; }
 .agenda { border-left: 1px solid var(--line); padding-left: 24px; }
-.agendaHeading > span { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ember-deep); font-weight: 600; }
+.agendaHeading > span { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--ember-deep); font-weight: 600; }
 .agendaHeading h2 { font-size: 16px; font-weight: 600; margin: 8px 0 20px; }
 .agendaTask { display: flex; width: 100%; gap: 10px; align-items: center; padding: 13px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; text-align: left; margin-bottom: 8px; color: var(--ink); cursor: pointer; }
 .agendaTask > span:nth-child(2) { flex: 1; min-width: 0; }
 .agendaTask strong { display: block; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
-.agendaTask small { display: block; margin-top: 5px; font-size: 10px; color: var(--ink-faint); }
+.agendaTask small { display: block; margin-top: 5px; font-size: 11px; color: var(--ink-faint); }
 .agendaTask svg { flex-shrink: 0; color: var(--ink-faint); }
 .empty { font-size: 12px; line-height: 1.7; color: var(--ink-faint); padding: 16px 0; }
 .layout button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
@@ -40,19 +40,21 @@
 
 @media (max-width: 600px) {
   .weekdays, .grid { min-width: 0; }
-  .weekdays span { padding: 10px 5px; font-size: 10px; }
+  .weekdays span { padding: 10px 5px; font-size: 11px; }
   .day { padding: 4px 2px; min-height: 95px; }
-  .event { padding: 4px 2px; gap: 3px; font-size: 9px; }
+  .event { padding: 4px 2px; gap: 3px; font-size: 11px; }
   .event .dot { width: 4px; height: 4px; }
-  .more { font-size: 9px; }
+  .more { font-size: 11px; }
 }
 
-.standaloneEvent { background: #eaf0ec; border-color: #d1dfd5; color: #385a47; }
+.standaloneEvent { background: var(--k-bg); border-color: var(--k-bd); color: var(--k-ink); }
 .standaloneEvent svg { flex-shrink: 0; width: 12px; height: 12px; }
-.agendaTask > svg:first-child { color: #527461; }
+.agendaTask { background: var(--k-bg, var(--surface)); border-color: var(--k-bd, var(--line)); color: var(--k-ink, var(--ink)); }
+.agendaTask small { color: color-mix(in srgb, var(--k-ink, var(--ink)) 78%, transparent); }
+.agendaTask > svg:first-child { color: var(--k-ac, var(--ink-faint)); }
 .addEvent { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ember-deep); padding: 10px; margin-bottom: 16px; cursor: pointer; }
 .eventNotice, .eventError { margin: 12px 28px; font-size: 13px; }
-.eventError { color: #a13923; }
+.eventError { color: var(--danger); }
 .eventDialog { position: fixed; inset: 0; margin: auto; box-sizing: border-box; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--line); border-radius: 14px; padding: 26px; color: var(--ink); background: var(--surface); box-shadow: 0 20px 80px #241e1833; }
 .eventDialog::backdrop { background: #241e1855; }
 .dialogHeading { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; margin-bottom: 24px; }
@@ -85,7 +87,7 @@
 .eventDialog .attendeeList .attendeeOn { border-color: var(--ember); background: var(--ember-tint); color: var(--ink); }
 .attendeeAvatar { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 9px; font-weight: 700; flex: none; }
 .guestAvatar { background: var(--ink-faint); }
-.attendeeCheck { color: var(--ember); }
+.attendeeCheck { color: var(--ember-deep); }
 .eventDialog .attendee .guestRemove { display: grid; place-items: center; padding: 2px; margin-right: -4px; border: 0; background: none; color: var(--ink-faint); border-radius: 50%; }
 .eventDialog .attendee .guestRemove:hover { color: var(--ink); background: var(--line-soft); }
 .guestAdd { display: flex; gap: 8px; }
@@ -103,13 +105,15 @@
 .spanEvent { pointer-events: auto; min-width: 0; margin: 2px 3px; padding: 3px 7px; border: 1px solid #c5d8cc; border-radius: 5px; background: #e1ece5; color: #385a47; text-align: left; display: flex; gap: 5px; align-items: center; font-size: 11px; cursor: pointer; }
 .spanEvent span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spanEvent svg { flex-shrink: 0; width: 12px; height: 12px; }
-.spanEvent:hover { background: #cedfd4; border-color: #789c86; }
+.spanEvent { background: var(--k-bg); border-color: var(--k-bd); color: var(--k-ink); }
+.spanEvent svg, .standaloneEvent svg { color: var(--k-ac); }
+.spanEvent:hover, .event.standaloneEvent:hover, .agendaTask:hover { background: color-mix(in srgb, var(--k-ac) 14%, var(--k-bg)); border-color: var(--k-ac); }
 .continuesBefore { margin-left: 0; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .continuesAfter { margin-right: 0; border-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 @media (max-width: 600px) {
   .week { min-width: 0; }
   .weekEvents { top: 36px; }
-  .spanEvent { padding: 3px; gap: 3px; font-size: 9px; }
+  .spanEvent { padding: 3px; gap: 3px; font-size: 11px; }
   .spanEvent svg { width: 10px; height: 10px; }
 }
 
@@ -134,17 +138,14 @@
 
 
 /* Subscribed (Moodle) calendars: read-only events in a blue tint. */
-.feedEvent, .spanEvent.feedEvent { background: #e6ecf7; border-color: #c8d4ea; color: #34507e; }
-.spanEvent.feedEvent:hover, .event.feedEvent:hover, .agendaTask.feedEvent:hover { background: #d5e0f2; border-color: #6f8cc0; }
-.agendaTask.feedEvent > svg:first-child { color: #5a77aa; }
 .feedsButton { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .feedsButton:hover { border-color: var(--ember); }
 .feedsButton svg { width: 14px; height: 14px; }
-.feedWarning { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #a13923; color: white; font-size: 11px; font-weight: 700; }
+.feedWarning { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--danger); color: white; font-size: 11px; font-weight: 700; }
 .feedList { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
 .feedList li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .feedList li > span:nth-child(2) { flex: 1; min-width: 0; font-size: 13px; }
-.feedList small { display: block; margin-top: 4px; color: #a13923; font-size: 11px; line-height: 1.4; }
+.feedList small { display: block; margin-top: 4px; color: var(--danger); font-size: 11px; line-height: 1.4; }
 .feedSwatch { width: 10px; height: 10px; border-radius: 3px; background: #6f8cc0; flex-shrink: 0; }
 .eventDialog .feedReload { margin-bottom: 22px; }
 
@@ -154,8 +155,8 @@
 .weekend.outside { background: color-mix(in srgb, var(--ink) 7%, var(--line-soft)); }
 .weekend.selected { background: var(--ember-tint); }
 .weekdays .weekendHead { color: var(--ink-faint); }
-.weekNumber { position: relative; float: right; margin: 5px 2px 0 0; font-size: 10px; font-weight: 600; color: var(--ink-faint); font-variant-numeric: tabular-nums; pointer-events: none; }
-@media (max-width: 600px) { .weekNumber { font-size: 9px; margin: 3px 0 0; } }
+.weekNumber { position: relative; float: right; margin: 5px 2px 0 0; font-size: 11px; font-weight: 600; color: var(--ink-faint); font-variant-numeric: tabular-nums; pointer-events: none; }
+@media (max-width: 600px) { .weekNumber { font-size: 11px; margin: 3px 0 0; } }
 
 /* Milestones on their due dates (from the board's planning data). */
 .day { position: relative; }
@@ -165,7 +166,7 @@
   max-width: calc(100% - 44px);
   padding: 2px 7px 2px 5px; border-radius: 999px;
   background: var(--ember-tint); color: var(--ember-deep);
-  font-size: 10.5px; font-weight: 700; text-decoration: none;
+  font-size: 11px; font-weight: 700; text-decoration: none;
 }
 .milestoneFlag span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .milestoneFlag:hover { background: var(--ember-tint2); }
@@ -211,7 +212,7 @@
 .eventDialog .deleteButton, .eventDialog button.deleteButton { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 0; background: none; color: var(--ink-soft); border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
 .eventDialog .deleteButton:hover, .eventDialog button.deleteButton:hover, .deleteMenu[open] .deleteButton { color: var(--danger); background: var(--danger-tint); }
 .deleteButton svg { width: 15px; height: 15px; }
-.deletePanel { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 2; width: 260px; padding: 6px; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px #241e1826; }
+.deletePanel { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 2; width: 260px; padding: 6px; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-menu); }
 .eventDialog .deletePanel > button { display: grid; gap: 2px; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 6px; }
 .eventDialog .deletePanel > button:hover { background: var(--bg); }
 .deletePanel strong { font-size: 13px; font-weight: 600; }
@@ -220,3 +221,45 @@
 .deletePanel p { margin: 6px 8px 10px; font-size: 13px; line-height: 1.45; }
 .deleteConfirm { display: flex; justify-content: flex-end; gap: 6px; padding: 0 4px 4px; }
 .eventDialog .deleteConfirm button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* day view: each event's agenda shown open under it */
+.dayEventRow .agendaTask:has(+ .dayAgenda) { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.dayAgenda { margin: -1px 0 8px; padding: 10px 12px 12px 38px; border: 1px solid var(--line); border-top-style: dashed; border-radius: 0 0 7px 7px; background: var(--surface); }
+.dayAgendaCount { margin: 0 0 4px; font-size: 11px; font-weight: 600; color: var(--ink-soft); }
+.dayAgenda .agendaList { margin-bottom: 8px; }
+.dayAgenda .agendaList .checkbox { font-size: 13px; }
+.dayAgenda input:not([type=checkbox]) { flex: 1; min-width: 0; box-sizing: border-box; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 13px; }
+.dayAgenda .guestAdd button { display: inline-flex; align-items: center; gap: 4px; flex: none; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.dayAgenda button:disabled { opacity: .5; cursor: default; }
+.dayAgenda .agendaRemove { display: grid; place-items: center; padding: 3px; border: 0; background: none; color: var(--ink-faint); border-radius: 50%; opacity: 0; cursor: pointer; }
+.dayAgenda .agendaList li:hover .agendaRemove, .dayAgenda .agendaRemove:focus-visible { opacity: 1; }
+.dayAgenda .agendaRemove:hover { color: var(--ink); background: var(--line-soft); }
+@media (hover: none) { .dayAgenda .agendaRemove { opacity: 1; } }
+.dayAgenda .eventError { margin: 8px 0 0; font-size: 12px; }
+
+/* ---- event categories: one tone each (tokens in globals.css) ---- */
+.kind_interview { --k-bg: var(--tone-plum-bg);  --k-bd: var(--tone-plum-bd);  --k-ac: color-mix(in srgb, var(--tone-plum-ac) 70%, var(--tone-plum-ink));  --k-ink: var(--tone-plum-ink); }
+.kind_meeting   { --k-bg: var(--tone-sky-bg);   --k-bd: var(--tone-sky-bd);   --k-ac: color-mix(in srgb, var(--tone-sky-ac) 70%, var(--tone-sky-ink));   --k-ink: var(--tone-sky-ink); }
+.kind_group     { --k-bg: var(--tone-sage-bg);  --k-bd: var(--tone-sage-bd);  --k-ac: color-mix(in srgb, var(--tone-sage-ac) 70%, var(--tone-sage-ink));  --k-ink: var(--tone-sage-ink); }
+.kind_agenda    { --k-bg: var(--tone-honey-bg); --k-bd: var(--tone-honey-bd); --k-ac: color-mix(in srgb, var(--tone-honey-ac) 70%, var(--tone-honey-ink)); --k-ink: var(--tone-honey-ink); }
+.kind_course    { --k-bg: var(--tone-rose-bg);  --k-bd: var(--tone-rose-bd);  --k-ac: color-mix(in srgb, var(--tone-rose-ac) 70%, var(--tone-rose-ink));  --k-ink: var(--tone-rose-ink); }
+.kind_other     { --k-bg: var(--line-soft); --k-bd: var(--line-strong); --k-ac: var(--ink-faint); --k-ink: var(--ink); } /* warm neutral = uncategorised */
+
+/* legend under the toolbar */
+.kindLegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: -4px 0 14px; padding: 0; list-style: none; font-size: 12px; color: var(--ink-soft); }
+.kindLegend li { display: inline-flex; align-items: center; gap: 6px; }
+.kindLegend li::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--k-bg); box-shadow: inset 0 0 0 1.5px var(--k-ac); }
+
+/* category in the event view */
+.kindTag { display: inline-block; margin-bottom: 8px; padding: 2px 8px; border-radius: 999px; background: var(--k-bg); border: 1px solid var(--k-bd); color: var(--k-ink); font-size: 11px; font-weight: 600; }
+
+/* category picker in the event form: radio chips */
+.eventDialog fieldset.kindPicker { gap: 7px; }
+.kindPicker legend { padding: 0; margin-bottom: 7px; font-size: 12px; font-weight: 600; }
+.kindPicker > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.eventDialog label.kindChip { position: relative; display: inline-flex; align-items: center; gap: 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink-soft); font-size: 13px; font-weight: 500; cursor: pointer; transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast); }
+.eventDialog label.kindChip:hover { border-color: var(--k-ac); }
+.eventDialog label.kindChip:has(input:checked) { background: var(--k-bg); border-color: var(--k-ac); color: var(--k-ink); font-weight: 600; }
+.eventDialog label.kindChip:has(input:focus-visible) { outline: 2px solid var(--ember); outline-offset: 2px; }
+.eventDialog .kindChip input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.eventDialog fieldset:disabled label.kindChip { cursor: default; }

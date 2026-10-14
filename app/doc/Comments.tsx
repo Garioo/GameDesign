@@ -217,7 +217,7 @@ export default function Comments({
       return {
         name: p?.name ?? "Member",
         initials: p?.initials ?? (p?.name ?? "M").slice(0, 2).toUpperCase(),
-        color: p?.color ?? "#a59a8c",
+        color: p?.color ?? "var(--ink-faint)",
       };
     };
   }, [people]);

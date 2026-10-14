@@ -1,6 +1,20 @@
 import { supabase } from "./supabase";
 import type { Repeat } from "./calendarRecurrence";
 
+/** What an event is; each kind has its own colour on the calendar. */
+export const EVENT_KINDS = [
+  { id: "interview", label: "Interview" },
+  { id: "meeting", label: "Meeting" },
+  { id: "group", label: "Group activity" },
+  { id: "agenda", label: "Agenda / to-do" },
+  { id: "course", label: "Course" },
+  { id: "other", label: "Other" },
+] as const;
+export type EventKind = (typeof EVENT_KINDS)[number]["id"];
+/** Subscribed-calendar (Moodle) events are always courses; rows saved before the migration fall back to other. */
+export const eventKind = (event: Pick<CalendarEvent, "kind"> & { feed?: unknown }): EventKind =>
+  event.feed ? "course" : EVENT_KINDS.some(k => k.id === event.kind) ? event.kind : "other";
+
 /** One line of an event's agenda checklist. */
 export interface AgendaItem { id: string; text: string }
 
@@ -27,12 +41,13 @@ export interface CalendarEvent {
   repeat_weekends: boolean;
   /** A one-off's checklist. Repeating events keep theirs per occurrence (getOccurrence), so every one starts empty. */
   agenda: AgendaItem[];
+  kind: EventKind;
 }
 export type CalendarEventDraft = Omit<CalendarEvent, "id">;
-const fields = "id,title,date,end_date,start_time,end_time,location,notes,attendees,guests,repeat,repeat_until,skipped_dates,repeat_weekends,agenda";
+const fields = "id,title,date,end_date,start_time,end_time,location,notes,attendees,guests,repeat,repeat_until,skipped_dates,repeat_weekends,agenda,kind";
 function eventError(error: { code?: string; message: string }) {
   return new Error(error.code === "PGRST205" || error.code === "42P01" || error.code === "PGRST204" || error.code === "42703"
-    ? "Calendar events need a database update. Apply the calendar-events, calendar-event-ranges, event-attendees and event-recurrence migrations in Supabase."
+    ? "Calendar events need a database update. Apply the calendar-events, calendar-event-ranges, event-attendees, event-recurrence and event-kind migrations in Supabase."
     : error.message);
 }
 export async function listCalendarEvents(project: string): Promise<CalendarEvent[]> {

@@ -379,7 +379,7 @@ export default function LiveCursors({ pageId, me }: { pageId: string; me: Me | n
             ))}
             <div
               className={d.active ? `${styles.caret} ${styles.moving}` : styles.caret}
-              style={{ left: d.caret.x, top: d.caret.y, height: d.caret.h }}
+              style={{ transform: `translate(${d.caret.x}px, ${d.caret.y}px)`, height: d.caret.h }}
             >
               <span className={d.active ? `${styles.tag} ${styles.tagOpen}` : styles.tag}>
                 {d.active ? d.name : ""}

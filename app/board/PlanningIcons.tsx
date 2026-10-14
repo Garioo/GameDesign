@@ -11,7 +11,8 @@ type Name =
   | "timeline"
   | "arrowLeft"
   | "arrowRight"
-  | "repeat";
+  | "repeat"
+  | "eyeOff";
 const paths: Record<Name, string> = {
   plus: "M12 5v14M5 12h14",
   menu: "M4 5h16v14H4zM9 5v14",
@@ -25,6 +26,7 @@ const paths: Record<Name, string> = {
   arrowLeft: "m14 6-6 6 6 6",
   arrowRight: "m10 6 6 6-6 6",
   repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
+  eyeOff: "M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A9.8 9.8 0 0 1 12 5c5 0 9 4.5 10 7-.4 1-1.2 2.3-2.3 3.5M6.6 6.6C4.3 8 2.6 10.2 2 12c1 2.5 5 7 10 7 1.8 0 3.4-.5 4.8-1.3",
 };
 export function PlanningIcon({
   name,

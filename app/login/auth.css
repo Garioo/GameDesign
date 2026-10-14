@@ -71,8 +71,8 @@
   transition: border-color var(--t-fast), background var(--t-fast), transform .04s;
 }
 .auth-btn:hover:not(:disabled) {
-  border-color: #d8cbb8;
-  background: #fffaf3;
+  border-color: var(--line-strong);
+  background: var(--surface);
 }
 .auth-btn:active:not(:disabled) { transform: translateY(1px); }
 .auth-btn:disabled { opacity: .6; cursor: default; }

@@ -429,7 +429,7 @@
   color: var(--ink-faint);
   font-weight: 500;
 }
-.priorityPicker.p_high { background: #fbe6dc; color: #934b32; }
+.priorityPicker.p_high { background: var(--danger-tint); color: var(--danger); }
 .priorityPicker.p_medium { background: #f7ecd2; color: #7a5614; }
 .priorityPicker.p_low { background: var(--line-soft); color: var(--ink-soft); }
 

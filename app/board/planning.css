@@ -99,10 +99,10 @@
   min-width: 0;
 }
 .planning-eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.09em;
-  color: var(--ember);
+  color: var(--ember-deep);
 }
 .planning-app .planning-heading h1 {
   font-family: inherit;
@@ -312,8 +312,8 @@
   --board-color: var(--ember);
   display: block;
   background: color-mix(in srgb, var(--board-color) 4%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--board-color) 22%, var(--line));
-  border-left: 4px solid var(--board-color);
+  --col-head-bg: color-mix(in srgb, var(--board-color) 4%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--board-color) 32%, var(--line));
   border-radius: 12px;
   padding: 4px 14px 14px;
 }
@@ -360,7 +360,8 @@
 }
 .planning-app .board-cols {
   gap: 12px;
-  align-items: flex-start;
+  /* columns share the tallest column's height, so a card can be dropped anywhere down a column */
+  align-items: stretch;
   width: 100%;
   min-width: 100%;
 }
@@ -374,11 +375,16 @@
   box-shadow: none;
 }
 .planning-app .col-head {
+  /* stays in view while the cards scroll under it (board-scroll is the scroll container) */
+  position: sticky;
+  top: 0;
+  z-index: 3;
   border: 0;
   height: 42px;
   padding: 6px 2px;
   gap: 8px;
-  background: transparent;
+  background: var(--col-head-bg, var(--bg));
+  box-shadow: 0 1px 0 var(--line-soft);
   cursor: default;
 }
 .planning-app .col-head::after {
@@ -393,7 +399,6 @@
   padding: 2px 7px;
   border-radius: 4px;
   background: transparent;
-  border-left: 2px solid var(--stage-color);
 }
 .planning-app .col-name {
   flex: initial;
@@ -413,7 +418,6 @@
   border-radius: 4px;
 }
 .planning-app .col-dot {
-  display: none;
   height: 8px;
   width: 8px;
   border-radius: 50%;
@@ -455,6 +459,7 @@
   background: var(--bg);
 }
 .planning-app .col-body {
+  flex: 1;
   border: 0;
   background: transparent;
   padding: 4px 0;
@@ -499,7 +504,7 @@
   background: transparent;
   border: 1px solid var(--line-soft);
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
   padding: 2px 5px;
@@ -532,14 +537,14 @@
   font-size: 9px;
 }
 .planning-app .card-priority {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: capitalize;
   background: transparent;
   color: var(--ink-soft);
   padding: 0;
 }
 .planning-app .card-priority.high {
-  color: #b16653;
+  color: var(--danger);
 }
 .planning-app .add-card-btn {
   font-size: 12px;
@@ -624,7 +629,7 @@
   font-size: 12px;
 }
 .planning-app .gantt-dates small {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .planning-app .gantt-dates .weekend {
@@ -719,13 +724,13 @@
 .planning-app .gantt-bar .gantt-bar-body:hover { background: transparent; }
 .gantt-bar-copy { display: grid; gap: 1px; min-width: 0; flex: 1; }
 .gantt-bar-copy strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; line-height: 16px; }
-.gantt-bar-copy small { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--ink-soft); line-height: 13px; overflow: hidden; text-overflow: ellipsis; }
+.gantt-bar-copy small { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-soft); line-height: 13px; overflow: hidden; text-overflow: ellipsis; }
 .gantt-bar-copy i { width: 5px; height: 5px; border-radius: 50%; background: var(--bar-color); flex: none; }
 .planning-app .planning-avatar,
 .planning-app .gantt-task-label .planning-avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; color: white; font-size: 8px; font-weight: 600; line-height: 1; }
 .planning-app .gantt-row > .gantt-task-label { flex-direction: row; align-items: center; gap: 9px; border-bottom: 1px solid var(--line-soft) !important; }
 .planning-app .gantt-task-label .gantt-task-copy { color: var(--ink); display: grid; gap: 3px; flex: 1; min-width: 0; }
-.planning-app .gantt-task-copy small { font-size: 10px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; }
+.planning-app .gantt-task-copy small { font-size: 11px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; }
 .gantt-task-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 @container (max-width: 100px) { .gantt-bar-body .planning-avatar { display: none; } }
 .planning-app .gantt-resize {
@@ -837,7 +842,7 @@
 }
 .planning-error,
 .planning-app .gantt-error {
-  color: #a84436;
+  color: var(--danger);
   background: #fff0ed;
   border: 1px solid #f0d2cc;
   border-radius: 7px;
@@ -1127,7 +1132,7 @@
   border-radius: 2px;
 }
 .stage-preview small {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-faint);
 }
 .stage-transfer {
@@ -1162,7 +1167,7 @@
 }
 .stage-dialog .planning-error {
   margin-top: 16px;
-  color: #a84436;
+  color: var(--danger);
 }
 @media (max-width: 760px) {
   .planning-app .planning-heading {
@@ -1319,11 +1324,11 @@
   margin-left: auto;
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   background: var(--line-soft);
 }
-.planning-app .card-tags .card-priority.high { background: #fbe6dc; color: #934b32; }
+.planning-app .card-tags .card-priority.high { background: var(--danger-tint); color: var(--danger); }
 .planning-app .card-tags .card-priority.medium { background: #f7ecd2; color: #7a5614; }
 .planning-app .card-tags .card-priority.low { background: #e6f1e8; color: #285c38; }
 
@@ -1370,7 +1375,7 @@
 .planning-app .quick-add-entry textarea { flex:1; min-width:0; max-height:120px; resize:vertical; border:1px solid var(--line); border-radius:6px; padding:9px 12px; font:inherit; font-size:13px; background:var(--bg); color:var(--ink); }
 .planning-app .task-quick-add small,.planning-app .new-card-form small { display:block; margin-top:6px; font-size:11px; color:var(--ink-soft); }
 .planning-app .task-quick-add p { margin:4px 0 0; font-size:12px; }
-.planning-app .task-quick-add [role=alert],.planning-app .new-card-form [role=alert] { color:#a43c2c; }
+.planning-app .task-quick-add [role=alert],.planning-app .new-card-form [role=alert] { color: var(--danger); }
 
 /* The timeline shares one compact row rhythm across labels, bars and connectors. */
 .planning-app .gantt-row { height: 44px; border-bottom: 1px solid var(--line-soft); }
@@ -1388,7 +1393,7 @@
 .planning-app .hierarchy-label .gantt-task-open { min-width: 0; flex: 1; }
 .planning-app .hierarchy-label .gantt-task-copy { min-width: 0; }
 .planning-app .hierarchy-label .gantt-task-copy strong { font-size: 12px; }
-.planning-app .hierarchy-label .gantt-task-copy small { font-size: 10px; }
+.planning-app .hierarchy-label .gantt-task-copy small { font-size: 11px; }
 .planning-app .timeline-drag-handle { padding: 0; width: 15px; flex: none; border: 0; background: transparent; cursor: grab; color: var(--ink-faint); opacity: 0; }
 .planning-app .gantt-row:hover .timeline-drag-handle, .planning-app .gantt-row:focus-within .timeline-drag-handle { opacity: 1; }
 .planning-app .timeline-owner { width: 20px; height: 20px; flex: none; font-size: 9px; }
@@ -1421,4 +1426,45 @@
 .board-phase-summary {font-size:12px;color:var(--ink-soft);line-height:1.6;padding:0 24px 12px}
 .board-phase-summary a,a.board-phase-summary {color:var(--ink-soft);text-decoration:none}
 a.board-phase-summary {display:block;padding:4px 0 0}
-.board-phase-summary a:hover,a.board-phase-summary:hover {color:var(--ember);text-decoration:underline}
+.board-phase-summary a:hover,a.board-phase-summary:hover {color: var(--ember-deep);text-decoration:underline}
+.stage-dialog .stage-warning {
+  margin: 10px 0 2px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: var(--tone-honey-bg);
+  border: 1px solid var(--tone-honey-bd);
+  color: var(--tone-honey-ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+/* per-stage hide (eye button in the stage header) and the buttons that bring hidden stages back */
+.planning-app .col-hide { margin-left: auto; color: var(--ink-faint); }
+.planning-app .col-hide:hover { color: var(--ink); }
+.planning-app .col-hide + .stage-header-menu { margin-left: 0; }
+.planning-app .col-hide svg { width: 15px; height: 15px; }
+.planning-app .hidden-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  align-self: flex-start;
+}
+.planning-app .hidden-stages button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.planning-app .hidden-stages button:hover { background: var(--surface); color: var(--ink); }
+.planning-app .hidden-stages .col-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--stage-color); }
+.planning-app .hidden-stages .col-count { margin-left: auto; font-size: 12px; color: var(--ink-faint); }
