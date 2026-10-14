@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { EVENT_KINDS, eventKind, listCalendarEvents, type CalendarEvent } from "@/lib/calendarEventsRepo";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import Icon from "@/app/components/Icon";
+import { EVENT_KINDS, eventKind, getKindColors, listCalendarEvents, saveKindColors, type CalendarEvent, type EventKind, type KindColors } from "@/lib/calendarEventsRepo";
 import { listCalendarFeeds, loadFeedEvents, type CalendarFeed, type FeedEvent } from "@/lib/calendarFeedsRepo";
 import { calendarWeekLayout, eventCoversDate, eventEndDate, eventSpan } from "@/lib/calendarLayout";
 import { expandOccurrences, isOccurrence, type Occurrence } from "@/lib/calendarRecurrence";
@@ -23,6 +24,8 @@ import { useFollowedView, useShareView } from "@/lib/followView";
 import UndoToast from "@/app/components/UndoToast";
 
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+// Built-in category colours (the --tone-*-ac tokens in globals.css), shown in the picker until a workspace picks its own.
+const DEFAULT_KIND_HEX: Record<EventKind, string> = { interview: "#8a5bb0", meeting: "#3f80c4", group: "#5a9d6e", agenda: "#cf9b1e", course: "#d65a64", other: "#756a5d" };
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const weekOf = (date: Date) => isoWeek(dayNumber(dayKey(date)));
 const isDay = (value: string | null | undefined): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime());
@@ -63,6 +66,26 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   }, [followMode, followDate]);
   const followEvent = following ? `${followedView?.event ?? ""}@${followedView?.occ ?? ""}` : undefined;
   const appliedFollowEvent = useRef<string | undefined>(undefined);
+  // Category colours chosen by the workspace (shared); unset kinds keep the built-in tone.
+  const [kindColors, setKindColors] = useState<KindColors>({});
+  const saveColorsTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!project) return;
+    let active = true;
+    getKindColors(project).then(c => { if (active) setKindColors(c); }).catch(console.error);
+    return () => { active = false; };
+  }, [project]);
+  function setKindColor(kind: EventKind, color: string | null) {
+    setKindColors(current => {
+      const next = { ...current };
+      if (color) next[kind] = color; else delete next[kind];
+      // The picker fires on every drag; save once it settles.
+      clearTimeout(saveColorsTimer.current);
+      saveColorsTimer.current = setTimeout(() => { saveKindColors(project, next).catch(e => setEventsError((e as Error).message)); }, 400);
+      return next;
+    });
+  }
+  const kindVars = Object.fromEntries(Object.entries(kindColors).map(([k, c]) => [`--kind-${k}`, c])) as CSSProperties;
   const [feeds, setFeeds] = useState<CalendarFeed[]>([]);
   const [feedEvents, setFeedEvents] = useState<Record<string, FeedEvent[]>>({});
   const [feedErrors, setFeedErrors] = useState<Record<string, string>>({});
@@ -232,7 +255,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
       {compact ? <span>{event.start_time ? `${event.start_time.slice(0, 5)} ` : ""}{event.title}</span> : <span><strong>{event.title}</strong><small>{eventRange(event)}{eventTime(event)}{event.location ? ` · ${event.location}` : ""}{"feed" in event ? ` · ${event.category || event.feed.label}` : ""}</small></span>}
     </button>;
   }
-  return <>
+  return <div className={styles.calendarRoot} style={kindVars} data-custom={Object.keys(kindColors).join(" ")}>
     <PlanningHeader title="Calendar" mode="calendar" onNavigation={onNavigation} createLabel="New event" onCreate={() => setEditingEvent(null)} canEdit={canEdit}>
       <label className="planning-search"><PlanningIcon name="search" /><input aria-label="Search calendar events" placeholder="Search events" value={search} onChange={e => setSearch(e.target.value)} /></label>
       <button className={styles.feedsButton} onClick={() => setFeedsOpen(true)} aria-label={`Subscribed calendars${failedFeeds ? `, ${failedFeeds} failed to load` : ""}`}><PlanningIcon name="calendar" />Calendars{feeds.length ? ` · ${feeds.length}` : ""}{failedFeeds ? <span className={styles.feedWarning} aria-hidden="true">!</span> : null}</button>
@@ -247,7 +270,13 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
             <div className={styles.viewSwitch} role="group" aria-label="Calendar view">{(["month", "week", "day"] as const).map(mode => <button key={mode} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
             <button onClick={goToToday}>Today</button><button aria-label={`Previous ${view}`} onClick={() => shiftMonth(-1)}><PlanningIcon name="arrowLeft" /></button><button aria-label={`Next ${view}`} onClick={() => shiftMonth(1)}><PlanningIcon name="arrowRight" /></button></div>
         </div>
-        <ul className={styles.kindLegend} aria-label="Event categories">{EVENT_KINDS.map(k => <li key={k.id} className={styles[`kind_${k.id}`]}>{k.label}</li>)}</ul>
+        <ul className={styles.kindLegend} aria-label="Event categories">{EVENT_KINDS.map(k => <li key={k.id} className={styles[`kind_${k.id}`]}>
+          {canEdit
+            ? <input type="color" className={styles.kindSwatch} value={kindColors[k.id] ?? DEFAULT_KIND_HEX[k.id]} onChange={e => setKindColor(k.id, e.target.value)} aria-label={`${k.label} colour`} title={`Change the ${k.label} colour for everyone`} />
+            : <span className={styles.kindSwatch} aria-hidden="true" />}
+          {k.label}
+          {canEdit && kindColors[k.id] && <button type="button" className={styles.kindReset} onClick={() => setKindColor(k.id, null)} aria-label={`Reset the ${k.label} colour`} title="Back to the default colour"><Icon name="close" /></button>}
+        </li>)}</ul>
         {view === "day" ? <div className={styles.daySchedule}>
           <div className={styles.daySectionHead}><h3>Events</h3>{canEdit && <button className={styles.addEvent} onClick={() => setEditingEvent(null)}><PlanningIcon name="plus" /> Add event on this date</button>}</div>
           {milestonesOn(selected).map((m) => milestoneLink(m, false))}
@@ -310,5 +339,5 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
       onUndoable={(message, undo) => setToast({ message, undo })} />}
     {toast && <UndoToast message={toast.message} onDismiss={dismissToast}
       onUndo={() => { toast.undo().catch(e => setEventsError((e as Error).message)); }} />}
-  </>;
+  </div>;
 }

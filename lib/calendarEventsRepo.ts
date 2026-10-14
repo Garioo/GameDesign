@@ -15,6 +15,26 @@ export type EventKind = (typeof EVENT_KINDS)[number]["id"];
 export const eventKind = (event: Pick<CalendarEvent, "kind"> & { feed?: unknown }): EventKind =>
   event.feed ? "course" : EVENT_KINDS.some(k => k.id === event.kind) ? event.kind : "other";
 
+/** Workspace-chosen colour per category; a missing kind keeps its built-in colour. */
+export type KindColors = Partial<Record<EventKind, string>>;
+const HEX = /^#[0-9a-fA-F]{6}$/;
+export async function getKindColors(project: string): Promise<KindColors> {
+  const { data, error } = await supabase.from("projects").select("calendar_colors").eq("id", project).maybeSingle();
+  if (error) {
+    if (error.code === "42703" || error.code === "PGRST204") return {}; // migration not applied yet: built-in colours
+    throw new Error(error.message);
+  }
+  const raw = (data?.calendar_colors ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(EVENT_KINDS.flatMap(k => typeof raw[k.id] === "string" && HEX.test(raw[k.id] as string) ? [[k.id, raw[k.id]]] : [])) as KindColors;
+}
+export async function saveKindColors(project: string, colors: KindColors): Promise<void> {
+  const clean = Object.fromEntries(Object.entries(colors).filter(([k, v]) => EVENT_KINDS.some(x => x.id === k) && typeof v === "string" && HEX.test(v)));
+  const { error } = await supabase.from("projects").update({ calendar_colors: clean }).eq("id", project);
+  if (error) throw new Error(error.code === "42703" || error.code === "PGRST204"
+    ? "Custom calendar colours need a database update. Apply migrate-calendar-colors.sql in Supabase."
+    : error.message);
+}
+
 /** One line of an event's agenda checklist. */
 export interface AgendaItem { id: string; text: string }
 

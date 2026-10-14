@@ -248,7 +248,17 @@
 /* legend under the toolbar */
 .kindLegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: -4px 0 14px; padding: 0; list-style: none; font-size: 12px; color: var(--ink-soft); }
 .kindLegend li { display: inline-flex; align-items: center; gap: 6px; }
-.kindLegend li::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--k-bg); box-shadow: inset 0 0 0 1.5px var(--k-ac); }
+.kindSwatch { flex: none; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 4px; background: var(--k-bg); box-shadow: inset 0 0 0 1.5px var(--k-ac); }
+/* editors get a native colour picker dressed as the swatch */
+input.kindSwatch { appearance: none; -webkit-appearance: none; cursor: pointer; background: none; box-shadow: none; }
+input.kindSwatch::-webkit-color-swatch-wrapper { padding: 0; }
+input.kindSwatch::-webkit-color-swatch { border: 0; border-radius: 4px; background: var(--k-bg); box-shadow: inset 0 0 0 1.5px var(--k-ac); }
+input.kindSwatch::-moz-color-swatch { border: 0; border-radius: 4px; background: var(--k-bg); box-shadow: inset 0 0 0 1.5px var(--k-ac); }
+input.kindSwatch:hover { outline: 2px solid var(--line-strong); outline-offset: 1px; }
+input.kindSwatch:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.kindReset { display: grid; place-items: center; width: 18px; height: 18px; margin-left: -2px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-faint); cursor: pointer; }
+.kindReset:hover { background: var(--line-soft); color: var(--ink); }
+.kindReset svg { width: 11px; height: 11px; }
 
 /* category in the event view */
 .kindTag { display: inline-block; margin-bottom: 8px; padding: 2px 8px; border-radius: 999px; background: var(--k-bg); border: 1px solid var(--k-bd); color: var(--k-ink); font-size: 11px; font-weight: 600; }
@@ -263,3 +273,20 @@
 .eventDialog label.kindChip:has(input:focus-visible) { outline: 2px solid var(--ember); outline-offset: 2px; }
 .eventDialog .kindChip input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .eventDialog fieldset:disabled label.kindChip { cursor: default; }
+
+/* workspace-chosen category colours: one hex per kind (set as --kind-<id> on .calendarRoot)
+   drives fill, border, accent and text; kinds without one keep the tone above */
+.calendarRoot { display: contents; }
+.kind_interview { --k-c: var(--kind-interview); }
+.kind_meeting   { --k-c: var(--kind-meeting); }
+.kind_group     { --k-c: var(--kind-group); }
+.kind_agenda    { --k-c: var(--kind-agenda); }
+.kind_course    { --k-c: var(--kind-course); }
+.kind_other     { --k-c: var(--kind-other); }
+[data-custom~="interview"] .kind_interview, [data-custom~="meeting"] .kind_meeting, [data-custom~="group"] .kind_group,
+[data-custom~="agenda"] .kind_agenda, [data-custom~="course"] .kind_course, [data-custom~="other"] .kind_other {
+  --k-bg: color-mix(in srgb, var(--k-c) 14%, var(--surface));
+  --k-bd: color-mix(in srgb, var(--k-c) 40%, var(--surface));
+  --k-ac: var(--k-c);
+  --k-ink: color-mix(in srgb, var(--k-c) 30%, var(--ink)); /* stays ≥5:1 even for very light picks */
+}
