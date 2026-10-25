@@ -519,3 +519,8 @@
   width: 14px;
   height: 14px;
 }
+@media (max-width: 860px) {
+  .backdrop { top: var(--visible-top, 0px); bottom: auto; height: var(--visible-height, 100dvh); padding-top: max(12px, env(safe-area-inset-top)); }
+  .dialog { max-height: calc(var(--visible-height, 100dvh) - 32px - env(safe-area-inset-top)); }
+  .body { min-height: 0; }
+}

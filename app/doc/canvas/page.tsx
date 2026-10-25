@@ -3,6 +3,7 @@
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 
 import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { GeoShapeGeoStyle, toRichText, type Editor } from "tldraw";
 import CanvasSidebar from "./CanvasSidebar";
@@ -360,14 +361,18 @@ export default function CanvasPage() {
     });
   }, [editor]);
 
+  const [shapeMenuPosition, setShapeMenuPosition] = useState({ left: 12, bottom: 12 });
+
   // Close the shape menu on outside click.
   useEffect(() => {
     if (!shapeMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest(".shape-wrap")) setShapeMenuOpen(false);
+    const onDoc = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest(".shape-wrap, .shape-menu")) setShapeMenuOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    const close = () => setShapeMenuOpen(false);
+    document.addEventListener("pointerdown", onDoc);
+    window.addEventListener("resize", close);
+    return () => { document.removeEventListener("pointerdown", onDoc); window.removeEventListener("resize", close); };
   }, [shapeMenuOpen]);
 
   const pickTool = (id: string) => editor?.setCurrentTool(id);
@@ -522,12 +527,17 @@ export default function CanvasPage() {
                 aria-label="Shapes"
                 aria-expanded={shapeMenuOpen}
                 disabled={!editor}
-                onClick={() => setShapeMenuOpen((o) => !o)}
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const menuWidth = 190;
+                  setShapeMenuPosition({ left: Math.max(12, Math.min(window.innerWidth - menuWidth - 12, rect.left + rect.width / 2 - menuWidth / 2)), bottom: window.innerHeight - rect.top + 12 });
+                  setShapeMenuOpen((o) => !o);
+                }}
               >
                 <Square className="dock-tool-icon" />
               </button>
-              {shapeMenuOpen && (
-                <div className="shape-menu">
+              {shapeMenuOpen && createPortal(
+                <div className="shape-menu" role="group" aria-label="Shape types" style={{ position: "fixed", left: shapeMenuPosition.left, top: "auto", bottom: shapeMenuPosition.bottom, transform: "none", zIndex: 55 }}>
                   {SHAPES.map((s) => (
                     <button
                       key={s.id}
@@ -539,7 +549,7 @@ export default function CanvasPage() {
                       <s.Icon className="dock-tool-icon" />
                     </button>
                   ))}
-                </div>
+                </div>, document.body
               )}
             </span>
             <button

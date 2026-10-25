@@ -101,7 +101,7 @@
 .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); position: relative; min-width: 560px; border-bottom: 1px solid var(--line-soft); }
 .week:last-child { border-bottom: 0; }
 .week .day { border-bottom: 0; }
-.weekEvents { position: absolute; top: 39px; left: 0; right: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: 26px; pointer-events: none; }
+.weekEvents { position: absolute; top: 39px; left: 0; right: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: var(--calendar-event-row, 26px); pointer-events: none; }
 .spanEvent { pointer-events: auto; min-width: 0; margin: 2px 3px; padding: 3px 7px; border: 1px solid #c5d8cc; border-radius: 5px; background: #e1ece5; color: #385a47; text-align: left; display: flex; gap: 5px; align-items: center; font-size: 11px; cursor: pointer; }
 .spanEvent span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spanEvent svg { flex-shrink: 0; width: 12px; height: 12px; }
@@ -290,3 +290,14 @@ input.kindSwatch:focus-visible { outline: 2px solid var(--ember); outline-offset
   --k-ac: var(--k-c);
   --k-ink: color-mix(in srgb, var(--k-c) 30%, var(--ink)); /* stays ≥5:1 even for very light picks */
 }
+@media (max-width: 600px) {
+  .weekNumber { position: absolute; float: none; top: 3px; right: 3px; margin: 0; font-size: 9px; line-height: 1; }
+  .day .date { margin-top: 8px; }
+}
+
+@media (pointer: coarse) {
+  .calendar { --calendar-event-row: 48px; }
+  .weekEvents { top: 64px; }
+}
+
+@media (pointer: coarse) { .navigation button { min-height: 44px; } }

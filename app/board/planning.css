@@ -1235,7 +1235,7 @@
   .planning-app .sidebar {
     position: absolute;
     left: 0;
-    top: 58px;
+    top: var(--app-header-height);
     bottom: 44px;
     z-index: 20;
     box-shadow: 8px 0 25px rgba(42, 36, 30, 0.08);
@@ -1468,3 +1468,16 @@ a.board-phase-summary {display:block;padding:4px 0 0}
 .planning-app .hidden-stages button:hover { background: var(--surface); color: var(--ink); }
 .planning-app .hidden-stages .col-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--stage-color); }
 .planning-app .hidden-stages .col-count { margin-left: auto; font-size: 12px; color: var(--ink-faint); }
+
+@media (max-width: 760px) {
+  .stage-dialog { height: auto; max-height: calc(var(--visible-height, 100dvh) - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .stage-dialog form { height: auto; max-height: inherit; }
+  .stage-dialog-content { min-height: 0; overflow-y: auto; }
+}
+@media (pointer: coarse) { .planning-app .col-name { min-width: 0; } }
+
+@media (pointer: coarse) {
+  .planning-app .planning-heading > .planning-primary,
+  .planning-app .planning-view-switch button,
+  .planning-app .planning-controls :is(button, summary, input, select) { min-height: 44px !important; }
+}

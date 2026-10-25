@@ -1,5 +1,7 @@
 "use client";
 
+import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
+import InstallHelp from "@/app/components/InstallHelp";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +39,8 @@ export default function Settings({
   onSignOut: () => void;
   onLeave: () => void;
 }) {
+  useBodyScrollLock(open);
+
   // profile draft
   const [name, setName] = useState(session.name);
   const [initials, setInitials] = useState(session.initials);
@@ -443,6 +447,7 @@ export default function Settings({
               <span className={styles.rule} />
             </div>
 
+            <InstallHelp />
             <div className={styles.account}>
               <div className={styles.accountWho}>
                 <span className={styles.accountEmail}>{email ?? "—"}</span>

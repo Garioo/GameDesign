@@ -1,5 +1,6 @@
 "use client";
 
+import InstallHelp from "@/app/components/InstallHelp";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -72,6 +73,7 @@ export default function LoginPage() {
           </button>
         </div>
 
+        <InstallHelp />
       </div>
     </main>
   );

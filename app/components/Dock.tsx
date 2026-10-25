@@ -159,7 +159,9 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
     navRevert.current = setTimeout(() => setNavHover(false), 600);
   };
 
-  const showNav = !tools || navHover;
+  const [navPinned, setNavPinned] = useState(false);
+  useEffect(() => () => { if (navRevert.current) clearTimeout(navRevert.current); }, []);
+  const showNav = !tools || navHover || navPinned;
 
 
   return (
@@ -168,7 +170,7 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
       onMouseEnter={tools ? cancelNavRevert : undefined}
       onMouseLeave={tools ? scheduleNavRevert : undefined}
     >
-      <nav className="dock">
+      <nav className="dock" aria-label={showNav ? "Workspace navigation" : "Canvas tools"}>
         {showNav ? (
           <div key="nav" className="dock-row dock-nav">
             <button data-tip className="dock-search" onClick={() => openSearch()} aria-label={`Search (${shortcut})`}>
@@ -180,6 +182,7 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
               <button
                 key={id}
                 data-tip
+                aria-current={id === active ? "page" : undefined}
                 className={"dock-item" + (id === active ? " is-active" : "")}
                 onClick={href && id !== active ? () => navigateWithTransition(router, hrefFor(id, href)) : undefined}
               >
@@ -206,9 +209,12 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <SequenceHint />
       {tools && (
-        <div className="dock-hint" title="Menu" onMouseEnter={() => setNavHover(true)}>
-          <span className="dock-hint-bar" />
-        </div>
+        <button type="button" className="dock-hint" aria-label={showNav ? "Show canvas tools" : "Show workspace navigation"}
+          aria-pressed={showNav} onClick={() => { cancelNavRevert(); setNavPinned(!showNav); setNavHover(false); }}
+          onPointerEnter={(event) => { if (event.pointerType === "mouse") setNavHover(true); }}>
+          <span className="dock-hint-bar" aria-hidden="true" />
+          <span className="dock-hint-label">{showNav ? "Canvas tools" : "Workspace menu"}</span>
+        </button>
       )}
     </div>
   );

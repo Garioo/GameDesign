@@ -57,16 +57,32 @@ export default function InlineAnnotator({
     if (!form) return setFormPos(null);
     const el = formRef.current;
     if (!el) return;
-    const margin = 12;
-    const dock = document.querySelector(".dock-wrap")?.getBoundingClientRect();
-    const bottomLimit = (dock && dock.top > window.innerHeight / 2 ? dock.top : window.innerHeight) - margin;
-    const h = el.offsetHeight;
-    const w = el.offsetWidth;
-    let top = form.rect.bottom + 8;
-    if (top + h > bottomLimit) top = form.rect.top - 8 - h;
-    top = Math.max(margin, Math.min(top, bottomLimit - h));
-    const left = Math.max(margin, Math.min(form.rect.left, window.innerWidth - w - margin));
-    setFormPos({ top, left });
+    const viewport = window.visualViewport;
+    const place = () => {
+      const margin = 12;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+      const dockElement = document.querySelector<HTMLElement>(".dock-wrap");
+      const dock = dockElement?.getBoundingClientRect();
+      const dockVisible = dockElement && getComputedStyle(dockElement).visibility !== "hidden";
+      const bottomLimit = Math.min(viewportBottom, dockVisible && dock && dock.top > viewportTop + 100 ? dock.top : viewportBottom) - margin;
+      const h = el.offsetHeight;
+      const w = el.offsetWidth;
+      let top = form.rect.bottom + 8;
+      if (top + h > bottomLimit) top = form.rect.top - 8 - h;
+      top = Math.max(viewportTop + margin, Math.min(top, bottomLimit - h));
+      const left = Math.max(margin, Math.min(form.rect.left, document.documentElement.clientWidth - w - margin));
+      setFormPos({ top, left });
+    };
+    place();
+    viewport?.addEventListener("resize", place);
+    viewport?.addEventListener("scroll", place);
+    window.addEventListener("resize", place);
+    return () => {
+      viewport?.removeEventListener("resize", place);
+      viewport?.removeEventListener("scroll", place);
+      window.removeEventListener("resize", place);
+    };
   }, [form, error]);
 
   // "Comment on this block": select its whole text and open the form.
@@ -243,7 +259,7 @@ export default function InlineAnnotator({
   return createPortal(
     <div
       className={styles.toolbar}
-      style={{ top: Math.max(8, spot.rect.top - 40), left: Math.max(8, spot.rect.left) }}
+      style={{ top: Math.max(8, spot.rect.top - 40), left: Math.max(12, Math.min(spot.rect.left, document.documentElement.clientWidth - 280)) }}
       // Keep the text selection while the buttons are pressed.
       onMouseDown={(e) => e.preventDefault()}
     >

@@ -199,7 +199,7 @@ export function SubtaskList({
 /* ── Tags ────────────────────────────────────────────────────────────────── */
 
 /** Chip input: Enter or comma adds a tag, Backspace on empty removes the last. */
-export function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+export function TagInput({ tags, onChange, id }: { id?: string; tags: string[]; onChange: (tags: string[]) => void }) {
   const [draft, setDraft] = useState("");
   const full = tags.length >= LIMITS.tagCount;
 
@@ -224,6 +224,7 @@ export function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: 
         </span>
       ))}
       <input
+        id={id}
         className={styles.tagInput}
         aria-label="Add tag"
         placeholder={full ? "Tag limit reached" : tags.length ? "Add tag…" : "Add tags…"}

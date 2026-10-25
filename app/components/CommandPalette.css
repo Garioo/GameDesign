@@ -107,3 +107,12 @@
   background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
   padding: 1px 5px; margin-right: 3px; color: var(--ink-soft);
 }
+
+@media (max-width: 860px) {
+  .palette-backdrop { padding-top: max(12px, env(safe-area-inset-top)); top: var(--visible-top, 0px); height: var(--visible-height, 100dvh); bottom: auto; }
+  .palette { display: flex; flex-direction: column; max-height: calc(var(--visible-height, 100dvh) - 32px - env(safe-area-inset-top)); }
+  .palette-list { min-height: 0; overflow-y: auto; }
+}
+
+.palette-close { flex: none; margin: 0 8px; min-width: 44px; min-height: 44px; padding: 8px; border: 0; border-radius: 8px; background: none; color: var(--ink-soft); font: inherit; cursor: pointer; }
+.palette-close:hover { background: var(--line-soft); color: var(--ink); }

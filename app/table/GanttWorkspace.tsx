@@ -528,6 +528,8 @@ export default function GanttWorkspace() {
   const dayAt = (e: PointerEvent<HTMLElement>) =>
     first + Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left) / preferences.zoom);
   function startDraft(e: PointerEvent<HTMLElement>, phase: Phase) {
+    // A finger swipe scrolls the chart; touch users set dates with the visible button.
+    if (e.pointerType === "touch") return;
     if (!canEdit || busy || !snapshot || e.button !== 0 || (phase.effective_start && phase.effective_end)) return;
     if ((e.target as HTMLElement).closest("button")) return; // the "Set dates" button opens the editor instead
     e.preventDefault();
@@ -1211,7 +1213,7 @@ export default function GanttWorkspace() {
             {busy
               ? "Saving…"
               : canEdit
-                ? "Drag bars to move · Drag edges to resize · Drag on an empty row to set dates · Click a title to edit"
+                ? <><span className="phase-pointer-instructions">Drag bars to move · Drag edges to resize · Drag on an empty row to set dates · Click a title to edit</span><span className="phase-touch-instructions">Swipe to scroll the timeline · Tap a phase title or Set dates to edit</span></>
                 : "View only"}
           </span>
         </p>

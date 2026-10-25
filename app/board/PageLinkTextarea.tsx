@@ -24,6 +24,7 @@ const TRIGGER_RE = /(?:\[\[|(?:^|\s)@)([^[\]@\n]{0,40})$/;
  */
 export default function PageLinkTextarea({
   value,
+  id,
   onChange,
   targets,
   className,
@@ -35,6 +36,7 @@ export default function PageLinkTextarea({
   hint = "Type [[ or @ to link a page, section, canvas, board or task.",
 }: {
   value: string;
+  id?: string;
   onChange: (value: string) => void;
   targets: MentionTarget[];
   className?: string;
@@ -118,6 +120,7 @@ export default function PageLinkTextarea({
     <div className={styles.field}>
       <textarea
         ref={ref}
+        id={id}
         className={className}
         value={shown}
         placeholder={placeholder}

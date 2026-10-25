@@ -24,9 +24,10 @@
 .panel {
   position: fixed;
   z-index: 40;
-  min-width: 220px;
+  width: min(320px, calc(100vw - 32px));
+  min-width: 0;
   max-width: min(320px, calc(100vw - 32px));
-  max-height: 60vh;
+  max-height: 60dvh;
   overflow: auto;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -68,3 +69,5 @@
 .actions button {
   flex: 1;
 }
+
+@media (pointer: coarse) { .option { min-height: 44px; } }

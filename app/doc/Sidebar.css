@@ -6,8 +6,8 @@
    ============================================================ */
 
 .sidebar {
-  position: sticky; top: 58px;
-  height: calc(100vh - 58px);
+  position: sticky; top: var(--app-header-height);
+  height: calc(100dvh - var(--app-header-height));
   padding: 22px 18px;
   border-right: 1px solid var(--line);
   display: flex; flex-direction: column;
@@ -215,7 +215,7 @@
   .sidebar {
     display: none;
     position: fixed;
-    left: 0; top: 58px; bottom: 0;
+    left: env(safe-area-inset-left, 0px); top: var(--app-header-height); bottom: 0;
     height: auto;
     z-index: 45;
     width: min(300px, 84vw);
@@ -224,4 +224,11 @@
   .app.nav-open .sidebar {
     display: flex;
   }
+}
+
+@media (hover: none) {
+  .nav-add, .row-dots { opacity: 1; }
+}
+@media (max-width: 860px) {
+  .sidebar { padding-bottom: calc(110px + env(safe-area-inset-bottom)); overscroll-behavior: contain; }
 }

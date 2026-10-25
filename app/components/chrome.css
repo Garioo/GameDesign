@@ -529,3 +529,44 @@ button.who-row:disabled { cursor: default; }
 @media (max-width: 380px) {
   .crumb-sep, .crumb-muted { display: none; }
 }
+
+/* Keep every destination reachable on touch, including the canvas tool swap. */
+.topbar { height: var(--app-header-height); padding-top: env(safe-area-inset-top, 0px); flex-shrink: 0; }
+.dock-wrap { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); max-width: 100%; }
+.dock-wrap.no-hint { padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+.dock-hint { border: 0; background: transparent; color: var(--ink-soft); font: inherit; }
+.dock-hint-label { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .dock-wrap { padding-left: 0; padding-right: 0; }
+  .dock { overflow-x: auto; overscroll-behavior-x: contain; max-width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); }
+  .dock-row { flex-shrink: 0; }
+  .dock-hint { height: 44px; gap: 8px; }
+  .dock-hint-label { display: inline; font-size: 12px; font-weight: 600; }
+  .dock-hint-bar { width: 24px; }
+  .dock-nav .dock-item { flex-direction: column; gap: 4px; padding: 6px 10px; font-size: 11px; flex-shrink: 0; }
+  .dock-nav .dock-search { min-width: 44px; }
+  .dock-nav .dock-search .kbd { display: none; }
+}
+@media (max-width: 860px) {
+  .topbar .brand { min-width: 0; overflow: hidden; }
+  .topbar .top-right { gap: 3px; }
+  .topbar .share-btn { margin-left: 0; }
+  .topbar .crumb-current { max-width: 24vw; }
+  .notif-panel, .who-menu { position: fixed; top: calc(var(--app-header-height) + 8px); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); width: auto; max-height: calc(var(--visible-height, 100dvh) - var(--app-header-height) - 32px); }
+}
+
+/* Phone chrome reserves a separate touch toolbar so page actions cannot
+   squeeze the title or enlarge Safari's layout viewport. */
+@media (max-width: 860px) {
+  .topbar { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; padding: env(safe-area-inset-top, 0px) 12px 0; background: var(--bg); backdrop-filter: none; }
+  .topbar .brand { flex: none; min-height: 48px; width: 100%; }
+  .topbar .crumb-current { max-width: 55vw; }
+  .topbar .top-right { width: 100%; min-width: 0; min-height: 48px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; gap: 6px; }
+  .topbar .top-right > * { flex-shrink: 0; }
+  .topbar .top-right > :first-child { margin-left: 0; }
+  .topbar .top-right > :last-child { margin-right: 4px; }
+}
+@media (hover: none), (pointer: coarse) {
+  .dock-wrap, .canvas-app .dock-wrap { width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); max-width: 100%; }
+  .dock { width: 100%; min-width: 0; max-width: 100%; }
+}

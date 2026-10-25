@@ -215,7 +215,7 @@ body::-webkit-scrollbar-track { background: transparent; }
 /* full-screen centered layout — used by the landing page and by
    the doc page's loading / empty states */
 .screen {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -243,4 +243,33 @@ body::-webkit-scrollbar-track { background: transparent; }
 .editable:empty::before {
   content: attr(data-placeholder);
   color: var(--ink-faint);
+}
+
+/* Shared iPhone viewport contract, including standalone and landscape. */
+:root { --app-header-height: calc(58px + env(safe-area-inset-top, 0px)); }
+html { -webkit-text-size-adjust: 100%; scroll-padding-bottom: 120px; }
+body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.install-help { margin-top: 20px; color: var(--ink-soft); font-size: 14px; line-height: 1.6; }
+.install-help summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: var(--ember-deep); font-weight: 600; }
+.install-help p { margin: 8px 0; }
+@media (pointer: coarse) {
+  /* 16px prevents focus zoom while retaining pinch-to-zoom accessibility. */
+  html body input:not([type=checkbox]):not([type=radio]),
+  html body textarea, html body select { font-size: max(16px, 1em) !important; }
+  .tbl-cell, .img-caption, .blk-code .blk-text { font-size: 16px !important; }
+  button, summary, select, input[type=button], input[type=submit], a { touch-action: manipulation; }
+  html body button, html body summary { min-height: 44px; }
+  html body button { min-width: 44px; }
+}
+@media (max-width: 860px) {
+  html body :is(dialog, [role=dialog]) { max-width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); }
+  html body dialog { max-height: calc(var(--visible-height, 100dvh) - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .keyboard-open .dock-wrap { visibility: hidden; pointer-events: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+@media (max-width: 860px) {
+  :root { --app-header-height: calc(102px + env(safe-area-inset-top, 0px)); }
 }

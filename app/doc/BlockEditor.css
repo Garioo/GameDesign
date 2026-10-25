@@ -817,3 +817,13 @@
   0%, 30% { background: var(--comment-mark); box-shadow: 0 0 0 4px var(--comment-mark); }
   100% { background: transparent; box-shadow: 0 0 0 4px transparent; }
 }
+
+@media (pointer: coarse) {
+  .blk-gutter { position: static; opacity: 1; margin-bottom: 2px; }
+  .blk-plus, .blk-handle { width: 44px; height: 44px; }
+  .blk .blk-main { padding-left: 0; }
+  .blk .blk-menu { left: 0; top: 46px; }
+  .blk-aside { right: 0; top: 2px; }
+  .blk .blk-comment-btn { display: inline-flex; opacity: 1; }
+  .blk-comment-btn, .blk-thread-badge { min-width: 44px; height: 44px; }
+}

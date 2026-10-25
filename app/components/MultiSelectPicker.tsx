@@ -83,7 +83,8 @@ export default function MultiSelectPicker({
         onClick={() => {
           if (open) return setOpen(null);
           const r = triggerRef.current!.getBoundingClientRect();
-          setOpen({ top: r.bottom + 6, left: r.left });
+          const width = Math.min(320, document.documentElement.clientWidth - 32);
+          setOpen({ top: r.bottom + 6, left: Math.max(16, Math.min(r.left, document.documentElement.clientWidth - width - 16)) });
         }}
       >
         <span className={styles.triggerLabel}>{label}</span> <Icon name="chevronDown" className={styles.chevron} />

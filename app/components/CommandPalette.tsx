@@ -1,5 +1,6 @@
 "use client";
 
+import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import type { SearchItem, SearchKind } from "@/lib/searchIndex";
 import { ShortcutKeys } from "./KeyboardLayer";
@@ -163,6 +164,7 @@ export default function CommandPalette({
   initialPicker?: string;
   onSelect: (item: SearchItem) => void;
 }) {
+  useBodyScrollLock(open);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -329,7 +331,14 @@ export default function CommandPalette({
 
   return (
     <div className="palette-backdrop" onMouseDown={onClose}>
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="palette" role="dialog" aria-modal="true" aria-label="Search workspace" onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key !== "Tab") return;
+          const controls = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('input:not([disabled]), button:not([disabled]), [tabindex="0"]')).filter(el => el.getClientRects().length > 0);
+          const first = controls[0], last = controls[controls.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        }}>
         <div className="palette-input-row">
           {mode !== "all" && (
             <span className="palette-mode">{mode === "pick" && picker ? picker.title : mode === "people" ? "People" : "Commands"}</span>
@@ -370,6 +379,7 @@ export default function CommandPalette({
               }
             }}
           />
+          <button type="button" className="palette-close" onClick={onClose} aria-label="Close search">Close</button>
         </div>
         {status && (
           <div className={`palette-status is-${status.kind}`} role="status">

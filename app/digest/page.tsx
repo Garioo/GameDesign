@@ -48,8 +48,8 @@ async function activityBetween(workspaceId: string, from: Date, to: Date): Promi
 function weekLabel(start: Date, end: Date): string {
   const last = new Date(end.getTime() - 86400000);
   const sameMonth = start.getMonth() === last.getMonth();
-  const a = start.toLocaleDateString(undefined, { day: "numeric", month: sameMonth ? undefined : "long" });
-  const b = last.toLocaleDateString(undefined, { day: "numeric", month: "long", year: last.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
+  const a = start.toLocaleDateString("en", { day: "numeric", month: sameMonth ? undefined : "long" });
+  const b = last.toLocaleDateString("en", { day: "numeric", month: "long", year: last.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
   return `${a} – ${b}`;
 }
 

@@ -140,7 +140,7 @@
 }
 
 /* Phones: the icons stay, the divider goes. */
-@media (max-width: 640px) {
+@media (max-width: 860px) {
   .root {
     padding-right: 0;
     border-right: 0;
@@ -156,4 +156,8 @@
     top: 64px;
     width: auto;
   }
+}
+@media (max-width: 860px) {
+  .panel { position: fixed; top: calc(var(--app-header-height) + 8px); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); width: auto; max-height: calc(var(--visible-height, 100dvh) - var(--app-header-height) - 24px); overflow-y: auto; }
+  .link { min-width: 44px; min-height: 44px; }
 }

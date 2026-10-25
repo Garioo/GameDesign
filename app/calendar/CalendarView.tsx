@@ -298,7 +298,7 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
                     {column === 0 && <span className={styles.weekNumber} title={`Week ${weekOf(date)}`}>W{weekOf(date)}</span>}
                     {milestonesOn(key).slice(0, 1).map((m) => milestoneLink(m, true))}
                     <button className={`${styles.date} ${key === today ? styles.today : ""}`} aria-label={`${date.toLocaleDateString("en", { dateStyle: "full" })}, ${standalone.length} events`} aria-pressed={key === selected} aria-current={key === today ? "date" : undefined} onClick={selectDate}>{date.getDate()}</button>
-                    <div style={{ height: lanes * 26 }} aria-hidden="true" />
+                    <div style={{ height: `calc(${lanes} * var(--calendar-event-row, 26px))` }} aria-hidden="true" />
                   </div>;
                 })}
                 <div className={styles.weekEvents}>

@@ -1,7 +1,7 @@
 /* A page shared by link (/share/<token>): just the page and its comments. */
 
 .page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -135,7 +135,7 @@
 .rail {
   position: sticky;
   top: 82px;
-  max-height: calc(100vh - 110px);
+  max-height: calc(100dvh - 110px);
   display: flex;
   flex-direction: column;
   gap: 8px;

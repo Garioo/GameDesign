@@ -20,3 +20,5 @@ next-env.d.ts
 *.iml
 .vscode/
 
+
+.next-mobile/

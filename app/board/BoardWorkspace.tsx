@@ -65,7 +65,7 @@ const HIDDEN_STAGES_KEY = "gd-board-hidden-stages";
 /* Board layout inherits the shared typography and design tokens. */
 const css = `
   .board-app {
-    min-height: 100vh;
+    min-height: 100dvh;
     background:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
       var(--wash),
@@ -944,29 +944,29 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
           </select>
         </div>
         <div className="modal-field">
-          <label className="modal-label">Title</label>
-          <input className="modal-input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
+          <label className="modal-label" htmlFor="card-title">Title</label>
+          <input id="card-title" className="modal-input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div className="modal-field">
-          <label className="modal-label">Description</label>
-          <PageLinkTextarea className="modal-textarea" value={sub} onChange={setSub} targets={linkTargets} formatShortcuts
+          <label className="modal-label" htmlFor="card-description">Description</label>
+          <PageLinkTextarea id="card-description" className="modal-textarea" value={sub} onChange={setSub} targets={linkTargets} formatShortcuts
             hint="Type [[ or @ to link a page, section, canvas, board or task · ⌘B bold · ⌘I italic" />
         </div>
         <div className="modal-field">
-          <label className="modal-label">Tags</label>
-          <TagInput tags={tags} onChange={setTags} />
+          <label className="modal-label" htmlFor="card-tags">Tags</label>
+          <TagInput id="card-tags" tags={tags} onChange={setTags} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="modal-field">
-            <label className="modal-label">Category</label>
-            <select aria-label="Task category" className="modal-select" value={categoryId} onChange={(e) => {setCategoryId(e.target.value);setKind(categories.find(c=>c.id===e.target.value)?.name??'');}}>
+            <label className="modal-label" htmlFor="card-category">Category</label>
+            <select id="card-category" aria-label="Task category" className="modal-select" value={categoryId} onChange={(e) => {setCategoryId(e.target.value);setKind(categories.find(c=>c.id===e.target.value)?.name??'');}}>
               <option value="">—</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="modal-field">
-            <label className="modal-label">Priority</label>
-            <select className="modal-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <label className="modal-label" htmlFor="card-priority">Priority</label>
+            <select id="card-priority" className="modal-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
               <option value="">—</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
@@ -975,14 +975,15 @@ function CardEditForm({ card, workspaceId, people, categories, onClose, onSave, 
           </div>
         </div>
         <div className="modal-field">
-          <label className="modal-label">Assignees</label>
-          <div className="owner-chips">
+          <span id="card-assignees" className="modal-label">Assignees</span>
+          <div className="owner-chips" role="group" aria-labelledby="card-assignees">
             {people.length === 0 && <span className="cal-due-empty">No workspace members to assign yet.</span>}
             {people.map((p) => (
               <button
                 key={p.id}
                 type="button"
                 className={`owner-chip${ownerIds.includes(p.id) ? " active" : ""}`}
+                aria-pressed={ownerIds.includes(p.id)}
                 onClick={() => toggleOwner(p.id)}
               >
                 <span className="owner-chip-avatar" style={{ background: p.color }}>{p.initials}</span>

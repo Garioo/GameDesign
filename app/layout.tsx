@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+import AppRuntime from "./components/AppRuntime";
 import RouteTransitionSignal from "./RouteTransitionSignal";
 
 // Single-family typography: Hanken Grotesk everywhere. Headings differ by
@@ -15,6 +16,9 @@ const hanken = Hanken_Grotesk({
 export const metadata: Metadata = {
   // Each section's layout sets its own title, so the tab reads e.g. "Calendar · Foundry".
   title: { default: "Foundry", template: "%s · Foundry" },
+  applicationName: "Foundry",
+  appleWebApp: { capable: true, title: "Foundry", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
   description: "A shared workspace for your team's docs, canvases, boards and plans.",
 };
 
@@ -22,6 +26,9 @@ export const metadata: Metadata = {
 // parchment instead of letting the browser guess a color.
 export const viewport: Viewport = {
   themeColor: "#f6f1e9",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -34,6 +41,7 @@ export default function RootLayout({
       <body>
         {children}
         <RouteTransitionSignal />
+        <AppRuntime />
       </body>
     </html>
   );

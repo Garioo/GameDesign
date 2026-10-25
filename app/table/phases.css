@@ -670,3 +670,14 @@
   padding: 0;
   border: 0;
 }
+
+@media (pointer: coarse) {
+  .phase-bar, .phase-parent-bar { height: 44px; top: 16px; touch-action: pan-y; }
+  .phase-bar > button { min-height: 40px; min-width: 0; }
+  .phase-resize { width: 18px; touch-action: pan-y; }
+  .phase-track-drawable { touch-action: auto; }
+}
+
+.phase-touch-instructions { display: none; }
+@media (pointer: coarse) { .phase-pointer-instructions { display: none; } .phase-touch-instructions { display: inline; } }
+@media (pointer: coarse) { .phase-main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); } }
