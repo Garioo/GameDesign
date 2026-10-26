@@ -1481,3 +1481,40 @@ a.board-phase-summary {display:block;padding:4px 0 0}
   .planning-app .planning-view-switch button,
   .planning-app .planning-controls :is(button, summary, input, select) { min-height: 44px !important; }
 }
+
+.mobile-stage-picker, .planning-controls-toggle { display: none; }
+.mobile-stage-column { display: contents; }
+@media (max-width: 860px) {
+  .planning-app .board-scroll { padding: 0 16px calc(90px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+  .mobile-stage-picker { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-soft); margin: 12px 0; }
+  .mobile-stage-picker select { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .planning-app .board-cols { display: block; min-width: 0; }
+  .mobile-stage-column { display: none; }
+  .mobile-stage-column.mobile-stage-active { display: block; }
+  .planning-app .col { width: 100%; min-width: 0; flex-basis: auto; }
+  .planning-app .col-head { height: auto; min-height: 52px; }
+  .planning-app .card { padding: 16px; }
+  .planning-app .card-title { font-size: 16px; line-height: 1.45; }
+  .planning-app .board-group-head { align-items: flex-start; flex-wrap: wrap; }
+  .planning-app .board-group-head h2 { font-size: 22px; }
+  .planning-app .planning-heading { gap: 8px; }
+  .planning-app .planning-view-switch { width: 100%; display: flex; }
+  .planning-app .planning-view-switch a { flex: 1; justify-content: center; min-height: 44px; }
+  .planning-app .planning-header { padding: 10px 16px; }
+  .planning-controls-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 44px; padding: 8px 0; color: var(--ink-soft); background: none; border: 0; font: inherit; font-size: 13px; }
+  .planning-controls { display: none; }
+  .planning-controls.controls-open { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; padding-bottom: 8px; }
+  .planning-app .planning-controls input { max-width: none; width: 100%; }
+  .planning-controls .planning-search { flex: 1 0 100%; }
+}
+@media (max-width: 860px) {
+  .planning-app .kanban-group { border: 0; padding: 0; background: none; box-shadow: none; }
+  .planning-app .board-group-head { gap: 8px; }
+  .planning-app .board-group-meta { width: auto; margin-left: auto; }
+}
+@media (max-width: 860px) {
+  .mobile-stage-picker select { min-height: 48px; }
+}
+@media (max-width: 860px) {
+  .mobile-stage-picker select { appearance: none; height: 48px; padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23756a5d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+}

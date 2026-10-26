@@ -273,3 +273,7 @@ body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-are
 @media (max-width: 860px) {
   :root { --app-header-height: calc(102px + env(safe-area-inset-top, 0px)); }
 }
+
+@media (max-width: 860px) {
+  :root { --app-header-height: calc(54px + env(safe-area-inset-top, 0px)); }
+}

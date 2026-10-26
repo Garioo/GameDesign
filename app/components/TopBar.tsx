@@ -37,6 +37,7 @@ interface TopBarProps {
   selfKey?: string;
   /** Page-specific actions on the right (save state, share, settings…). */
   children?: ReactNode;
+  status?: ReactNode;
   /** Shows a hamburger button before the brand (mobile only, via CSS) that opens the page's own nav drawer. Omit when the page has no collapsible nav. */
   onMenuToggle?: () => void;
   /** Also show the menu button on wide screens (e.g. to hide/show a docked sidebar). */
@@ -52,6 +53,7 @@ export default function TopBar({
   crumbs = [],
   online,
   children,
+  status,
   onMenuToggle,
   menuAlwaysVisible = false,
   menuLabel = "Toggle navigation",
@@ -60,6 +62,16 @@ export default function TopBar({
 }: TopBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const close = (e: PointerEvent) => { if (!actionsRef.current?.contains(e.target as Node)) setActionsOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setActionsOpen(false); };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", key); };
+  }, [actionsOpen]);
   const [whoOpen, setWhoOpen] = useState(false);
   const whoRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -200,7 +212,10 @@ export default function TopBar({
           </Fragment>
         ))}
       </div>
-      <div className="top-right">
+      {status && <div className="header-status">{status}</div>}
+      <div className="top-actions" ref={actionsRef}>
+      <button className="mobile-actions-toggle" aria-label="Page actions" aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)}><svg className="topbar-menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+      <div className={"top-right" + (actionsOpen ? " actions-open" : "")}>
         {workspaceId && <WorkspaceLinks workspaceId={workspaceId} />}
         {online && (
           <div className="who-wrap" ref={whoRef}>
@@ -282,6 +297,7 @@ export default function TopBar({
         )}
         {workspaceId && <NotificationBell workspaceId={workspaceId} />}
         {children}
+      </div>
       </div>
       {(nudges.length > 0 || followed) && (
         <div className="presence-toasts" aria-live="polite">

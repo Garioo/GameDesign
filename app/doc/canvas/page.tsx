@@ -188,6 +188,7 @@ export default function CanvasPage() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tool, setTool] = useState("select");
+  const [shareMessage, setShareMessage] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -427,11 +428,15 @@ export default function CanvasPage() {
         selfKey={session?.userId}
         onMenuToggle={() => setSidebarOpen((v) => !v)}
         workspaceId={session?.workspaceId}
+        status={active && <SaveStatus state={saveState} onRetry={() => retrySave.current?.()} />}
       >
-        {active && (
-          <SaveStatus state={saveState} onRetry={() => retrySave.current?.()} />
-        )}
-        <button className="share-btn">Share</button>
+        <button className="share-btn" onClick={async () => {
+          try {
+            const url = new URL(window.location.href); if (active) url.searchParams.set("c", active.id);
+            if (navigator.share) await navigator.share({ title: active?.name ?? "Foundry canvas", url: url.href });
+            else { await navigator.clipboard.writeText(url.href); setShareMessage("Link copied"); }
+          } catch (e) { if (!(e instanceof Error && e.name === "AbortError")) setShareMessage("Couldn’t share. Try again."); }
+        }}>Share</button>{shareMessage && <span role="status">{shareMessage}</span>}
         <button
           className="share-btn"
           onClick={async () => {

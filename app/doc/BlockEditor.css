@@ -827,3 +827,18 @@
   .blk .blk-comment-btn { display: inline-flex; opacity: 1; }
   .blk-comment-btn, .blk-thread-badge { min-width: 44px; height: 44px; }
 }
+
+/* Tap text to edit; tools belong to the active block, not every paragraph. */
+@media (max-width: 860px) {
+  .blk .blk-gutter { display: none; position: absolute; top: auto; bottom: 0; left: 0; margin: 0; }
+  .blk.is-active, .blk:focus-within, .blk:has(.blk-gutter.is-open), .blk.is-selected { padding-bottom: 48px; }
+  .blk.is-active > .blk-gutter, .blk:focus-within > .blk-gutter, .blk > .blk-gutter.is-open, .blk.is-selected > .blk-gutter { display: flex; opacity: 1; }
+  .blk-plus, .blk-handle { width: 44px; height: 44px; }
+  .blk .blk-main { padding-left: 0; }
+  .blk .blk-menu { left: 0; top: 100%; }
+  .blk .blk-aside { top: auto; bottom: 0; }
+  .blk .blk-comment-btn { display: none; }
+  .blk.is-active .blk-comment-btn, .blk:focus-within .blk-comment-btn, .blk:has(.blk-gutter.is-open) .blk-comment-btn { display: inline-flex; opacity: 1; }
+  .blk:has(.has-threads) { padding-right: 48px; }
+  .blk-text { font-size: 16px; line-height: 1.7; }
+}

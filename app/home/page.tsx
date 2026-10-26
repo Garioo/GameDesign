@@ -38,6 +38,7 @@ import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 import TeamScoreboard from "@/app/components/TeamScoreboard";
 import UpcomingMilestones from "@/app/components/UpcomingMilestones";
 import styles from "./home.module.css";
+import HomeSchedule from "./HomeSchedule";
 
 /* ---------- inline icon set (lucide-flavoured, no deps) ---------- */
 type IconProps = { className?: string };
@@ -546,6 +547,8 @@ export default function HomeDashboard() {
               )}
             </div>
           </header>
+
+          {session && <HomeSchedule key={session.workspaceId} workspaceId={session.workspaceId} />}
 
           <div className={styles.columns}>
             <div className={styles.main}>

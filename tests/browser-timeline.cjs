@@ -203,7 +203,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     // Date a second phase and create a dependency using the browser form.
     await page
       .locator(`[data-phase-id="${id(4)}"]`)
-      .getByRole("button", { name: "+ Set dates", exact: true })
+      .getByRole("button", { name: "Set dates", exact: true })
       .click();
     await page.getByLabel("Phase start", { exact: true }).fill("2026-09-01");
     await page.getByLabel("Phase end", { exact: true }).fill("2026-09-03");
@@ -266,7 +266,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     );
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page
-      .getByRole("button", { name: "+ New phase", exact: true })
+      .getByRole("button", { name: "New phase", exact: true })
       .click();
     await page.getByLabel("Board name", { exact: true }).fill("Production");
     await page
@@ -279,7 +279,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
       ),
     );
     // Creating a phase while every phase is shown keeps the "All phases" view.
-    await page.getByRole("button", { name: "Show phases", exact: true }).click();
+    await page.getByRole("button", { name: "Phases to show", exact: true }).click();
     assert.ok(
       await page
         .getByRole("group", { name: "Phases to show" })
@@ -293,7 +293,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     await gameplay.waitFor();
     assert.equal(
       await page
-        .getByRole("button", { name: "+ New phase", exact: true })
+        .getByRole("button", { name: "New phase", exact: true })
         .count(),
       0,
     );

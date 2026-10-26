@@ -394,3 +394,8 @@
   font-size: 11px;
 }
 
+
+@media (max-width: 860px) {
+  .shell { padding: 24px 16px calc(100px + env(safe-area-inset-bottom)); }
+  .hero { margin-bottom: 24px; padding-bottom: 20px; }
+}

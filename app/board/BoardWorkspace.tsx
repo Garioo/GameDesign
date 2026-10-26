@@ -1061,6 +1061,7 @@ export default function BoardWorkspace() {
   // Boards shown in the combined view; null = every board (new ones included).
   const [boardFilter, setBoardFilter] = useState<string[] | null>(null);
   // Stages hidden on the board (e.g. Done), per viewer. Stage ids are unique, so one key covers every workspace.
+  const [mobileStages, setMobileStages] = useState<Record<string, string>>({});
   const [hiddenStages, setHiddenStages] = useState<string[]>([]);
   useEffect(() => {
     try {
@@ -1151,7 +1152,12 @@ export default function BoardWorkspace() {
         const requestedCard=params.get('card');
         const cardBoard=requestedCard?loaded.find(b=>b.cols.some(c=>c.cards.some(k=>k.id===requestedCard))):undefined;
         const linkedCard=cardBoard?.cols.flatMap(c=>c.cards).find(k=>k.id===requestedCard);
-        if(cardBoard&&linkedCard){setAllBoards(false);setActiveBoardId(cardBoard.id);setEditingCard(linkedCard);}
+        if(cardBoard&&linkedCard){
+          setAllBoards(false);setActiveBoardId(cardBoard.id);setEditingCard(linkedCard);
+          if (linkedCard.columnId) setMobileStages(s => ({ ...s, [cardBoard.id]: linkedCard.columnId! }));
+          const url = new URL(window.location.href); url.searchParams.set("board", cardBoard.id);
+          window.history.replaceState(window.history.state, "", url);
+        }
         setPeople(members);
         setCategories(cats);
         setLoading(false);
@@ -1282,7 +1288,10 @@ export default function BoardWorkspace() {
     const url = new URL(window.location.href);
     if (card) {
       const board = boardOfColumn(card.columnId ?? "") ?? boards.find(b => b.cols.some(c => c.cards.some(k => k.id === card.id)));
-      if (board) url.searchParams.set("board", board.id);
+      if (board) {
+        url.searchParams.set("board", board.id);
+        if (card.columnId) setMobileStages(s => ({ ...s, [board.id]: card.columnId! }));
+      }
       url.searchParams.set("card", card.id);
     } else {
       url.searchParams.delete("card");
@@ -1642,8 +1651,14 @@ export default function BoardWorkspace() {
                       </details>
                     </div>
                   </header>}
+                  <label className="mobile-stage-picker">Stage
+                    <select aria-label={`Stage in ${board.name}`} value={mobileStages[board.id] && boardCols.some(c => c.id === mobileStages[board.id] && !hiddenStages.includes(c.id)) ? mobileStages[board.id] : boardCols.find(c => !hiddenStages.includes(c.id))?.id ?? ""} onChange={e => setMobileStages(s => ({ ...s, [board.id]: e.target.value }))}>
+                      {boardCols.filter(c => !hiddenStages.includes(c.id)).map(c => <option key={c.id} value={c.id}>{c.name} · {c.cards.length} tasks</option>)}
+                    </select>
+                  </label>
                   <div className="board-cols">
                     {boardCols.filter((col) => !hiddenStages.includes(col.id)).map((col) => (
+                      <div key={col.id} className={"mobile-stage-column" + (col.id === (mobileStages[board.id] && boardCols.some(c => c.id === mobileStages[board.id] && !hiddenStages.includes(c.id)) ? mobileStages[board.id] : boardCols.find(c => !hiddenStages.includes(c.id))?.id) ? " mobile-stage-active" : "")}>
                       <Column
                         key={col.id}
                         col={col}
@@ -1661,6 +1676,7 @@ export default function BoardWorkspace() {
                         onDrop={handleDrop}
                         onDragLeave={handleDragLeave}
                       />
+                      </div>
                     ))}
                     {boardCols.some((col) => hiddenStages.includes(col.id)) && <div className="hidden-stages" aria-label="Hidden stages">
                       {boardCols.filter((col) => hiddenStages.includes(col.id)).map((col) => (

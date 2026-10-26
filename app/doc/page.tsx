@@ -2,6 +2,7 @@
 
 import LinkedDocuments from "./LinkedDocuments";
 import Icon from "@/app/components/Icon";
+import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 import { useSidebarLiveUpdates } from "@/lib/useSidebarLiveUpdates";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -250,6 +251,25 @@ function DocPageInner() {
     });
   }, []);
   const [railOpen, setRailOpen] = useState(false);
+  useBodyScrollLock(sidebarOpen || railOpen);
+  useEffect(() => {
+    const sidebarMedia = window.matchMedia("(max-width: 860px)");
+    const railMedia = window.matchMedia("(max-width: 1180px)");
+    const resize = () => { if (!sidebarMedia.matches) setSidebarOpen(false); if (!railMedia.matches) setRailOpen(false); };
+    sidebarMedia.addEventListener("change", resize);
+    railMedia.addEventListener("change", resize);
+    return () => { sidebarMedia.removeEventListener("change", resize); railMedia.removeEventListener("change", resize); };
+  }, []);
+  useEffect(() => {
+    if (!sidebarOpen && !railOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("dialog[open], .palette, .row-menu, .nav-rename")) {
+        setSidebarOpen(false); setRailOpen(false);
+      }
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [sidebarOpen, railOpen]);
   const [draftRecovery, setDraftRecovery] = useState<BlockDraft & { pageId: string } | null>(null);
   const draftChecked = useRef<Set<string>>(new Set());
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
@@ -1277,15 +1297,15 @@ function DocPageInner() {
         selfKey={session?.userId}
         onMenuToggle={toggleSidebar}
         menuAlwaysVisible
-        menuLabel={sidebarHidden ? "Show sidebar (⌘\\)" : "Hide sidebar (⌘\\)"}
+        menuLabel="Toggle sidebar (⌘\\)"
         workspaceId={session?.workspaceId}
+        status={<SaveStatus state={saveState} onRetry={retryFailedSaves} />}
       >
         {session && !canEdit && (
           <span className="review-chip" title="You can read everything and comment — select text or use the comment icon beside a paragraph.">
             View &amp; comment
           </span>
         )}
-        <SaveStatus state={saveState} onRetry={retryFailedSaves} />
         <button
           className="share-btn rail-toggle-btn"
           title="Linked references & comments"

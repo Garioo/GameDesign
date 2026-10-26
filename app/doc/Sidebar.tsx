@@ -303,7 +303,7 @@ export default function Sidebar({
               onBlur={commitRename}
             />
           ) : (
-            <span className="nav-title">{doc.title}</span>
+            <a className="nav-title" href={`/doc?page=${encodeURIComponent(doc.id)}`} aria-current={doc.id === active.id ? "page" : undefined} onClick={e => { e.stopPropagation(); if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); onSelect(doc.id); }}>{doc.title}</a>
           )}
           {canEdit && (
             <button
@@ -353,7 +353,7 @@ export default function Sidebar({
   const orderedSections = [...sections].sort((a, b) => a.position - b.position);
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" aria-label="Pages sidebar">
       <div className="section-head">
         <span className="section-icon">
           <Sun className="section-icon-svg" />
@@ -371,7 +371,7 @@ export default function Sidebar({
         {canEdit && <span className="drag-hint">drag to reorder / nest</span>}
       </div>
 
-      <nav className="nav">
+      <nav className="nav" aria-label="Page tree">
         {orderedSections.map((sec, secIndex) => {
           const tops = topLevel(sec.id);
           const isRenaming = renaming?.kind === "section" && renaming.id === sec.id;

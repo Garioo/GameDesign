@@ -36,7 +36,7 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     else if(method==='POST') {const b=route.request().postDataJSON();data=(await db.query('insert into calendar_events(project_id,title,date,start_time,end_time,location,notes,end_date) values($1,$2,$3,$4,$5,$6,$7,$8) returning *',[b.project_id,b.title,b.date,b.start_time,b.end_time,b.location,b.notes,b.end_date])).rows[0];}
     else if(method==='PATCH') {const b=route.request().postDataJSON();data=(await db.query('update calendar_events set title=$1,date=$2,start_time=$3,end_time=$4,location=$5,notes=$6,end_date=$8 where id=$7 returning *',[b.title,b.date,b.start_time,b.end_time,b.location,b.notes,eventId,b.end_date])).rows[0];}
     else if(method==='DELETE') data=(await db.query('delete from calendar_events where id=$1 returning id',[eventId])).rows[0];
-   const normalize=row=>({...row,date:row.date instanceof Date?row.date.toISOString().slice(0,10):row.date,end_date:row.end_date instanceof Date?row.end_date.toISOString().slice(0,10):row.end_date});
+   const normalize=row=>({attendees:[],guests:[],repeat:null,repeat_until:null,skipped_dates:[],repeat_weekends:true,agenda:[],kind:'other',...row,date:row.date instanceof Date?row.date.toISOString().slice(0,10):row.date,end_date:row.end_date instanceof Date?row.end_date.toISOString().slice(0,10):row.end_date});
    data=Array.isArray(data)?data.map(normalize):normalize(data);
    }
    else if(u.pathname.includes('/rpc/')){
@@ -112,8 +112,10 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  await page.getByRole('region',{name:'Daily calendar'}).waitFor();
  await page.screenshot({path:'/tmp/calendar-multiday-day.png'});
  await page.getByRole('button',{name:'Studio playtest',exact:false}).first().click();
+ await page.getByRole('button',{name:'Edit',exact:true}).click();
  assert.equal(await page.getByLabel('End date',{exact:true}).inputValue(),day(9));
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await page.getByRole('button',{name:'Close event',exact:true}).click();
  await page.getByRole('button',{name:'Next day',exact:true}).click();
  await page.getByRole('button',{name:'Studio playtest',exact:false}).first().waitFor();
  await page.getByRole('button',{name:'Month',exact:true}).click();
@@ -125,19 +127,18 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  assert.equal(await page.getByLabel('Start date',{exact:true}).inputValue(),day(0));
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await page.getByRole('button',{name:'Studio playtest',exact:false}).first().click();
+ await page.getByRole('button',{name:'Edit',exact:true}).click();
  await page.getByLabel('Event title',{exact:true}).fill('Updated playtest');
  await page.getByRole('button',{name:'Save event',exact:true}).click();
  await page.getByRole('dialog').waitFor({state:'hidden'});
  assert.equal((await db.query('select title from calendar_events')).rows[0].title,'Updated playtest');
  await page.getByRole('button',{name:'Updated playtest',exact:false}).first().click();
- await page.getByRole('button',{name:'Delete event',exact:true}).click();
- await page.getByRole('button',{name:'Confirm delete',exact:true}).click();
+ await page.getByRole('button',{name:'Delete',exact:true}).click();
  await page.getByRole('dialog').waitFor({state:'hidden'});
  assert.equal((await db.query('select * from calendar_events')).rows.length,0);
  assert.equal((await snapshot()).cards.length,taskCount);
  await page.screenshot({path:'/tmp/foundry-calendar-desktop.png' ,fullPage:true});
  await page.setViewportSize({width:390,height:844});
- await page.getByRole('button',{name:'Calendar',exact:true}).scrollIntoViewIfNeeded();
  await page.screenshot({path:'/tmp/foundry-calendar-mobile.png',fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'No page-level horizontal overflow');
  assert.deepEqual(errors,[]);

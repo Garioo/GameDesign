@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { PlanningIcon } from "./PlanningIcons";
 export default function PlanningHeader({
@@ -20,6 +22,7 @@ export default function PlanningHeader({
   canEdit: boolean;
   children?: ReactNode;
 }) {
+  const [controlsOpen, setControlsOpen] = useState(false);
   const suffix = boardId ? `?board=${encodeURIComponent(boardId)}` : "";
   return (
     <header className="planning-header">
@@ -60,7 +63,8 @@ export default function PlanningHeader({
           </button>
         )}
       </div>
-      <div className="planning-controls">{children}</div>
+      <button className="planning-controls-toggle" aria-expanded={controlsOpen} onClick={() => setControlsOpen(v => !v)}>Search &amp; filters <PlanningIcon name="search" /></button>
+      <div className={"planning-controls" + (controlsOpen ? " controls-open" : "")}>{children}</div>
     </header>
   );
 }

@@ -248,6 +248,8 @@ export default function GanttWorkspace() {
     zoom: 40,
     sort: "start",
   });
+  const [phoneFilters, setPhoneFilters] = useState(false);
+  const [phoneTimeline, setPhoneTimeline] = useState(false);
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<{
     id: string;
@@ -620,7 +622,7 @@ export default function GanttWorkspace() {
 
   return (
     <div
-      className="phase-workspace planning-app"
+      className={"phase-workspace planning-app" + (phoneTimeline ? " phone-timeline" : " phone-schedule")}
       style={{ "--phase-label-width": `${labelWidth}px` } as CSSProperties}
     >
       <TopBar crumbs={["Gantt"]} online={online} selfKey={session?.userId} workspaceId={session?.workspaceId}>
@@ -659,7 +661,10 @@ export default function GanttWorkspace() {
             </button>
           </div>
         )}
-        <div className="phase-toolbar">
+        <div className="phase-mobile-heading"><h1>Gantt</h1><div role="group" aria-label="Schedule view"><button aria-pressed={!phoneTimeline} onClick={() => setPhoneTimeline(false)}>Schedule</button><button aria-pressed={phoneTimeline} onClick={() => setPhoneTimeline(true)}>Timeline</button></div></div>
+        <nav className="phase-mobile-planning" aria-label="Planning view"><Link href={"/board" + (chosenBoards?.length === 1 ? `?board=${chosenBoards[0]}` : "")}>Board</Link><Link href="/table" aria-current="page">Gantt</Link><Link href={"/calendar" + (chosenBoards?.length === 1 ? `?board=${chosenBoards[0]}` : "")}>Calendar</Link></nav>
+        <div className="phase-mobile-controls"><button aria-expanded={phoneFilters} onClick={() => setPhoneFilters(v => !v)}>Search &amp; filters{query || chosenBoards ? " · Active" : ""}</button>{canEdit && <button className="planning-primary" onClick={() => setStageBoard(null)}><Icon name="plus" /> New phase</button>}</div>
+        <div className={"phase-toolbar" + (phoneFilters ? " phone-filters-open" : "")}>
           <div className="phase-show">
             Show
             <MultiSelectPicker
@@ -874,6 +879,15 @@ export default function GanttWorkspace() {
             })}
           </section>
         )}
+        {!loading && rows.length > 0 && <section className="phase-mobile-list" aria-label="Phase schedule">{rows.map(p => {
+          const percent = phasePercent(p), dates = p.effective_start && p.effective_end;
+          return <article key={p.id} className={p.category_id ? "schedule-item schedule-child" : "schedule-item"}>
+            <div><h2>{p.title}</h2>{!p.category_id && active.some(c => c.board_id === p.board_id && c.category_id) && <button className="schedule-expand" aria-expanded={!preferences.collapsed.includes(p.id)} onClick={() => setPreferences(s => ({ ...s, collapsed: s.collapsed.includes(p.id) ? s.collapsed.filter(id => id !== p.id) : [...s.collapsed, p.id] }))}>{preferences.collapsed.includes(p.id) ? "Show subphases" : "Hide subphases"}</button>}{p.category_id && <p>{p.board_name}</p>}</div>
+            <p className="schedule-dates">{dates ? `${new Date(p.effective_start! + "T12:00:00").toLocaleDateString("en", { month: "short", day: "numeric" })} – ${new Date(p.effective_end! + "T12:00:00").toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })}` : "No dates set"}</p>
+            <div className="schedule-progress"><progress value={percent} max={100} aria-label={`${p.title} completion`} /><span>{percent}% · {p.completed}/{p.total} tasks</span></div>
+            <footer>{canEdit && <button onClick={() => openEditor(p.id)}>Edit dates &amp; phase</button>}<Link href={phaseBoardHref(p)}>Open board <Icon name="arrowUpRight" /></Link></footer>
+          </article>;
+        })}</section>}
         {loading ? (
           <div className="phase-empty">Loading phases…</div>
         ) : !rows.length ? (

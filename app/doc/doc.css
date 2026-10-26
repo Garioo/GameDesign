@@ -338,3 +338,13 @@
 
 .main, .doc { min-width: 0; }
 @media (max-width: 860px) { .doc-title { overflow-wrap: anywhere; } }
+
+@media (max-width: 860px) {
+  .main { padding: 24px 20px calc(100px + env(safe-area-inset-bottom)); }
+  .doc-title { font-size: 34px; line-height: 1.18; margin-bottom: 12px; }
+  .doc-subtitle { font-size: 17px; line-height: 1.5; margin-bottom: 18px; }
+  .doc-crumb { display: none; }
+  .page-meta { gap: 8px 16px; margin-bottom: 20px; padding-bottom: 12px; }
+  .page-meta-group { flex-wrap: wrap; }
+  .app:has(.blk-text.is-focused) .dock-wrap { opacity: 1; }
+}

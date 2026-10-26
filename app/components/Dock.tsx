@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 import { navigateWithTransition } from "@/lib/viewTransition";
 import { useShortcuts, type Shortcut } from "@/lib/shortcuts";
 import GlobalSearch, { type PaletteOpen, type SearchConfig } from "./GlobalSearch";
@@ -111,6 +112,13 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
     setSearchMode(mode);
     setSearchOpen(true);
   };
+  const [moreOpen, setMoreOpen] = useState(false);
+  useBodyScrollLock(moreOpen);
+  const moreRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (moreOpen) moreRef.current?.showModal();
+    else moreRef.current?.close();
+  }, [moreOpen]);
   const [helpOpen, setHelpOpen] = useState(false);
   // "⌘K" on Apple devices, "Ctrl K" elsewhere. Decided after mount so the
   // server-rendered markup (which can't know the platform) never mismatches.
@@ -166,7 +174,7 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
 
   return (
     <div
-      className={"dock-wrap" + (navHover ? " is-nav" : "") + (tools ? "" : " no-hint")}
+      className={"dock-wrap" + (navHover ? " is-nav" : "") + (tools ? " has-tools" : " no-hint")}
       onMouseEnter={tools ? cancelNavRevert : undefined}
       onMouseLeave={tools ? scheduleNavRevert : undefined}
     >
@@ -205,6 +213,20 @@ export default function Dock({ search, onNew, newLabel = "New", tools, planningB
           </div>
         )}
       </nav>
+      <nav className="mobile-dock" aria-label="Mobile navigation">
+        {ITEMS.filter(item => ["home", "work", "pages", "board"].includes(item.id)).map(({ id, label, href, Icon }) => {
+          const selected = id === active || (id === "board" && ["calendar", "table"].includes(active));
+          return <button key={id} aria-current={selected ? "page" : undefined} onClick={() => navigateWithTransition(router, hrefFor(id, href!))}><Icon className="dock-icon" /><span>{id === "board" ? "Planning" : label}</span></button>;
+        })}
+        <button aria-current={["canvas", "milestones", ""].includes(active) ? "page" : undefined} aria-label="More navigation" aria-haspopup="dialog" onClick={() => setMoreOpen(true)}><Grid className="dock-icon" /><span>More</span></button>
+      </nav>
+      <dialog ref={moreRef} className="mobile-nav-sheet" aria-label="Workspace menu" onCancel={() => setMoreOpen(false)} onClose={() => setMoreOpen(false)} onClick={e => { if (e.target === e.currentTarget) setMoreOpen(false); }}>
+        <header><h2>Workspace</h2><button onClick={() => setMoreOpen(false)}>Close</button></header>
+        <div className="mobile-nav-grid">{ITEMS.map(({ id, label, href, Icon }) => <button key={id} aria-current={id === active ? "page" : undefined} onClick={() => { setMoreOpen(false); navigateWithTransition(router, hrefFor(id, href!)); }}><Icon className="dock-icon" />{label}</button>)}</div>
+        <button className="mobile-nav-search" onClick={() => { setMoreOpen(false); openSearch(); }}><SearchIcon className="dock-icon" />Search workspace</button>
+        <button className="mobile-nav-search" onClick={() => { setMoreOpen(false); navigateWithTransition(router, "/digest"); }}>Weekly digest</button>
+        {onNew && <button className="mobile-nav-search" onClick={() => { setMoreOpen(false); onNew(); }}><Plus className="dock-icon" />{newLabel}</button>}
+      </dialog>
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} config={search} initial={searchMode} />
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <SequenceHint />

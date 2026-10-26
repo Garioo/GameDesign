@@ -1618,8 +1618,10 @@ function BlockRow({
         block.type +
         (dragging ? " is-dragging" : "") +
         (dropTarget ? " is-drop" : "") +
-        (selected ? " is-selected" : "")
+        (selected ? " is-selected" : "") +
+        (focused ? " is-active" : "")
       }
+      onPointerDown={(e) => { if (e.pointerType === "touch") onFocus(); }}
       data-block-id={block.id}
       onDragOver={(e) => {
         if (readOnly) return;

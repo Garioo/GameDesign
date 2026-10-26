@@ -37,6 +37,10 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   onNavigation: () => void;
 }) {
   const [view, setView] = useState<"month" | "week" | "day">("month");
+  // Keep deep links explicit; an ordinary phone visit opens the readable daily agenda.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 860px)").matches && !new URLSearchParams(location.search).has("mode")) setView("day");
+  }, []);
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selected, setSelected] = useState(() => dayKey(new Date()));
   const [search, setSearch] = useState("");
@@ -137,14 +141,14 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
   // Kept until the event turns up: the first load can run before the workspace
   // id is known and come back empty.
   useEffect(() => {
-    const found = wantedEvent ? standaloneEvents.find(e => e.id === wantedEvent) : undefined;
+    const found = wantedEvent ? [...standaloneEvents, ...Object.values(feedEvents).flat()].find(e => e.id === wantedEvent) : undefined;
     if (!found) return;
     setEditingEvent(found);
     // ?occ= (or ?date=) picks the occurrence of a repeating event.
     const day = wantedOccurrence ?? selected;
     setEditingOccurrence(found.repeat && isOccurrence(found, day) ? day : found.date);
     setWantedEvent(null);
-  }, [wantedEvent, standaloneEvents]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wantedEvent, standaloneEvents, feedEvents]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (followEvent === undefined) { appliedFollowEvent.current = undefined; return; }
     if (followEvent === appliedFollowEvent.current) return;
@@ -270,13 +274,27 @@ export default function CalendarView({ canEdit, project, onNavigation }: {
             <div className={styles.viewSwitch} role="group" aria-label="Calendar view">{(["month", "week", "day"] as const).map(mode => <button key={mode} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
             <button onClick={goToToday}>Today</button><button aria-label={`Previous ${view}`} onClick={() => shiftMonth(-1)}><PlanningIcon name="arrowLeft" /></button><button aria-label={`Next ${view}`} onClick={() => shiftMonth(1)}><PlanningIcon name="arrowRight" /></button></div>
         </div>
-        <ul className={styles.kindLegend} aria-label="Event categories">{EVENT_KINDS.map(k => <li key={k.id} className={styles[`kind_${k.id}`]}>
+        <details className={styles.categorySettings}><summary>Event colours</summary><ul className={styles.kindLegend} aria-label="Event categories">{EVENT_KINDS.map(k => <li key={k.id} className={styles[`kind_${k.id}`]}>
           {canEdit
             ? <input type="color" className={styles.kindSwatch} value={kindColors[k.id] ?? DEFAULT_KIND_HEX[k.id]} onChange={e => setKindColor(k.id, e.target.value)} aria-label={`${k.label} colour`} title={`Change the ${k.label} colour for everyone`} />
             : <span className={styles.kindSwatch} aria-hidden="true" />}
           {k.label}
           {canEdit && kindColors[k.id] && <button type="button" className={styles.kindReset} onClick={() => setKindColor(k.id, null)} aria-label={`Reset the ${k.label} colour`} title="Back to the default colour"><Icon name="close" /></button>}
-        </li>)}</ul>
+        </li>)}</ul></details>
+        {view === "day" && <div className={styles.dayPicker}>
+          <label>Go to date<input aria-label="Go to calendar date" type="date" value={selected} onChange={e => { if (isDay(e.target.value)) goToDay(e.target.value); }} /></label>
+          <div className={styles.dayStrip} role="group" aria-label="Days of this week">{Array.from({ length: 7 }, (_, i) => {
+            const date = new Date(weekStart); date.setDate(date.getDate() + i); const key = dayKey(date);
+            return <button key={key} aria-label={date.toLocaleDateString("en", { dateStyle: "full" })} aria-pressed={key === selected} onClick={() => goToDay(key)}><small>{weekdays[i]}</small><strong>{date.getDate()}</strong><span aria-hidden="true">{eventsOn(key).length ? "·" : ""}</span></button>;
+          })}</div>
+        </div>}
+        {view !== "day" && <div className={styles.phoneDateGrid} aria-label="Choose calendar day">
+          <div className={styles.phoneWeekdays}>{weekdays.map(day => <span key={day}>{day}</span>)}</div>
+          <div className={styles.phoneDates}>{visibleCells.map(date => {
+            const key = dayKey(date), count = eventsOn(key).length;
+            return <button key={key} className={view === "month" && date.getMonth() !== month.getMonth() ? styles.phoneOutside : undefined} aria-label={`${date.toLocaleDateString("en", { dateStyle: "full" })}, ${count} events`} aria-pressed={key === selected} aria-current={key === today ? "date" : undefined} onClick={() => setSelected(key)}><span>{date.getDate()}</span><span className={styles.phoneDateMark} data-events={count > 0 || milestonesOn(key).length > 0} aria-hidden="true" /></button>;
+          })}</div>
+        </div>}
         {view === "day" ? <div className={styles.daySchedule}>
           <div className={styles.daySectionHead}><h3>Events</h3>{canEdit && <button className={styles.addEvent} onClick={() => setEditingEvent(null)}><PlanningIcon name="plus" /> Add event on this date</button>}</div>
           {milestonesOn(selected).map((m) => milestoneLink(m, false))}
